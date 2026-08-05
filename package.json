@@ -9,7 +9,6 @@
     "start": "NODE_ENV=production node dist/index.js",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
-    "seed:mensual": "tsx server/seedInformeMonthly.ts",
     "format": "prettier --write ."
   },
   "dependencies": {
