@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isPageVisible } from "@shared/informe";
 import { Switch } from "@/components/ui/switch";
 import type {
@@ -70,6 +70,56 @@ function formatUploadedAt(value: string | null): string | null {
     month: "2-digit",
     year: "numeric",
   });
+}
+
+const COLLAPSE_STORAGE_PREFIX = "av-weekly:sidebar-collapsed:";
+
+interface SidebarSectionProps {
+  id: string;
+  title: string;
+  children: React.ReactNode;
+}
+
+/** Sidebar card that the user can fold away to shorten the column. */
+function SidebarSection({ id, title, children }: SidebarSectionProps) {
+  const storageKey = `${COLLAPSE_STORAGE_PREFIX}${id}`;
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.localStorage.getItem(storageKey) === "1";
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKey, collapsed ? "1" : "0");
+  }, [collapsed, storageKey]);
+
+  const toggle = useCallback(() => setCollapsed((previous) => !previous), []);
+  const contentId = `sidebar-section-${id}`;
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">{title}</CardTitle>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={toggle}
+            aria-expanded={!collapsed}
+            aria-controls={contentId}
+            className="font-mono text-xs"
+          >
+            {collapsed ? "Mostrar" : "Ocultar"}
+          </Button>
+        </div>
+      </CardHeader>
+
+      {!collapsed && <div id={contentId}>{children}</div>}
+    </Card>
+  );
 }
 
 interface UploadZoneProps {
@@ -177,10 +227,7 @@ export default function DeckSidebar({
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Fuentes</CardTitle>
-        </CardHeader>
+      <SidebarSection id="fuentes" title="Fuentes">
         <CardContent className="space-y-3">
           <UploadZone
             id="informe-upload-semanal"
@@ -213,12 +260,9 @@ export default function DeckSidebar({
             </p>
           )}
         </CardContent>
-      </Card>
+      </SidebarSection>
 
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Edición</CardTitle>
-        </CardHeader>
+      <SidebarSection id="edicion" title="Edición">
         <CardContent className="space-y-3">
           <ToggleGroup
             type="single"
@@ -266,12 +310,9 @@ export default function DeckSidebar({
             </AlertDialogContent>
           </AlertDialog>
         </CardContent>
-      </Card>
+      </SidebarSection>
 
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Páginas</CardTitle>
-        </CardHeader>
+      <SidebarSection id="paginas" title="Páginas">
         <CardContent className="space-y-2">
           {pages.length === 0 && (
             <p className="font-mono text-xs text-muted-foreground">Sin páginas</p>
@@ -316,7 +357,7 @@ export default function DeckSidebar({
             );
           })}
         </CardContent>
-      </Card>
+      </SidebarSection>
     </div>
   );
 }

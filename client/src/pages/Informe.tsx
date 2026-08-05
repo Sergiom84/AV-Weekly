@@ -3,12 +3,14 @@ import { isPageVisible } from "@shared/informe";
 import type { DeckPage } from "@shared/informe";
 import { useInformeData } from "@/hooks/useInformeData";
 import MainNav from "@/components/MainNav";
+import HomeLink from "@/components/HomeLink";
 import DeckSidebar from "@/components/informe/DeckSidebar";
 import CoverPage from "@/components/informe/CoverPage";
 import IndexPage from "@/components/informe/IndexPage";
 import SectionPage from "@/components/informe/SectionPage";
 import MonthlyTrendPage from "@/components/informe/MonthlyTrendPage";
 import ResolutionDetailPage from "@/components/informe/ResolutionDetailPage";
+import ClosingPage from "@/components/informe/ClosingPage";
 import WeeklySupportPage from "@/components/informe/WeeklySupportPage";
 import SlideFrame from "@/components/informe/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,6 +118,16 @@ export default function Informe() {
             />
           </SlideFrame>
         );
+      case "closing":
+        return (
+          <ClosingPage
+            page={page}
+            editing={editing}
+            onChange={onChange}
+            number={number}
+            muted={muted}
+          />
+        );
       case "resolutionDetail":
         return (
           <SlideFrame number={number} muted={muted}>
@@ -154,7 +166,7 @@ export default function Informe() {
   if (loading && !deck) {
     return (
       <div className="min-h-screen bg-background">
-        <MainNav />
+        <MainNav rightSlot={<HomeLink />} />
         <div className="flex min-h-[60vh] items-center justify-center">
           <div className="text-center">
             <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-primary" />
@@ -167,12 +179,13 @@ export default function Informe() {
 
   return (
     <div className="min-h-screen bg-background">
-      <MainNav />
+      <MainNav rightSlot={<HomeLink />} />
 
       <main className="container py-8">
         <div className="flex flex-col gap-8 lg:flex-row">
           <div className="w-full flex-shrink-0 lg:w-80">
-            <div className="lg:sticky lg:top-20">
+            {/* Own scroll track: the sidebar reaches its last page without moving the deck. */}
+            <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2 print:max-h-none print:overflow-visible">
               <DeckSidebar
                 deck={deck}
                 weekly={weekly}

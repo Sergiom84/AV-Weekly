@@ -1,0 +1,587 @@
+/* Home futurista. Ámbito exclusivo del Home: nada de esto alcanza al deck del informe.
+   Lenguaje visual derivado de laserdrift.com, ver
+   C:\Users\sergi\Documents\Webs\Estilos Visuales Web\AV weekly futura\REFERENCE.md */
+
+.futura {
+  --fut-void: #000000;
+  --fut-deep: #0b1326;
+  --fut-night: #131228;
+  --fut-violet-900: #250d50;
+  --fut-violet-700: #4c1d95;
+  --fut-violet-600: #6021b8;
+  --fut-violet-500: #864dd7;
+  --fut-violet-400: #a855f7;
+  --fut-magenta: #9c27b0;
+  --fut-pink-500: #dc0f73;
+  --fut-pink-400: #f20461;
+  --fut-cyan: #03a9f4;
+  --fut-green: #53fe8b;
+  --fut-amber: #eab308;
+  --fut-text: #ffffff;
+  --fut-text-dim: rgba(255, 255, 255, 0.72);
+  --fut-text-faint: rgba(255, 255, 255, 0.38);
+  --fut-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --fut-skew: -10deg;
+
+  position: relative;
+  min-height: 100vh;
+  background: var(--fut-void);
+  color: var(--fut-text);
+  font-family: "JetBrains Mono", monospace;
+  overflow-x: hidden;
+}
+
+/* ---------- Capas de tubo ---------- */
+
+.futura-scanlines::after,
+.futura-vignette::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.futura-scanlines::after {
+  z-index: 3;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.3) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+.futura-vignette::before {
+  z-index: 2;
+  background: radial-gradient(
+    120% 92% at 50% 50%,
+    transparent 42%,
+    rgba(0, 0, 0, 0.55) 78%,
+    #000 100%
+  );
+}
+
+/* ---------- Portada ---------- */
+
+.futura-cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 82vh;
+  padding: 6rem 1.5rem 4rem;
+  overflow: hidden;
+  background:
+    radial-gradient(88% 58% at 50% 86%, rgba(242, 4, 97, 0.75) 0%, transparent 58%),
+    radial-gradient(76% 66% at 50% 62%, rgba(76, 29, 149, 0.85) 0%, transparent 62%),
+    linear-gradient(180deg, #000 0%, var(--fut-night) 44%, var(--fut-violet-900) 100%);
+}
+
+.futura-horizon {
+  position: absolute;
+  left: -30%;
+  right: -30%;
+  bottom: 0;
+  height: 40%;
+  z-index: 1;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(3, 169, 244, 0.85) 0 2px, transparent 2px 72px),
+    repeating-linear-gradient(0deg, rgba(3, 169, 244, 0.85) 0 2px, transparent 2px 46px);
+  transform: perspective(300px) rotateX(74deg);
+  transform-origin: 50% 100%;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 32%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 32%);
+}
+
+.futura-sun {
+  position: absolute;
+  left: 50%;
+  bottom: 30%;
+  width: min(420px, 46vw);
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  z-index: 0;
+  background: linear-gradient(180deg, #ffe28a 0%, var(--fut-pink-400) 55%, var(--fut-violet-700) 100%);
+  mask-image:
+    linear-gradient(180deg, #000 0 52%, transparent 52%),
+    repeating-linear-gradient(0deg, #000 0 10px, transparent 10px 18px);
+  -webkit-mask-image:
+    linear-gradient(180deg, #000 0 52%, transparent 52%),
+    repeating-linear-gradient(0deg, #000 0 10px, transparent 10px 18px);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+  opacity: 0.55;
+  filter: blur(0.5px);
+}
+
+.futura-title {
+  position: relative;
+  z-index: 4;
+  margin: 0;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 800;
+  font-size: clamp(3.25rem, 15vw, 11rem);
+  line-height: 0.92;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #e2dbff 34%,
+    #6f63a6 50%,
+    #ffffff 58%,
+    #f3c9ff 78%,
+    #b98ad8 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 22px rgba(220, 15, 115, 0.6))
+    drop-shadow(0 0 64px rgba(134, 77, 215, 0.5));
+}
+
+.futura-title-glitch {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: var(--fut-cyan);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  opacity: 0.55;
+  animation: futura-glitch 5.5s steps(1) infinite;
+}
+
+@keyframes futura-glitch {
+  0%, 92%, 100% { transform: translate(0, 0); opacity: 0; }
+  93% { transform: translate(-4px, 2px); opacity: 0.6; }
+  95% { transform: translate(3px, -2px); opacity: 0.4; }
+  97% { transform: translate(-2px, -1px); opacity: 0.55; }
+}
+
+.futura-kicker {
+  position: relative;
+  z-index: 4;
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.52em;
+  text-indent: 0.52em;
+  text-transform: uppercase;
+  color: var(--fut-text-faint);
+}
+
+/* ---------- Acordeón de tarjetas ---------- */
+
+.futura-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .futura-deck {
+    flex-direction: row;
+    height: 26rem;
+  }
+}
+
+.futura-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 11rem;
+  padding: 0;
+  overflow: hidden;
+  border: 3px solid transparent;
+  border-radius: 11px;
+  box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.7);
+  text-align: left;
+  transition:
+    flex 0.35s var(--fut-ease),
+    border-color 0.35s var(--fut-ease),
+    transform 0.35s var(--fut-ease);
+}
+
+@media (min-width: 1024px) {
+  .futura-card {
+    flex: 0.5;
+    min-height: 0;
+    transform: skew(var(--fut-skew), 0deg);
+  }
+
+  .futura-card:hover,
+  .futura-card:focus-visible {
+    flex: 1.6;
+  }
+
+  .futura-card > .futura-card-inner {
+    transform: skew(calc(var(--fut-skew) * -1), 0deg) scale(1.16);
+  }
+}
+
+.futura-card:hover,
+.futura-card:focus-visible {
+  border-color: var(--fut-violet-500);
+  outline: none;
+}
+
+/* Filete interior que se despliega en altura, como en la referencia */
+.futura-card::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 90%;
+  height: 0;
+  transform: translate(-50%, -50%);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+  transition: all 0.3s var(--fut-ease);
+}
+
+.futura-card:hover::after,
+.futura-card:focus-visible::after {
+  height: 90%;
+  opacity: 1;
+  background: rgba(96, 33, 184, 0.25);
+  border-top-color: var(--fut-violet-600);
+  border-bottom-color: var(--fut-violet-600);
+  transition-delay: 0.2s;
+}
+
+.futura-card-inner {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.35s var(--fut-ease);
+}
+
+.futura-card-body {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 1.5rem;
+}
+
+.futura-card-name {
+  margin: 0;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.futura-card-meta {
+  margin: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--fut-text-faint);
+}
+
+.futura-card-desc {
+  margin: 0;
+  max-width: 40ch;
+  font-size: 0.72rem;
+  line-height: 1.7;
+  color: var(--fut-text-dim);
+  opacity: 0;
+  transform: translateY(14px);
+  transition: all 0.3s var(--fut-ease) 0.15s;
+}
+
+.futura-card:hover .futura-card-desc,
+.futura-card:focus-visible .futura-card-desc {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 1023px) {
+  .futura-card-desc {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Corchetes de esquina del HUD */
+.futura-brackets::before,
+.futura-brackets::after {
+  content: "";
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  z-index: 5;
+  border-color: currentColor;
+  opacity: 0;
+  transition: opacity 0.3s var(--fut-ease) 0.1s;
+}
+
+.futura-brackets::before {
+  top: 12px;
+  left: 12px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+
+.futura-brackets::after {
+  right: 12px;
+  bottom: 12px;
+  border-right: 2px solid;
+  border-bottom: 2px solid;
+}
+
+.futura-card:hover .futura-brackets::before,
+.futura-card:hover .futura-brackets::after,
+.futura-card:focus-visible .futura-brackets::before,
+.futura-card:focus-visible .futura-brackets::after {
+  opacity: 0.85;
+}
+
+/* --- Skin 1: Oficinas. Plano técnico en cian sobre azul profundo --- */
+
+.futura-skin-oficinas {
+  background:
+    linear-gradient(150deg, var(--fut-deep) 0%, #071a33 55%, #041226 100%);
+  color: var(--fut-cyan);
+}
+
+.futura-skin-oficinas .futura-layer {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(3, 169, 244, 0.16) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(90deg, rgba(3, 169, 244, 0.16) 0 1px, transparent 1px 22px);
+}
+
+.futura-skin-oficinas .futura-layer-2 {
+  position: absolute;
+  inset: 18% 14%;
+  border: 1px solid rgba(3, 169, 244, 0.5);
+  box-shadow: inset 0 0 60px rgba(3, 169, 244, 0.18);
+}
+
+.futura-skin-oficinas .futura-layer-3 {
+  position: absolute;
+  inset: 18% 14%;
+  border-left: 1px solid rgba(3, 169, 244, 0.5);
+  transform: translateX(38%);
+}
+
+/* --- Skin 2: Informática. Columnas de datos en verde HUD --- */
+
+.futura-skin-informatica {
+  background: linear-gradient(160deg, #030b08 0%, #06180f 60%, #02120c 100%);
+  color: var(--fut-green);
+}
+
+.futura-skin-informatica .futura-layer {
+  position: absolute;
+  inset: -30% 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(83, 254, 139, 0.22) 0 2px,
+    transparent 2px 26px
+  );
+  mask-image: repeating-linear-gradient(180deg, #000 0 14px, transparent 14px 30px);
+  -webkit-mask-image: repeating-linear-gradient(180deg, #000 0 14px, transparent 14px 30px);
+  animation: futura-rain 7s linear infinite;
+}
+
+@keyframes futura-rain {
+  from { transform: translateY(-14%); }
+  to { transform: translateY(14%); }
+}
+
+.futura-skin-informatica .futura-layer-2 {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(70% 55% at 30% 30%, rgba(83, 254, 139, 0.22), transparent 70%);
+}
+
+/* --- Skin 3: Compras. Radar magenta con barrido --- */
+
+.futura-skin-compras {
+  background: linear-gradient(140deg, var(--fut-violet-900) 0%, #520b3c 60%, #1a0320 100%);
+  color: var(--fut-pink-400);
+}
+
+.futura-skin-compras .futura-layer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 130%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle,
+    rgba(242, 4, 97, 0.3) 0 1px,
+    transparent 1px 40px
+  );
+}
+
+.futura-skin-compras .futura-layer-2 {
+  position: absolute;
+  inset: -60%;
+  border-radius: 50%;
+  transform-origin: 50% 50%;
+  background: conic-gradient(from 0deg, rgba(242, 4, 97, 0.42), transparent 32%);
+  animation: futura-sweep 4.5s linear infinite;
+}
+
+@keyframes futura-sweep {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Skin 4: AV. Horizonte synthwave, la única activa --- */
+
+.futura-skin-av {
+  background:
+    radial-gradient(80% 60% at 50% 92%, rgba(242, 4, 97, 0.6) 0%, transparent 60%),
+    linear-gradient(180deg, #0a0418 0%, #2b0b52 55%, #4b0f6b 100%);
+  color: var(--fut-violet-400);
+}
+
+.futura-skin-av .futura-layer {
+  position: absolute;
+  left: -40%;
+  right: -40%;
+  bottom: 0;
+  height: 52%;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(3, 169, 244, 0.55) 0 1px, transparent 1px 60px),
+    repeating-linear-gradient(0deg, rgba(3, 169, 244, 0.55) 0 1px, transparent 1px 44px);
+  transform: perspective(220px) rotateX(74deg);
+  transform-origin: 50% 100%;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 55%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 55%);
+}
+
+.futura-skin-av .futura-layer-2 {
+  position: absolute;
+  left: 50%;
+  bottom: 40%;
+  width: min(15rem, 72%);
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffe28a 0%, var(--fut-pink-400) 62%, var(--fut-violet-700) 100%);
+  mask-image:
+    linear-gradient(180deg, transparent 0 6%, #000 22%),
+    repeating-linear-gradient(0deg, #000 0 8px, transparent 8px 14px);
+  -webkit-mask-image:
+    linear-gradient(180deg, transparent 0 6%, #000 22%),
+    repeating-linear-gradient(0deg, #000 0 8px, transparent 8px 14px);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+  opacity: 0.8;
+}
+
+/* ---------- Sección y cabecera ---------- */
+
+.futura-shell {
+  position: relative;
+  z-index: 4;
+  padding: 4rem 1.5rem 6rem;
+}
+
+@media (min-width: 1024px) {
+  .futura-shell {
+    padding: 5rem 3rem 7rem;
+  }
+}
+
+.futura-section-label {
+  margin: 0 0 1.75rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--fut-text-faint);
+}
+
+.futura-sound {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid rgba(168, 85, 247, 0.55);
+  border-radius: 50%;
+  background: rgba(37, 13, 80, 0.5);
+  color: var(--fut-text);
+  backdrop-filter: blur(6px);
+  transition: border-color 0.3s var(--fut-ease), box-shadow 0.3s var(--fut-ease);
+}
+
+.futura-sound:hover {
+  border-color: var(--fut-violet-400);
+  box-shadow: 0 0 24px rgba(134, 77, 215, 0.5);
+}
+
+/* ---------- Placeholder ---------- */
+
+.futura-standby {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 6rem 1.5rem;
+  overflow: hidden;
+  text-align: center;
+  background:
+    radial-gradient(70% 44% at 50% 92%, rgba(242, 4, 97, 0.45) 0%, transparent 60%),
+    radial-gradient(62% 52% at 50% 62%, rgba(76, 29, 149, 0.6) 0%, transparent 64%),
+    linear-gradient(180deg, #000 0%, var(--fut-night) 52%, var(--fut-violet-900) 100%);
+}
+
+.futura-standby-panel {
+  max-width: 34rem;
+  padding: 3rem 2.5rem;
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  background: rgba(37, 13, 80, 0.35);
+  backdrop-filter: blur(6px);
+  clip-path: polygon(
+    22px 0, calc(100% - 22px) 0, 100% 22px,
+    100% calc(100% - 22px), calc(100% - 22px) 100%,
+    22px 100%, 0 calc(100% - 22px), 0 22px
+  );
+}
+
+.futura-back {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.75rem 2rem;
+  border-top: 3px solid var(--fut-cyan);
+  border-bottom: 3px solid var(--fut-cyan);
+  box-shadow: inset 0 0 20px rgba(33, 150, 243, 0.35);
+  font-size: 0.68rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--fut-text);
+  transition: box-shadow 0.3s var(--fut-ease);
+}
+
+.futura-back:hover {
+  box-shadow: inset 0 0 34px rgba(33, 150, 243, 0.65);
+}
+
+/* ---------- Movimiento reducido ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .futura *,
+  .futura *::before,
+  .futura *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
