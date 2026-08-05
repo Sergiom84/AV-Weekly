@@ -1,0 +1,31 @@
+import { createClient } from '@libsql/client';
+
+const url = process.env.URL_TURSO ?? 'file:./data/av-weekly.db';
+
+export const client = createClient(
+  url.startsWith('file:') ? { url } : { url, authToken: process.env.TOKEN_TURSO }
+);
+
+export async function initDb() {
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS informe_deck (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS informe_weekly (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      source_file TEXT,
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS informe_monthly (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      source_file TEXT,
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+}

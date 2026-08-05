@@ -1,0 +1,357 @@
+export type SupportType =
+  | "Remotos"
+  | "Programados"
+  | "Presenciales"
+  | "Incidencias"
+  | "Correctivos";
+
+/**
+ * Contract for the "Informe" deck: a slide-based weekly report.
+ *
+ * Data sources:
+ * - Weekly workbook ("Templates semanales audiovisuales"): matrix sheets, one
+ *   row per category/location and one column per ISO week.
+ * - Monthly workbook ("Audiovisuales - Resueltas mes anterior"): flat ticket
+ *   dump aggregated into monthly totals per support type.
+ * - Historical workbook (previous-year totals): pending, uploaded by the user.
+ *
+ * Every imported value can be overridden by hand from the deck editor. The
+ * imported dataset stays immutable; overrides live in the deck state.
+ */
+
+export const INFORME_SUPPORT_TYPES: SupportType[] = [
+  "Remotos",
+  "Programados",
+  "Presenciales",
+  "Incidencias",
+  "Correctivos",
+];
+
+export const MONTH_LABELS = [
+  "Ene",
+  "Feb",
+  "Mar",
+  "Abr",
+  "May",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dic",
+];
+
+/* -------------------------------------------------------------------------- */
+/* Imported datasets                                                          */
+/* -------------------------------------------------------------------------- */
+
+/** One labelled row of a weekly matrix (category or location). */
+export interface WeeklyRow {
+  label: string;
+  /** Values aligned with `WeeklyMatrix.weeks`, same length, zero-filled. */
+  values: number[];
+  total: number;
+}
+
+/** A matrix of weekly values: rows x weeks, plus the column totals. */
+export interface WeeklyMatrix {
+  /** Ascending ISO week numbers present in the source, e.g. [1..31]. */
+  weeks: number[];
+  rows: WeeklyRow[];
+  /** Column totals aligned with `weeks`. */
+  totals: number[];
+}
+
+/** One row of the "detalle por resolución" sheets (tiers 1-3 plus total). */
+export interface ResolutionRow {
+  category: string;
+  tier2: string;
+  tier3: string;
+  total: number;
+}
+
+export interface WeeklyTypeData {
+  /** Breakdown by resolution category. Present for Remotos. */
+  categories: WeeklyMatrix | null;
+  /** Breakdown by building/location. Present for the other four types. */
+  locations: WeeklyMatrix | null;
+  /** Detail sheet for the reported week. */
+  resolutions: ResolutionRow[];
+}
+
+export interface InformeWeeklyDataset {
+  byType: Record<SupportType, WeeklyTypeData>;
+  /** Highest week number found across all sheets. */
+  maxWeek: number;
+  sourceFile: string | null;
+  uploadedAt: string | null;
+}
+
+export interface InformeMonthlyDataset {
+  /** byType[type][year] -> 12 values, null when the month has no data. */
+  byType: Record<SupportType, Record<string, (number | null)[]>>;
+  /** Ascending list of years with at least one value. */
+  years: number[];
+  sourceFile: string | null;
+  uploadedAt: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Deck state                                                                  */
+/* -------------------------------------------------------------------------- */
+
+export type DeckPageKind =
+  | "cover"
+  | "index"
+  | "section"
+  | "monthlyTrend"
+  | "weeklySupport"
+  | "resolutionDetail"
+  | "pendingItems"
+  | "closing";
+
+/** How a page decides its default visibility when the user has not forced it. */
+export type AutoVisibility = "always" | "firstTuesday";
+
+/**
+ * Which weeks a weekly page renders.
+ * - range: every week between `from` and `to` inclusive.
+ * - list: exactly the weeks in `weeks`, in the given order.
+ */
+export interface WeekSelection {
+  mode: "range" | "list";
+  from: number;
+  to: number;
+  weeks: number[];
+}
+
+export function defaultWeekSelection(maxWeek: number): WeekSelection {
+  return { mode: "range", from: 1, to: Math.max(1, maxWeek), weeks: [] };
+}
+
+/** Resolves a selection into the concrete, ordered list of weeks to render. */
+export function resolveWeekSelection(
+  selection: WeekSelection | undefined,
+  available: number[]
+): number[] {
+  if (!selection) {
+    return available;
+  }
+
+  if (selection.mode === "list") {
+    const wanted = selection.weeks.filter((week) => available.includes(week));
+    return wanted.length > 0 ? wanted : available;
+  }
+
+  const from = Math.min(selection.from, selection.to);
+  const to = Math.max(selection.from, selection.to);
+  const inRange = available.filter((week) => week >= from && week <= to);
+  return inRange.length > 0 ? inRange : available;
+}
+
+/**
+ * Manual edits keyed by cell.
+ * - monthlyTrend pages: `${year}:${monthIndex0based}`.
+ * - weeklySupport pages: `${rowLabel}:${week}`.
+ * A null value blanks the cell; an absent key falls back to the imported value.
+ */
+export type CellOverrides = Record<string, number | null>;
+
+export interface DeckPage {
+  /** Stable identifier, never renumbered. */
+  id: string;
+  kind: DeckPageKind;
+  /** Support type this page reports on, when applicable. */
+  supportType: SupportType | null;
+  /** Editable text slots: title, subtitle, footnote, bullets, etc. */
+  text: Record<string, string>;
+  /** User-forced visibility. null means "follow autoVisibility". */
+  visible: boolean | null;
+  autoVisibility: AutoVisibility;
+  /** Only meaningful for weeklySupport pages. */
+  weekSelection: WeekSelection | null;
+  /** Only meaningful for monthlyTrend pages. Years shown, ascending. */
+  years: number[] | null;
+  overrides: CellOverrides;
+  /** Rows hidden by the user, by row label. */
+  hiddenRows: string[];
+}
+
+export interface DeckState {
+  pages: DeckPage[];
+  updatedAt: string | null;
+}
+
+export interface InformePayload {
+  deck: DeckState;
+  weekly: InformeWeeklyDataset;
+  monthly: InformeMonthlyDataset;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Visibility                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** True when `date` is the first Tuesday of its month. */
+export function isFirstTuesday(date: Date): boolean {
+  return date.getDay() === 2 && date.getDate() <= 7;
+}
+
+/** Effective visibility of a page: manual override wins over the auto rule. */
+export function isPageVisible(page: DeckPage, reference: Date): boolean {
+  if (page.visible !== null) {
+    return page.visible;
+  }
+
+  return page.autoVisibility === "always" || isFirstTuesday(reference);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Empty values                                                                */
+/* -------------------------------------------------------------------------- */
+
+export function emptyWeeklyDataset(): InformeWeeklyDataset {
+  return {
+    byType: Object.fromEntries(
+      INFORME_SUPPORT_TYPES.map((type) => [
+        type,
+        { categories: null, locations: null, resolutions: [] },
+      ])
+    ) as unknown as Record<SupportType, WeeklyTypeData>,
+    maxWeek: 0,
+    sourceFile: null,
+    uploadedAt: null,
+  };
+}
+
+export function emptyMonthlyDataset(): InformeMonthlyDataset {
+  return {
+    byType: Object.fromEntries(
+      INFORME_SUPPORT_TYPES.map((type) => [type, {}])
+    ) as unknown as Record<SupportType, Record<string, (number | null)[]>>,
+    years: [],
+    sourceFile: null,
+    uploadedAt: null,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Default deck                                                                */
+/* -------------------------------------------------------------------------- */
+
+const SECTION_LABEL: Record<SupportType, string> = {
+  Remotos: "1.2 Soporte remoto",
+  Programados: "1.3 Soporte programado",
+  Presenciales: "1.4 Soporte presencial",
+  Incidencias: "1.5 Incidencias",
+  Correctivos: "1.6 Mantenimientos correctivos",
+};
+
+const TREND_LABEL: Record<SupportType, string> = {
+  Remotos: "1.2 Soporte remoto tendencia",
+  Programados: "1.3 Soporte programado tendencia",
+  Presenciales: "1.4 Soporte presencial tendencia",
+  Incidencias: "1.5 Incidencias tendencia",
+  Correctivos: "1.6 Mantenimientos correctivos tendencia",
+};
+
+const TYPE_FOOTNOTE: Record<SupportType, string> = {
+  Remotos:
+    "Errores: actuación del dispatcher gestionando una incidencia. Conexión: conexión remota de una sala con videoconferencia. Operativa: guía al usuario sobre utilización de los medios AV.",
+  Programados:
+    "Soportes programados: soporte agendado al técnico para usuarios o salas VIP. El técnico acude antes y se retira cuando todo está funcionando.",
+  Presenciales:
+    "Soporte presencial: acciones solicitadas por el usuario cuya intervención requiere más tiempo, a partir de 15 minutos.",
+  Incidencias: "Incidencias: incidencias generadas por el usuario a las que acude el técnico.",
+  Correctivos:
+    "Mantenimientos correctivos: acciones de carácter proactivo. Conllevan una acción que corrige un fallo.",
+};
+
+/** Builds the default 16-page deck matching the current weekly report. */
+export function createDefaultDeck(): DeckState {
+  const pages: DeckPage[] = [
+    {
+      id: "cover",
+      kind: "cover",
+      supportType: null,
+      text: {
+        title: "Informe de seguimiento del servicio",
+        subtitle: "Servicio Audiovisuales BBVA",
+        period: "",
+      },
+      visible: null,
+      autoVisibility: "always",
+      weekSelection: null,
+      years: null,
+      overrides: {},
+      hiddenRows: [],
+    },
+    {
+      id: "index",
+      kind: "index",
+      supportType: null,
+      text: {
+        title: "1 Revisión de métricas",
+        item1: "1.2 Soporte remoto",
+        item2: "1.3 Soporte programado",
+        item3: "1.4 Soporte presencial",
+        item4: "1.5 Incidencias",
+        item5: "1.6 Mantenimientos correctivos",
+        item6: "2. Asuntos pendientes",
+      },
+      visible: null,
+      autoVisibility: "always",
+      weekSelection: null,
+      years: null,
+      overrides: {},
+      hiddenRows: [],
+    },
+    {
+      id: "section-metrics",
+      kind: "section",
+      supportType: null,
+      text: { title: "1 Revisión de métricas", subtitle: "" },
+      visible: null,
+      autoVisibility: "always",
+      weekSelection: null,
+      years: null,
+      overrides: {},
+      hiddenRows: [],
+    },
+  ];
+
+  for (const type of INFORME_SUPPORT_TYPES) {
+    pages.push({
+      id: `trend-${type.toLowerCase()}`,
+      kind: "monthlyTrend",
+      supportType: type,
+      text: { title: TREND_LABEL[type], subtitle: "AUDIOVISUALES", footnote: "" },
+      visible: null,
+      autoVisibility: "firstTuesday",
+      weekSelection: null,
+      years: [2023, 2024, 2025, 2026],
+      overrides: {},
+      hiddenRows: [],
+    });
+
+    pages.push({
+      id: `weekly-${type.toLowerCase()}`,
+      kind: "weeklySupport",
+      supportType: type,
+      text: {
+        title: SECTION_LABEL[type],
+        subtitle: "AUDIOVISUALES",
+        footnote: TYPE_FOOTNOTE[type],
+      },
+      visible: null,
+      autoVisibility: "always",
+      weekSelection: defaultWeekSelection(31),
+      years: null,
+      overrides: {},
+      hiddenRows: [],
+    });
+  }
+
+  return { pages, updatedAt: null };
+}

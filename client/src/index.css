@@ -1,0 +1,269 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  /* Corporativo Moderno: Azul Profesional + Naranja Alerta */
+  --primary: #1e40af; /* Azul profundo */
+  --primary-foreground: #f0f9ff;
+  --sidebar-primary: #1e40af;
+  --sidebar-primary-foreground: #f0f9ff;
+  
+  /* Colores de alerta y énfasis */
+  --chart-1: #1e40af; /* Azul primario */
+  --chart-2: #3b82f6; /* Azul claro */
+  --chart-3: #ea580c; /* Naranja alerta */
+  --chart-4: #f97316; /* Naranja secundario */
+  --chart-5: #6b7280; /* Gris secundario */
+  
+  --radius: 0.65rem;
+  --background: #ffffff; /* Blanco puro */
+  --foreground: #1f2937; /* Gris oscuro */
+  --card: #f9fafb; /* Gris muy claro */
+  --card-foreground: #1f2937;
+  --popover: #ffffff;
+  --popover-foreground: #1f2937;
+  --secondary: #f3f4f6; /* Gris claro */
+  --secondary-foreground: #374151;
+  --muted: #e5e7eb; /* Gris medio */
+  --muted-foreground: #6b7280;
+  --accent: #fef3c7; /* Amarillo claro para destacar */
+  --accent-foreground: #92400e;
+  --destructive: #dc2626; /* Rojo para errores */
+  --destructive-foreground: #fef2f2;
+  --border: #e5e7eb;
+  --input: #f3f4f6;
+  --ring: #1e40af;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1f2937;
+  --sidebar-accent: #f3f4f6;
+  --sidebar-accent-foreground: #1e40af;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #1e40af;
+}
+
+.dark {
+  --primary: #3b82f6;
+  --primary-foreground: #0c2340;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #0c2340;
+  --background: #0f172a;
+  --foreground: #e5e7eb;
+  --card: #1e293b;
+  --card-foreground: #e5e7eb;
+  --popover: #1e293b;
+  --popover-foreground: #e5e7eb;
+  --secondary: #334155;
+  --secondary-foreground: #cbd5e1;
+  --muted: #475569;
+  --muted-foreground: #94a3b8;
+  --accent: #fef3c7;
+  --accent-foreground: #78350f;
+  --destructive: #ef4444;
+  --destructive-foreground: #7f1d1d;
+  --border: #334155;
+  --input: #1e293b;
+  --ring: #3b82f6;
+  --chart-1: #3b82f6;
+  --chart-2: #60a5fa;
+  --chart-3: #f97316;
+  --chart-4: #fb923c;
+  --chart-5: #9ca3af;
+  --sidebar: #1e293b;
+  --sidebar-foreground: #e5e7eb;
+  --sidebar-accent: #334155;
+  --sidebar-accent-foreground: #3b82f6;
+  --sidebar-border: #334155;
+  --sidebar-ring: #3b82f6;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 600;
+  }
+  
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+      max-width: 1280px;
+    }
+  }
+  
+  /* Estilos corporativos personalizados */
+  .kpi-card {
+    @apply bg-card rounded-lg p-6 shadow-sm border border-border transition-all duration-150;
+  }
+  
+  .kpi-card:hover {
+    @apply shadow-md border-primary/20;
+  }
+  
+  .kpi-value {
+    @apply text-3xl font-bold text-foreground font-mono;
+  }
+  
+  .kpi-label {
+    @apply text-sm text-muted-foreground font-medium uppercase tracking-wide;
+  }
+  
+  .trend-up {
+    @apply text-green-600 dark:text-green-400;
+  }
+  
+  .trend-down {
+    @apply text-red-600 dark:text-red-400;
+  }
+  
+  .chart-container {
+    @apply bg-card rounded-lg p-6 shadow-sm border border-border;
+  }
+  
+  .sidebar-item {
+    @apply px-4 py-3 rounded-md text-sm transition-colors duration-150;
+  }
+  
+  .sidebar-item:hover {
+    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+  }
+  
+  .sidebar-item.active {
+    @apply bg-sidebar-primary text-sidebar-primary-foreground font-medium;
+  }
+}
+
+/* Print / PDF export styles */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: white !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:static {
+    position: static !important;
+  }
+
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+
+  .chart-container,
+  .kpi-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Force single column layout in print */
+  .lg\:flex-row {
+    flex-direction: column !important;
+  }
+
+  .lg\:grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .lg\:grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Ensure charts render at full width */
+  .recharts-responsive-container {
+    width: 100% !important;
+  }
+}
