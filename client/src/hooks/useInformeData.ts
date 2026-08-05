@@ -314,6 +314,12 @@ export function useInformeData() {
     [upload]
   );
 
+  const uploadPlano = useCallback(
+    (file: File) =>
+      upload("/api/informe/upload/plano", file, "No se pudo cargar el fichero plano"),
+    [upload]
+  );
+
   const resetDeck = useCallback(async (): Promise<InformeActionResult> => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
@@ -366,6 +372,7 @@ export function useInformeData() {
     error,
     uploadWeekly,
     uploadTendencia,
+    uploadPlano,
     updatePage,
     reorderPages,
     resetDeck,

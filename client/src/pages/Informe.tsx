@@ -38,6 +38,7 @@ export default function Informe() {
     error,
     uploadWeekly,
     uploadTendencia,
+    uploadPlano,
     updatePage,
     resetDeck,
   } = useInformeData();
@@ -184,6 +185,8 @@ export default function Informe() {
                 monthly={monthly}
                 onUploadWeekly={uploadWeekly}
                 onUploadTendencia={uploadTendencia}
+                onUploadPlano={uploadPlano}
+                planoSource={weekly.resolutionSource ?? { sourceFile: null, uploadedAt: null }}
                 onUpdatePage={updatePage}
                 onResetDeck={resetDeck}
                 onSelectPage={scrollToPage}

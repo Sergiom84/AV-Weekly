@@ -18,6 +18,7 @@ import {
 } from "../shared/informe.ts";
 import { client } from "./db.js";
 import { parseInformeWeeklyWorkbook } from "./parseInformeWeekly.js";
+import { parseInformePlanoWorkbook } from "./parseInformePlano.js";
 import {
   mergeMonthlyDatasets,
   mergeWeeklyHistory,
@@ -27,6 +28,11 @@ import {
 type WeeklyHistory = Record<SupportType, WeeklyComparison[]>;
 /** Resolution detail accumulated per support type and ISO week. */
 type ResolutionHistory = Record<SupportType, Record<string, ResolutionRow[]>>;
+interface StoredResolutionHistory {
+  byType: ResolutionHistory;
+  sourceFile: string | null;
+  uploadedAt: string | null;
+}
 
 function emptyResolutionHistory(): ResolutionHistory {
   return Object.fromEntries(
@@ -128,22 +134,35 @@ async function readStoredWeeklyHistory(): Promise<WeeklyHistory> {
   }
 }
 
-async function readStoredResolutionHistory(): Promise<ResolutionHistory> {
+async function readStoredResolutionHistory(): Promise<StoredResolutionHistory> {
+  const empty: StoredResolutionHistory = {
+    byType: emptyResolutionHistory(),
+    sourceFile: null,
+    uploadedAt: null,
+  };
   const result = await client.execute(
     "SELECT data FROM informe_resolution_history WHERE id = 1"
   );
 
   if (result.rows.length === 0) {
-    return emptyResolutionHistory();
+    return empty;
   }
 
   try {
-    const stored = JSON.parse(result.rows[0].data as string) as Partial<ResolutionHistory>;
-    return Object.fromEntries(
-      INFORME_SUPPORT_TYPES.map((type) => [type, stored[type] ?? {}])
-    ) as ResolutionHistory;
+    const stored = JSON.parse(result.rows[0].data as string) as Partial<StoredResolutionHistory> &
+      Partial<ResolutionHistory>;
+    // Rows written before the source was tracked hold the map at the top level.
+    const source = stored.byType ?? (stored as ResolutionHistory);
+
+    return {
+      byType: Object.fromEntries(
+        INFORME_SUPPORT_TYPES.map((type) => [type, source[type] ?? {}])
+      ) as ResolutionHistory,
+      sourceFile: stored.sourceFile ?? null,
+      uploadedAt: stored.uploadedAt ?? null,
+    };
   } catch {
-    return emptyResolutionHistory();
+    return empty;
   }
 }
 
@@ -151,17 +170,21 @@ async function readStoredResolutionHistory(): Promise<ResolutionHistory> {
 function withHistory(
   weekly: InformeWeeklyDataset,
   comparisons: WeeklyHistory,
-  resolutions: ResolutionHistory
+  resolutions: StoredResolutionHistory
 ): InformeWeeklyDataset {
   return {
     ...weekly,
+    resolutionSource: {
+      sourceFile: resolutions.sourceFile,
+      uploadedAt: resolutions.uploadedAt,
+    },
     byType: Object.fromEntries(
       INFORME_SUPPORT_TYPES.map((type) => [
         type,
         {
           ...weekly.byType[type],
           comparisons: comparisons[type] ?? [],
-          resolutionsByWeek: resolutions[type] ?? {},
+          resolutionsByWeek: resolutions.byType[type] ?? {},
         },
       ])
     ) as InformeWeeklyDataset["byType"],
@@ -235,7 +258,8 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
 
     // The detail sheets carry a single week and their names are truncated by
     // Excel, so the reported week is taken from the matrices of that same type.
-    const resolutionHistory = await readStoredResolutionHistory();
+    const storedResolutions = await readStoredResolutionHistory();
+    const resolutionHistory = storedResolutions.byType;
 
     for (const type of INFORME_SUPPORT_TYPES) {
       const typeData = dataset.byType[type];
@@ -276,7 +300,13 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
                 VALUES (1, ?, datetime('now'))
                 ON CONFLICT(id) DO UPDATE
                 SET data = excluded.data, uploaded_at = excluded.uploaded_at`,
-          args: [JSON.stringify(resolutionHistory)],
+          args: [
+            JSON.stringify({
+              byType: resolutionHistory,
+              sourceFile: storedResolutions.sourceFile,
+              uploadedAt: storedResolutions.uploadedAt,
+            }),
+          ],
         },
       ],
       "write"
@@ -286,6 +316,47 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Error al procesar el libro semanal del Informe";
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post("/api/informe/upload/plano", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Debes adjuntar el fichero plano de tendencias." });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const parsed = parseInformePlanoWorkbook(workbook);
+    const previous = await readStoredResolutionHistory();
+
+    // A type present in the file replaces its whole set of weeks; the rest of
+    // the accumulated history survives.
+    const merged = Object.fromEntries(
+      INFORME_SUPPORT_TYPES.map((type) => [
+        type,
+        Object.keys(parsed[type]).length > 0 ? parsed[type] : previous.byType[type],
+      ])
+    ) as ResolutionHistory;
+
+    await client.execute({
+      sql: `INSERT INTO informe_resolution_history (id, data, uploaded_at)
+            VALUES (1, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE
+            SET data = excluded.data, uploaded_at = excluded.uploaded_at`,
+      args: [
+        JSON.stringify({
+          byType: merged,
+          sourceFile: req.file.originalname,
+          uploadedAt: new Date().toISOString(),
+        }),
+      ],
+    });
+
+    res.json(await buildInformePayload());
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Error al procesar el fichero plano de tendencias";
     res.status(500).json({ error: message });
   }
 });

@@ -36,6 +36,8 @@ interface DeckSidebarProps {
   error: string | null;
   onUploadWeekly: (file: File) => Promise<InformeActionResult>;
   onUploadTendencia: (file: File) => Promise<InformeActionResult>;
+  onUploadPlano: (file: File) => Promise<InformeActionResult>;
+  planoSource: { sourceFile: string | null; uploadedAt: string | null };
   onUpdatePage: (pageId: string, patch: Partial<DeckPage>) => void;
   onResetDeck: () => Promise<InformeActionResult>;
   onSelectPage: (pageId: string) => void;
@@ -165,6 +167,8 @@ export default function DeckSidebar({
   error,
   onUploadWeekly,
   onUploadTendencia,
+  onUploadPlano,
+  planoSource,
   onUpdatePage,
   onResetDeck,
   onSelectPage,
@@ -193,6 +197,14 @@ export default function DeckSidebar({
             uploadedAt={monthly.uploadedAt}
             disabled={loading}
             onUpload={onUploadTendencia}
+          />
+          <UploadZone
+            id="informe-upload-plano"
+            label="Detalle por resolución"
+            sourceFile={planoSource.sourceFile}
+            uploadedAt={planoSource.uploadedAt}
+            disabled={loading}
+            onUpload={onUploadPlano}
           />
 
           {error && (

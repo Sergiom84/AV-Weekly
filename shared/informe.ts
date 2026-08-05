@@ -140,8 +140,16 @@ export function comparisonValue(
   return typeof value === "number" ? value : null;
 }
 
+/** Where an imported dataset came from. */
+export interface DatasetSource {
+  sourceFile: string | null;
+  uploadedAt: string | null;
+}
+
 export interface InformeWeeklyDataset {
   byType: Record<SupportType, WeeklyTypeData>;
+  /** Origin of the resolution detail, which is uploaded separately. */
+  resolutionSource?: DatasetSource;
   /** Highest week number found across all sheets. */
   maxWeek: number;
   sourceFile: string | null;
@@ -327,7 +335,12 @@ const TYPE_FOOTNOTE: Record<SupportType, string> = {
 };
 
 /** Types that report a resolution breakdown of their own. */
-const RESOLUTION_DETAIL_TYPES: SupportType[] = ["Programados"];
+const RESOLUTION_DETAIL_TYPES: SupportType[] = [
+  "Programados",
+  "Presenciales",
+  "Incidencias",
+  "Correctivos",
+];
 
 const RESOLUTION_LABEL: Partial<Record<SupportType, string>> = {
   Programados: "1.3 Soporte programado por resolución",
