@@ -16,6 +16,25 @@ import { INFORME_SUPPORT_TYPES } from "../shared/informe.ts";
 
 export type ResolutionByWeek = Record<SupportType, Record<string, ResolutionRow[]>>;
 
+export interface PlanoResult {
+  /** Resolution detail per ISO week-year. */
+  byYear: Record<string, ResolutionByWeek>;
+  years: number[];
+}
+
+/** ISO week-year of an Excel date serial, taken from the Thursday of its week. */
+function weekYearFromSerial(serial: number | null): number | null {
+  if (serial === null || !Number.isFinite(serial)) {
+    return null;
+  }
+
+  const epoch = Date.UTC(1899, 11, 30);
+  const date = new Date(epoch + Math.trunc(serial) * 86400000);
+  const dayOfWeek = (date.getUTCDay() + 6) % 7;
+  const thursday = new Date(date.getTime() + (3 - dayOfWeek) * 86400000);
+  return thursday.getUTCFullYear();
+}
+
 const TYPE_BY_LABEL: Record<string, SupportType> = {
   REMOTO: "Remotos",
   REMOTOS: "Remotos",
@@ -67,7 +86,7 @@ function findSheet(workbook: XLSX.WorkBook, name: string) {
   return match ? workbook.Sheets[match] : null;
 }
 
-export function parseInformePlanoWorkbook(workbook: XLSX.WorkBook): ResolutionByWeek {
+export function parseInformePlanoWorkbook(workbook: XLSX.WorkBook): PlanoResult {
   const sheet = findSheet(workbook, RESOLUTION_SHEET);
 
   if (!sheet) {
@@ -78,11 +97,14 @@ export function parseInformePlanoWorkbook(workbook: XLSX.WorkBook): ResolutionBy
   }
 
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
-  const byWeek = emptyByWeek();
+  const byYear = new Map<string, ResolutionByWeek>();
   // Totals are accumulated per (type, week, group, resolution) before being
   // turned into rows, so repeated lines in the source add up instead of
   // overwriting each other.
-  const buckets = new Map<string, { type: SupportType; week: number; row: ResolutionRow }>();
+  const buckets = new Map<
+    string,
+    { type: SupportType; year: string; week: number; row: ResolutionRow }
+  >();
 
   for (const row of rows) {
     const type = TYPE_BY_LABEL[normalize(row["Tipo Soporte"])];
@@ -91,11 +113,14 @@ export function parseInformePlanoWorkbook(workbook: XLSX.WorkBook): ResolutionBy
     const tier3 = String(row["Acción"] ?? row.Accion ?? "").trim();
     const tickets = toCount(row.Tickets);
 
-    if (!type || week === 0 || (!tier2 && !tier3) || tickets <= 0) {
+    const yearNumber = weekYearFromSerial(toCount(row.Fecha));
+
+    if (!type || week === 0 || (!tier2 && !tier3) || tickets <= 0 || yearNumber === null) {
       continue;
     }
 
-    const key = `${type}|${week}|${tier2}|${tier3}`;
+    const year = String(yearNumber);
+    const key = `${type}|${year}|${week}|${tier2}|${tier3}`;
     const existing = buckets.get(key);
 
     if (existing) {
@@ -105,6 +130,7 @@ export function parseInformePlanoWorkbook(workbook: XLSX.WorkBook): ResolutionBy
 
     buckets.set(key, {
       type,
+      year,
       week,
       row: { category: type, tier2: tier2 || tier3, tier3: tier3 || tier2, total: tickets },
     });
@@ -117,17 +143,28 @@ export function parseInformePlanoWorkbook(workbook: XLSX.WorkBook): ResolutionBy
   }
 
   for (const bucket of Array.from(buckets.values())) {
+    const target = byYear.get(bucket.year) ?? emptyByWeek();
     const key = String(bucket.week);
-    byWeek[bucket.type][key] = [...(byWeek[bucket.type][key] ?? []), bucket.row];
+    target[bucket.type][key] = [...(target[bucket.type][key] ?? []), bucket.row];
+    byYear.set(bucket.year, target);
   }
 
-  for (const type of INFORME_SUPPORT_TYPES) {
-    for (const key of Object.keys(byWeek[type])) {
-      byWeek[type][key].sort(
-        (a, b) => a.tier2.localeCompare(b.tier2, "es") || a.tier3.localeCompare(b.tier3, "es")
-      );
+  const result: Record<string, ResolutionByWeek> = {};
+
+  for (const [year, target] of Array.from(byYear.entries())) {
+    for (const type of INFORME_SUPPORT_TYPES) {
+      for (const key of Object.keys(target[type])) {
+        target[type][key].sort(
+          (a, b) => a.tier2.localeCompare(b.tier2, "es") || a.tier3.localeCompare(b.tier3, "es")
+        );
+      }
     }
+
+    result[year] = target;
   }
 
-  return byWeek;
+  return {
+    byYear: result,
+    years: Object.keys(result).map(Number).sort((a, b) => a - b),
+  };
 }

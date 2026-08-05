@@ -29,9 +29,16 @@ type WeeklyHistory = Record<SupportType, WeeklyComparison[]>;
 /** Resolution detail accumulated per support type and ISO week. */
 type ResolutionHistory = Record<SupportType, Record<string, ResolutionRow[]>>;
 interface StoredResolutionHistory {
-  byType: ResolutionHistory;
+  /** Resolution detail per ISO week-year: byYear["2026"][tipo][semana]. */
+  byYear: Record<string, ResolutionHistory>;
   sourceFile: string | null;
   uploadedAt: string | null;
+}
+
+/** The reported year: the most recent one stored. */
+function latestYear(byYear: Record<string, ResolutionHistory>): string | null {
+  const years = Object.keys(byYear).sort();
+  return years.length > 0 ? years[years.length - 1] : null;
 }
 
 function emptyResolutionHistory(): ResolutionHistory {
@@ -135,11 +142,7 @@ async function readStoredWeeklyHistory(): Promise<WeeklyHistory> {
 }
 
 async function readStoredResolutionHistory(): Promise<StoredResolutionHistory> {
-  const empty: StoredResolutionHistory = {
-    byType: emptyResolutionHistory(),
-    sourceFile: null,
-    uploadedAt: null,
-  };
+  const empty: StoredResolutionHistory = { byYear: {}, sourceFile: null, uploadedAt: null };
   const result = await client.execute(
     "SELECT data FROM informe_resolution_history WHERE id = 1"
   );
@@ -149,15 +152,26 @@ async function readStoredResolutionHistory(): Promise<StoredResolutionHistory> {
   }
 
   try {
-    const stored = JSON.parse(result.rows[0].data as string) as Partial<StoredResolutionHistory> &
-      Partial<ResolutionHistory>;
-    // Rows written before the source was tracked hold the map at the top level.
-    const source = stored.byType ?? (stored as ResolutionHistory);
+    const stored = JSON.parse(result.rows[0].data as string) as Partial<StoredResolutionHistory> & {
+      byType?: ResolutionHistory;
+    };
+
+    if (stored.byYear) {
+      return {
+        byYear: stored.byYear,
+        sourceFile: stored.sourceFile ?? null,
+        uploadedAt: stored.uploadedAt ?? null,
+      };
+    }
+
+    // Rows written before the year dimension existed held a single map.
+    const legacy = stored.byType ?? (stored as unknown as ResolutionHistory);
+    const byType = Object.fromEntries(
+      INFORME_SUPPORT_TYPES.map((type) => [type, legacy[type] ?? {}])
+    ) as ResolutionHistory;
 
     return {
-      byType: Object.fromEntries(
-        INFORME_SUPPORT_TYPES.map((type) => [type, source[type] ?? {}])
-      ) as ResolutionHistory,
+      byYear: { [String(new Date().getUTCFullYear())]: byType },
       sourceFile: stored.sourceFile ?? null,
       uploadedAt: stored.uploadedAt ?? null,
     };
@@ -172,6 +186,9 @@ function withHistory(
   comparisons: WeeklyHistory,
   resolutions: StoredResolutionHistory
 ): InformeWeeklyDataset {
+  const year = latestYear(resolutions.byYear);
+  const currentResolutions = (year ? resolutions.byYear[year] : null) ?? emptyResolutionHistory();
+
   return {
     ...weekly,
     resolutionSource: {
@@ -184,7 +201,7 @@ function withHistory(
         {
           ...weekly.byType[type],
           comparisons: comparisons[type] ?? [],
-          resolutionsByWeek: resolutions.byType[type] ?? {},
+          resolutionsByWeek: currentResolutions[type] ?? {},
         },
       ])
     ) as InformeWeeklyDataset["byType"],
@@ -259,7 +276,10 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
     // The detail sheets carry a single week and their names are truncated by
     // Excel, so the reported week is taken from the matrices of that same type.
     const storedResolutions = await readStoredResolutionHistory();
-    const resolutionHistory = storedResolutions.byType;
+    const currentYear =
+      latestYear(storedResolutions.byYear) ?? String(new Date().getUTCFullYear());
+    const resolutionHistory =
+      storedResolutions.byYear[currentYear] ?? emptyResolutionHistory();
 
     for (const type of INFORME_SUPPORT_TYPES) {
       const typeData = dataset.byType[type];
@@ -302,7 +322,7 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
                 SET data = excluded.data, uploaded_at = excluded.uploaded_at`,
           args: [
             JSON.stringify({
-              byType: resolutionHistory,
+              byYear: { ...storedResolutions.byYear, [currentYear]: resolutionHistory },
               sourceFile: storedResolutions.sourceFile,
               uploadedAt: storedResolutions.uploadedAt,
             }),
@@ -330,14 +350,19 @@ router.post("/api/informe/upload/plano", upload.single("file"), async (req, res)
     const parsed = parseInformePlanoWorkbook(workbook);
     const previous = await readStoredResolutionHistory();
 
-    // A type present in the file replaces its whole set of weeks; the rest of
-    // the accumulated history survives.
-    const merged = Object.fromEntries(
-      INFORME_SUPPORT_TYPES.map((type) => [
-        type,
-        Object.keys(parsed[type]).length > 0 ? parsed[type] : previous.byType[type],
-      ])
-    ) as ResolutionHistory;
+    // A year present in the file replaces its own types; other years survive.
+    const merged: Record<string, ResolutionHistory> = { ...previous.byYear };
+
+    for (const [year, incoming] of Object.entries(parsed.byYear)) {
+      const base = merged[year] ?? emptyResolutionHistory();
+
+      merged[year] = Object.fromEntries(
+        INFORME_SUPPORT_TYPES.map((type) => [
+          type,
+          Object.keys(incoming[type]).length > 0 ? incoming[type] : base[type],
+        ])
+      ) as ResolutionHistory;
+    }
 
     await client.execute({
       sql: `INSERT INTO informe_resolution_history (id, data, uploaded_at)
@@ -346,7 +371,7 @@ router.post("/api/informe/upload/plano", upload.single("file"), async (req, res)
             SET data = excluded.data, uploaded_at = excluded.uploaded_at`,
       args: [
         JSON.stringify({
-          byType: merged,
+          byYear: merged,
           sourceFile: req.file.originalname,
           uploadedAt: new Date().toISOString(),
         }),
