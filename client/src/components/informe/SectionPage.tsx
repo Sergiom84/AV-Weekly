@@ -11,6 +11,10 @@ interface SectionPageProps {
   muted?: boolean;
 }
 
+/**
+ * Section divider over the corporate artwork. The title sits in the upper area
+ * so it clears the logo band and the claim printed on the image.
+ */
 export default function SectionPage({
   page,
   editing,
@@ -22,31 +26,34 @@ export default function SectionPage({
     onChange({ text: { ...page.text, [key]: value } });
 
   const subtitle = page.text.subtitle ?? "";
+  const fieldRing = editing ? "ring-white/40 focus:ring-white" : "";
 
   return (
-    <SlideFrame number={number} muted={muted}>
-      <div className="@container flex h-full w-full flex-col items-center justify-center gap-[2cqi] text-center">
-        <h2 className="text-[5cqi] leading-tight text-foreground">
-          <EditableText
-            value={page.text.title ?? ""}
-            onChange={setSlot("title")}
-            editing={editing}
-            ariaLabel="Título de la sección"
-            className="block w-full text-center"
-          />
-        </h2>
-
-        {(editing || subtitle) && (
-          <p className="font-mono text-[1.8cqi] uppercase tracking-wide text-muted-foreground">
+    <SlideFrame number={number} muted={muted} background="/informe/contraportada.png">
+      <div className="@container flex h-full w-full">
+        <div className="flex w-[62%] flex-col justify-start pt-[6%]">
+          <h2 className="text-[4.4cqi] leading-tight text-white">
             <EditableText
-              value={subtitle}
-              onChange={setSlot("subtitle")}
+              value={page.text.title ?? ""}
+              onChange={setSlot("title")}
               editing={editing}
-              ariaLabel="Subtítulo de la sección"
-              className="block w-full text-center"
+              ariaLabel="Título de la sección"
+              className={`block w-full ${fieldRing}`}
             />
-          </p>
-        )}
+          </h2>
+
+          {(editing || subtitle) && (
+            <p className="mt-[1.4cqi] font-mono text-[1.6cqi] uppercase tracking-wide text-white/75">
+              <EditableText
+                value={subtitle}
+                onChange={setSlot("subtitle")}
+                editing={editing}
+                ariaLabel="Subtítulo de la sección"
+                className={`block w-full ${fieldRing}`}
+              />
+            </p>
+          )}
+        </div>
       </div>
     </SlideFrame>
   );

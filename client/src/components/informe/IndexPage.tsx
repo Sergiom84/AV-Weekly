@@ -13,6 +13,10 @@ interface IndexPageProps {
 
 const ITEM_KEYS = ["item1", "item2", "item3", "item4", "item5", "item6"] as const;
 
+/**
+ * Index slide over the corporate artwork. The block sits in the upper area so
+ * it clears the logo band and the claim printed on the image.
+ */
 export default function IndexPage({
   page,
   editing,
@@ -23,32 +27,38 @@ export default function IndexPage({
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
 
-  return (
-    <SlideFrame number={number} muted={muted}>
-      <div className="@container flex h-full w-full flex-col gap-[3cqi]">
-        <h2 className="text-[4cqi] leading-tight text-foreground">
-          <EditableText
-            value={page.text.title ?? ""}
-            onChange={setSlot("title")}
-            editing={editing}
-            ariaLabel="Título del índice"
-            className="block w-full"
-          />
-        </h2>
+  const fieldRing = editing ? "ring-white/40 focus:ring-white" : "";
 
-        <ol className="ml-[4cqi] flex flex-col gap-[1.4cqi] border-l border-border pl-[3cqi]">
-          {ITEM_KEYS.map((key, position) => (
-            <li key={key} className="font-mono text-[1.8cqi] text-foreground">
-              <EditableText
-                value={page.text[key] ?? ""}
-                onChange={setSlot(key)}
-                editing={editing}
-                ariaLabel={`Entrada ${position + 1} del índice`}
-                className="block w-full"
-              />
-            </li>
-          ))}
-        </ol>
+  return (
+    <SlideFrame number={number} muted={muted} background="/informe/contraportada.png">
+      <div className="@container flex h-full w-full">
+        {/* Offset to the right: the list is tall enough to reach the logo band
+            printed on the artwork, which sits in the left margin. */}
+        <div className="ml-[22%] flex w-[46%] flex-col justify-start pt-[2%]">
+          <h2 className="text-[3.4cqi] leading-tight text-white">
+            <EditableText
+              value={page.text.title ?? ""}
+              onChange={setSlot("title")}
+              editing={editing}
+              ariaLabel="Título del índice"
+              className={`block w-full ${fieldRing}`}
+            />
+          </h2>
+
+          <ol className="mt-[1.6cqi] flex flex-col gap-[0.9cqi] border-l border-white/30 pl-[2.4cqi]">
+            {ITEM_KEYS.map((key, position) => (
+              <li key={key} className="font-mono text-[1.5cqi] text-white/85">
+                <EditableText
+                  value={page.text[key] ?? ""}
+                  onChange={setSlot(key)}
+                  editing={editing}
+                  ariaLabel={`Entrada ${position + 1} del índice`}
+                  className={`block w-full ${fieldRing}`}
+                />
+              </li>
+            ))}
+          </ol>
+        </div>
       </div>
     </SlideFrame>
   );
