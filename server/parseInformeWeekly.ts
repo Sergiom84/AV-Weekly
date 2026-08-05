@@ -210,7 +210,8 @@ function parseDetailSheet(worksheet: XLSX.WorkSheet): ResolutionRow[] {
 }
 
 function createEmptyTypeData(): WeeklyTypeData {
-  return { categories: null, locations: null, resolutions: [] };
+  // Comparison series come from the trends workbook, not from this one.
+  return { categories: null, locations: null, resolutions: [], comparisons: [] };
 }
 
 export function parseInformeWeeklyWorkbook(workbook: XLSX.WorkBook): InformeWeeklyDataset {

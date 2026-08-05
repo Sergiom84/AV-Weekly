@@ -6,14 +6,30 @@ import type {
   InformeMonthlyDataset,
   InformePayload,
   InformeWeeklyDataset,
+  SupportType,
+  WeeklyComparison,
 } from "../shared/informe.ts";
 import {
   createDefaultDeck,
   emptyMonthlyDataset,
   emptyWeeklyDataset,
+  INFORME_SUPPORT_TYPES,
 } from "../shared/informe.ts";
 import { client } from "./db.js";
 import { parseInformeWeeklyWorkbook } from "./parseInformeWeekly.js";
+import {
+  mergeMonthlyDatasets,
+  mergeWeeklyHistory,
+  parseTendenciaWorkbook,
+} from "./parseTendenciaMensual.js";
+
+type WeeklyHistory = Record<SupportType, WeeklyComparison[]>;
+
+function emptyWeeklyHistory(): WeeklyHistory {
+  return Object.fromEntries(
+    INFORME_SUPPORT_TYPES.map((type) => [type, [] as WeeklyComparison[]])
+  ) as WeeklyHistory;
+}
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -86,16 +102,50 @@ async function readStoredInformeMonthly(): Promise<InformeMonthlyDataset | null>
   }
 }
 
+async function readStoredWeeklyHistory(): Promise<WeeklyHistory> {
+  const result = await client.execute(
+    "SELECT data FROM informe_weekly_history WHERE id = 1"
+  );
+
+  if (result.rows.length === 0) {
+    return emptyWeeklyHistory();
+  }
+
+  try {
+    const stored = JSON.parse(result.rows[0].data as string) as Partial<WeeklyHistory>;
+    return mergeWeeklyHistory(emptyWeeklyHistory(), stored as WeeklyHistory);
+  } catch {
+    return emptyWeeklyHistory();
+  }
+}
+
+/** Attaches the previous-year comparison series to the current weekly dataset. */
+function withComparisons(
+  weekly: InformeWeeklyDataset,
+  history: WeeklyHistory
+): InformeWeeklyDataset {
+  return {
+    ...weekly,
+    byType: Object.fromEntries(
+      INFORME_SUPPORT_TYPES.map((type) => [
+        type,
+        { ...weekly.byType[type], comparisons: history[type] ?? [] },
+      ])
+    ) as InformeWeeklyDataset["byType"],
+  };
+}
+
 async function buildInformePayload(): Promise<InformePayload> {
-  const [deck, weekly, monthly] = await Promise.all([
+  const [deck, weekly, monthly, history] = await Promise.all([
     readStoredInformeDeck(),
     readStoredInformeWeekly(),
     readStoredInformeMonthly(),
+    readStoredWeeklyHistory(),
   ]);
 
   return {
     deck: deck ?? createDefaultDeck(),
-    weekly: weekly ?? emptyWeeklyDataset(),
+    weekly: withComparisons(weekly ?? emptyWeeklyDataset(), history),
     monthly: monthly ?? emptyMonthlyDataset(),
   };
 }
@@ -163,6 +213,57 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Error al procesar el libro semanal del Informe";
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post("/api/informe/upload/tendencia", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Debes adjuntar el libro de tendencias." });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const parsed = parseTendenciaWorkbook(workbook);
+    const uploadedAt = new Date().toISOString();
+
+    const previousMonthly = (await readStoredInformeMonthly()) ?? emptyMonthlyDataset();
+    const monthly = mergeMonthlyDatasets(previousMonthly, {
+      ...parsed.monthly,
+      sourceFile: req.file.originalname,
+      uploadedAt,
+    });
+
+    const history = mergeWeeklyHistory(await readStoredWeeklyHistory(), parsed.weeklyHistory);
+
+    await client.batch(
+      [
+        {
+          sql: `INSERT INTO informe_monthly (id, data, source_file, uploaded_at)
+                VALUES (1, ?, ?, datetime('now'))
+                ON CONFLICT(id) DO UPDATE
+                SET data = excluded.data,
+                    source_file = excluded.source_file,
+                    uploaded_at = excluded.uploaded_at`,
+          args: [JSON.stringify(monthly), monthly.sourceFile],
+        },
+        {
+          sql: `INSERT INTO informe_weekly_history (id, data, source_file, uploaded_at)
+                VALUES (1, ?, ?, datetime('now'))
+                ON CONFLICT(id) DO UPDATE
+                SET data = excluded.data,
+                    source_file = excluded.source_file,
+                    uploaded_at = excluded.uploaded_at`,
+          args: [JSON.stringify(history), req.file.originalname],
+        },
+      ],
+      "write"
+    );
+
+    res.json(await buildInformePayload());
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Error al procesar el libro de tendencias";
     res.status(500).json({ error: message });
   }
 });

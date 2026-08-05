@@ -30,7 +30,7 @@ async function startServer() {
     });
   }
 
-  const port = process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3001);
+  const port = process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3201);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

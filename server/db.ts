@@ -27,5 +27,13 @@ export async function initDb() {
       source_file TEXT,
       uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Previous-year weekly totals per support type, for the comparison series.
+    CREATE TABLE IF NOT EXISTS informe_weekly_history (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      source_file TEXT,
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }

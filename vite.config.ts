@@ -168,12 +168,13 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 3000,
-    strictPort: false, // Will find next available port if 3000 is busy
+    // Ports are configurable so the app can run next to other local projects.
+    port: Number(process.env.CLIENT_PORT ?? 3200),
+    strictPort: true,
     host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: `http://localhost:${process.env.PORT ?? 3201}`,
         changeOrigin: true,
       },
     },

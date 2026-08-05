@@ -12,6 +12,7 @@ import type { DeckPage, InformeMonthlyDataset } from "@shared/informe";
 import { MONTH_LABELS } from "@shared/informe";
 import EditableNumber from "./EditableNumber";
 import EditableText from "./EditableText";
+import SlideHeading from "./SlideHeading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -100,26 +101,13 @@ export default function MonthlyTrendPage({
 
   return (
     <div className="@container flex h-full w-full flex-col text-foreground">
-      <header className="shrink-0">
-        <h2 className="text-[3.2cqi] leading-none font-bold tracking-wide text-foreground">
-          <EditableText
-            value={page.text.subtitle ?? ""}
-            onChange={setSlot("subtitle")}
-            editing={editing}
-            ariaLabel="Encabezado de la página"
-            className="block w-full"
-          />
-        </h2>
-        <p className="mt-[0.4cqi] font-mono text-[1.7cqi] leading-tight text-muted-foreground">
-          <EditableText
-            value={page.text.title ?? ""}
-            onChange={setSlot("title")}
-            editing={editing}
-            ariaLabel="Título de la página"
-            className="block w-full"
-          />
-        </p>
-      </header>
+      <SlideHeading
+        service={page.text.subtitle ?? ""}
+        title={page.text.title ?? ""}
+        editing={editing}
+        onServiceChange={setSlot("subtitle")}
+        onTitleChange={setSlot("title")}
+      />
 
       {editing && (
         <div className="mt-[1cqi] flex shrink-0 flex-wrap items-center gap-1">

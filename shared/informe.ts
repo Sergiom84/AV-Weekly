@@ -71,6 +71,17 @@ export interface ResolutionRow {
   total: number;
 }
 
+/**
+ * Weekly totals of a previous year, used as the comparison series on the
+ * weekly pages. Keyed by ISO week so a partial or 53-week year still lines up
+ * with the current year regardless of how many weeks it reports.
+ */
+export interface WeeklyComparison {
+  year: number;
+  /** Total per ISO week: key is the week number as a string. */
+  totalsByWeek: Record<string, number>;
+}
+
 export interface WeeklyTypeData {
   /** Breakdown by resolution category. Present for Remotos. */
   categories: WeeklyMatrix | null;
@@ -78,6 +89,21 @@ export interface WeeklyTypeData {
   locations: WeeklyMatrix | null;
   /** Detail sheet for the reported week. */
   resolutions: ResolutionRow[];
+  /** Previous-year weekly totals, ascending by year. Empty when not loaded. */
+  comparisons: WeeklyComparison[];
+}
+
+/** Comparison total for a week, or null when that year has no data for it. */
+export function comparisonValue(
+  comparison: WeeklyComparison | undefined,
+  week: number
+): number | null {
+  if (!comparison) {
+    return null;
+  }
+
+  const value = comparison.totalsByWeek[String(week)];
+  return typeof value === "number" ? value : null;
 }
 
 export interface InformeWeeklyDataset {
@@ -208,7 +234,7 @@ export function emptyWeeklyDataset(): InformeWeeklyDataset {
     byType: Object.fromEntries(
       INFORME_SUPPORT_TYPES.map((type) => [
         type,
-        { categories: null, locations: null, resolutions: [] },
+        { categories: null, locations: null, resolutions: [], comparisons: [] },
       ])
     ) as unknown as Record<SupportType, WeeklyTypeData>,
     maxWeek: 0,

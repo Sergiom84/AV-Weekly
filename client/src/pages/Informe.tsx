@@ -36,6 +36,7 @@ export default function Informe() {
     saving,
     error,
     uploadWeekly,
+    uploadTendencia,
     updatePage,
     resetDeck,
   } = useInformeData();
@@ -168,7 +169,9 @@ export default function Informe() {
                 loading={loading}
                 saving={saving}
                 error={error}
+                monthly={monthly}
                 onUploadWeekly={uploadWeekly}
+                onUploadTendencia={uploadTendencia}
                 onUpdatePage={updatePage}
                 onResetDeck={resetDeck}
                 onSelectPage={scrollToPage}

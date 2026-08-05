@@ -308,6 +308,12 @@ export function useInformeData() {
     [upload]
   );
 
+  const uploadTendencia = useCallback(
+    (file: File) =>
+      upload("/api/informe/upload/tendencia", file, "No se pudo cargar la tendencia mensual"),
+    [upload]
+  );
+
   const resetDeck = useCallback(async (): Promise<InformeActionResult> => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
@@ -359,6 +365,7 @@ export function useInformeData() {
     saving,
     error,
     uploadWeekly,
+    uploadTendencia,
     updatePage,
     reorderPages,
     resetDeck,

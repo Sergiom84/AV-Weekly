@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import type {
   DeckPage,
   DeckState,
+  InformeMonthlyDataset,
   InformeWeeklyDataset,
 } from "@shared/informe";
 import type { InformeActionResult } from "@/hooks/useInformeData";
@@ -27,12 +28,14 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 interface DeckSidebarProps {
   deck: DeckState | null;
   weekly: InformeWeeklyDataset;
+  monthly: InformeMonthlyDataset;
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
   loading: boolean;
   saving: boolean;
   error: string | null;
   onUploadWeekly: (file: File) => Promise<InformeActionResult>;
+  onUploadTendencia: (file: File) => Promise<InformeActionResult>;
   onUpdatePage: (pageId: string, patch: Partial<DeckPage>) => void;
   onResetDeck: () => Promise<InformeActionResult>;
   onSelectPage: (pageId: string) => void;
@@ -154,12 +157,14 @@ function UploadZone({
 export default function DeckSidebar({
   deck,
   weekly,
+  monthly,
   editing,
   onEditingChange,
   loading,
   saving,
   error,
   onUploadWeekly,
+  onUploadTendencia,
   onUpdatePage,
   onResetDeck,
   onSelectPage,
@@ -180,6 +185,14 @@ export default function DeckSidebar({
             uploadedAt={weekly.uploadedAt}
             disabled={loading}
             onUpload={onUploadWeekly}
+          />
+          <UploadZone
+            id="informe-upload-tendencia"
+            label="Tendencia mensual"
+            sourceFile={monthly.sourceFile}
+            uploadedAt={monthly.uploadedAt}
+            disabled={loading}
+            onUpload={onUploadTendencia}
           />
 
           {error && (
