@@ -28,6 +28,13 @@ export async function initDb() {
       uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Resolution detail accumulated week by week, from each weekly upload.
+    CREATE TABLE IF NOT EXISTS informe_resolution_history (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Previous-year weekly totals per support type, for the comparison series.
     CREATE TABLE IF NOT EXISTS informe_weekly_history (
       id INTEGER PRIMARY KEY CHECK (id = 1),

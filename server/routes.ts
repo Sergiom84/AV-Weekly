@@ -6,6 +6,7 @@ import type {
   InformeMonthlyDataset,
   InformePayload,
   InformeWeeklyDataset,
+  ResolutionRow,
   SupportType,
   WeeklyComparison,
 } from "../shared/informe.ts";
@@ -24,6 +25,14 @@ import {
 } from "./parseTendenciaMensual.js";
 
 type WeeklyHistory = Record<SupportType, WeeklyComparison[]>;
+/** Resolution detail accumulated per support type and ISO week. */
+type ResolutionHistory = Record<SupportType, Record<string, ResolutionRow[]>>;
+
+function emptyResolutionHistory(): ResolutionHistory {
+  return Object.fromEntries(
+    INFORME_SUPPORT_TYPES.map((type) => [type, {} as Record<string, ResolutionRow[]>])
+  ) as ResolutionHistory;
+}
 
 function emptyWeeklyHistory(): WeeklyHistory {
   return Object.fromEntries(
@@ -119,33 +128,58 @@ async function readStoredWeeklyHistory(): Promise<WeeklyHistory> {
   }
 }
 
-/** Attaches the previous-year comparison series to the current weekly dataset. */
-function withComparisons(
+async function readStoredResolutionHistory(): Promise<ResolutionHistory> {
+  const result = await client.execute(
+    "SELECT data FROM informe_resolution_history WHERE id = 1"
+  );
+
+  if (result.rows.length === 0) {
+    return emptyResolutionHistory();
+  }
+
+  try {
+    const stored = JSON.parse(result.rows[0].data as string) as Partial<ResolutionHistory>;
+    return Object.fromEntries(
+      INFORME_SUPPORT_TYPES.map((type) => [type, stored[type] ?? {}])
+    ) as ResolutionHistory;
+  } catch {
+    return emptyResolutionHistory();
+  }
+}
+
+/** Attaches the stored history to the current weekly dataset. */
+function withHistory(
   weekly: InformeWeeklyDataset,
-  history: WeeklyHistory
+  comparisons: WeeklyHistory,
+  resolutions: ResolutionHistory
 ): InformeWeeklyDataset {
   return {
     ...weekly,
     byType: Object.fromEntries(
       INFORME_SUPPORT_TYPES.map((type) => [
         type,
-        { ...weekly.byType[type], comparisons: history[type] ?? [] },
+        {
+          ...weekly.byType[type],
+          comparisons: comparisons[type] ?? [],
+          resolutionsByWeek: resolutions[type] ?? {},
+        },
       ])
     ) as InformeWeeklyDataset["byType"],
   };
 }
 
 async function buildInformePayload(): Promise<InformePayload> {
-  const [deck, weekly, monthly, history] = await Promise.all([
+  const [deck, weekly, monthly, history, resolutions] = await Promise.all([
     readStoredInformeDeck(),
     readStoredInformeWeekly(),
     readStoredInformeMonthly(),
     readStoredWeeklyHistory(),
+    readStoredResolutionHistory(),
   ]);
 
   return {
     deck: deck ?? createDefaultDeck(),
-    weekly: withComparisons(weekly ?? emptyWeeklyDataset(), history),
+    weekly: withHistory(weekly ?? emptyWeeklyDataset(), history, resolutions),
     monthly: monthly ?? emptyMonthlyDataset(),
   };
 }
@@ -199,15 +233,54 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
       uploadedAt: new Date().toISOString(),
     };
 
-    await client.execute({
-      sql: `INSERT INTO informe_weekly (id, data, source_file, uploaded_at)
-            VALUES (1, ?, ?, datetime('now'))
-            ON CONFLICT(id) DO UPDATE
-            SET data = excluded.data,
-                source_file = excluded.source_file,
-                uploaded_at = excluded.uploaded_at`,
-      args: [JSON.stringify(stored), stored.sourceFile],
-    });
+    // The detail sheets carry a single week and their names are truncated by
+    // Excel, so the reported week is taken from the matrices of that same type.
+    const resolutionHistory = await readStoredResolutionHistory();
+
+    for (const type of INFORME_SUPPORT_TYPES) {
+      const typeData = dataset.byType[type];
+      const matrix = typeData.categories ?? typeData.locations;
+
+      if (!matrix || typeData.resolutions.length === 0) {
+        continue;
+      }
+
+      const lastWeekWithData = matrix.weeks.filter(
+        (_, index) => (matrix.totals[index] ?? 0) > 0
+      );
+      const reportedWeek = lastWeekWithData[lastWeekWithData.length - 1];
+
+      if (reportedWeek === undefined) {
+        continue;
+      }
+
+      resolutionHistory[type] = {
+        ...resolutionHistory[type],
+        [String(reportedWeek)]: typeData.resolutions,
+      };
+    }
+
+    await client.batch(
+      [
+        {
+          sql: `INSERT INTO informe_weekly (id, data, source_file, uploaded_at)
+                VALUES (1, ?, ?, datetime('now'))
+                ON CONFLICT(id) DO UPDATE
+                SET data = excluded.data,
+                    source_file = excluded.source_file,
+                    uploaded_at = excluded.uploaded_at`,
+          args: [JSON.stringify(stored), stored.sourceFile],
+        },
+        {
+          sql: `INSERT INTO informe_resolution_history (id, data, uploaded_at)
+                VALUES (1, ?, datetime('now'))
+                ON CONFLICT(id) DO UPDATE
+                SET data = excluded.data, uploaded_at = excluded.uploaded_at`,
+          args: [JSON.stringify(resolutionHistory)],
+        },
+      ],
+      "write"
+    );
 
     res.json(await buildInformePayload());
   } catch (err) {

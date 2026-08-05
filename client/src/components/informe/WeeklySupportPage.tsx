@@ -1,5 +1,10 @@
 import type { DeckPage, InformeWeeklyDataset, WeekSelection } from "@shared/informe";
-import { comparisonValue, defaultWeekSelection, resolveWeekSelection } from "@shared/informe";
+import {
+  comparisonValue,
+  defaultHiddenRows,
+  defaultWeekSelection,
+  resolveWeekSelection,
+} from "@shared/informe";
 import EditableText from "./EditableText";
 import RowFilterPanel from "./RowFilterPanel";
 import SlideHeading from "./SlideHeading";
@@ -60,7 +65,10 @@ export default function WeeklySupportPage({
     page.weekSelection ?? defaultWeekSelection(matrix.weeks[matrix.weeks.length - 1]);
   const weeks = resolveWeekSelection(selection, matrix.weeks);
 
-  const hiddenRows = page.hiddenRows ?? [];
+  // A page that has never been filtered opens on its default rows.
+  const rowLabels = matrix.rows.map((row) => row.label);
+  const presetHidden = defaultHiddenRows(page.supportType, rowLabels);
+  const hiddenRows = page.hiddenRows ?? presetHidden;
   const visibleRows = matrix.rows.filter((row) => !hiddenRows.includes(row.label));
 
   const isOverridden = (rowLabel: string, week: number) =>
@@ -145,9 +153,10 @@ export default function WeeklySupportPage({
 
       {editing && (
         <RowFilterPanel
-          labels={matrix.rows.map((row) => row.label)}
+          labels={rowLabels}
           hiddenRows={hiddenRows}
           scope={page.id}
+          defaultHidden={presetHidden}
           onChange={(next) => onChange({ hiddenRows: next })}
         />
       )}

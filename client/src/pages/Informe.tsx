@@ -8,6 +8,7 @@ import CoverPage from "@/components/informe/CoverPage";
 import IndexPage from "@/components/informe/IndexPage";
 import SectionPage from "@/components/informe/SectionPage";
 import MonthlyTrendPage from "@/components/informe/MonthlyTrendPage";
+import ResolutionDetailPage from "@/components/informe/ResolutionDetailPage";
 import WeeklySupportPage from "@/components/informe/WeeklySupportPage";
 import SlideFrame from "@/components/informe/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,6 +110,17 @@ export default function Informe() {
             <MonthlyTrendPage
               page={page}
               monthly={monthly}
+              editing={editing}
+              onChange={onChange}
+            />
+          </SlideFrame>
+        );
+      case "resolutionDetail":
+        return (
+          <SlideFrame number={number} muted={muted}>
+            <ResolutionDetailPage
+              page={page}
+              weekly={weekly}
               editing={editing}
               onChange={onChange}
             />

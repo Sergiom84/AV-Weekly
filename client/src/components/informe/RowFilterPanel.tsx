@@ -7,6 +7,8 @@ interface RowFilterPanelProps {
   hiddenRows: string[];
   /** Namespaces the checkbox ids so several pages can coexist. */
   scope: string;
+  /** Rows hidden by the page's default preset. */
+  defaultHidden: string[];
   onChange: (hiddenRows: string[]) => void;
 }
 
@@ -18,6 +20,7 @@ export default function RowFilterPanel({
   labels,
   hiddenRows,
   scope,
+  defaultHidden,
   onChange,
 }: RowFilterPanelProps) {
   if (labels.length === 0) {
@@ -26,6 +29,9 @@ export default function RowFilterPanel({
 
   const allVisible = hiddenRows.length === 0;
   const allHidden = hiddenRows.length >= labels.length;
+  const sameAsDefault =
+    hiddenRows.length === defaultHidden.length &&
+    defaultHidden.every((label) => hiddenRows.includes(label));
 
   const toggle = (label: string, visible: boolean) =>
     onChange(
@@ -52,6 +58,15 @@ export default function RowFilterPanel({
           onClick={() => onChange([...labels])}
         >
           Deseleccionar
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={sameAsDefault}
+          onClick={() => onChange([...defaultHidden])}
+        >
+          Defecto
         </Button>
       </div>
 

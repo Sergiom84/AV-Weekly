@@ -89,8 +89,42 @@ export interface WeeklyTypeData {
   locations: WeeklyMatrix | null;
   /** Detail sheet for the reported week. */
   resolutions: ResolutionRow[];
+  /** Accumulated resolution detail, keyed by ISO week as a string. */
+  resolutionsByWeek: Record<string, ResolutionRow[]>;
   /** Previous-year weekly totals, ascending by year. Empty when not loaded. */
   comparisons: WeeklyComparison[];
+}
+
+/**
+ * Rows shown by default on each weekly page. A type with no entry here starts
+ * with every row visible. Matching ignores case and accents, so "CONEXIÓN" and
+ * "CONEXION" are the same row.
+ */
+export const DEFAULT_VISIBLE_ROWS: Partial<Record<SupportType, string[]>> = {
+  Remotos: ["ERRORES", "OPERATIVA", "CONEXION", "VIDEO"],
+};
+
+function normalizeRowLabel(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
+/** Rows to hide so only the default ones remain visible. */
+export function defaultHiddenRows(
+  type: SupportType | null,
+  labels: string[]
+): string[] {
+  const defaults = type ? DEFAULT_VISIBLE_ROWS[type] : undefined;
+
+  if (!defaults) {
+    return [];
+  }
+
+  const wanted = new Set(defaults.map(normalizeRowLabel));
+  return labels.filter((label) => !wanted.has(normalizeRowLabel(label)));
 }
 
 /** Comparison total for a week, or null when that year has no data for it. */
@@ -197,8 +231,8 @@ export interface DeckPage {
   /** Only meaningful for monthlyTrend pages. Years shown, ascending. */
   years: number[] | null;
   overrides: CellOverrides;
-  /** Rows hidden by the user, by row label. */
-  hiddenRows: string[];
+  /** Rows hidden by the user, by row label. Absent means "use the defaults". */
+  hiddenRows?: string[];
 }
 
 export interface DeckState {
@@ -234,7 +268,13 @@ export function emptyWeeklyDataset(): InformeWeeklyDataset {
     byType: Object.fromEntries(
       INFORME_SUPPORT_TYPES.map((type) => [
         type,
-        { categories: null, locations: null, resolutions: [], comparisons: [] },
+        {
+          categories: null,
+          locations: null,
+          resolutions: [],
+          resolutionsByWeek: {},
+          comparisons: [],
+        },
       ])
     ) as unknown as Record<SupportType, WeeklyTypeData>,
     maxWeek: 0,
@@ -286,7 +326,17 @@ const TYPE_FOOTNOTE: Record<SupportType, string> = {
     "Mantenimientos correctivos: acciones de carácter proactivo. Conllevan una acción que corrige un fallo.",
 };
 
-/** Builds the default 16-page deck matching the current weekly report. */
+/** Types that report a resolution breakdown of their own. */
+const RESOLUTION_DETAIL_TYPES: SupportType[] = ["Programados"];
+
+const RESOLUTION_LABEL: Partial<Record<SupportType, string>> = {
+  Programados: "1.3 Soporte programado por resolución",
+  Presenciales: "1.4 Soporte presencial por resolución",
+  Incidencias: "1.5 Incidencias por resolución",
+  Correctivos: "1.6 Mantenimientos correctivos por resolución",
+};
+
+/** Builds the default deck matching the current weekly report. */
 export function createDefaultDeck(): DeckState {
   const pages: DeckPage[] = [
     {
@@ -302,7 +352,6 @@ export function createDefaultDeck(): DeckState {
       weekSelection: null,
       years: null,
       overrides: {},
-      hiddenRows: [],
     },
     {
       id: "index",
@@ -362,8 +411,25 @@ export function createDefaultDeck(): DeckState {
       weekSelection: defaultWeekSelection(31),
       years: null,
       overrides: {},
-      hiddenRows: [],
+      // hiddenRows stays absent so the page opens on its default rows.
     });
+
+    if (RESOLUTION_DETAIL_TYPES.includes(type)) {
+      pages.push({
+        id: `resolution-${type.toLowerCase()}`,
+        kind: "resolutionDetail",
+        supportType: type,
+        text: {
+          title: RESOLUTION_LABEL[type] ?? "",
+          subtitle: "AUDIOVISUALES",
+          footnote: "",
+        },
+        visible: true,
+        weekSelection: defaultWeekSelection(31),
+        years: null,
+        overrides: {},
+      });
+    }
   }
 
   return { pages, updatedAt: null };
