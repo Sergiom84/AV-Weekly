@@ -12,7 +12,6 @@ import type {
 } from "@shared/informe";
 
 export type {
-  AutoVisibility,
   CellOverrides,
   DeckPage,
   DeckPageKind,
@@ -309,12 +308,6 @@ export function useInformeData() {
     [upload]
   );
 
-  const uploadMonthly = useCallback(
-    (file: File) =>
-      upload("/api/informe/upload/mensual", file, "No se pudo cargar las resueltas del mes"),
-    [upload]
-  );
-
   const resetDeck = useCallback(async (): Promise<InformeActionResult> => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
@@ -366,7 +359,6 @@ export function useInformeData() {
     saving,
     error,
     uploadWeekly,
-    uploadMonthly,
     updatePage,
     reorderPages,
     resetDeck,

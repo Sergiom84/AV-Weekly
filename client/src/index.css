@@ -55,7 +55,14 @@
   --chart-3: #ea580c; /* Naranja alerta */
   --chart-4: #f97316; /* Naranja secundario */
   --chart-5: #6b7280; /* Gris secundario */
-  
+
+  /* Paleta del informe corporativo: una serie por año, asignada por posición */
+  --informe-serie-1: #1c3144; /* Azul marino */
+  --informe-serie-2: #31577f; /* Azul acero */
+  --informe-serie-3: #35c1f1; /* Azul celeste */
+  --informe-serie-4: #ef8b4c; /* Naranja */
+
+
   --radius: 0.65rem;
   --background: #ffffff; /* Blanco puro */
   --foreground: #1f2937; /* Gris oscuro */
@@ -109,6 +116,13 @@
   --chart-3: #f97316;
   --chart-4: #fb923c;
   --chart-5: #9ca3af;
+
+  /* Mismas series, con la luminosidad mínima para leerse sobre fondo oscuro */
+  --informe-serie-1: #8aa9c4;
+  --informe-serie-2: #5b93cf;
+  --informe-serie-3: #35c1f1;
+  --informe-serie-4: #ef8b4c;
+
   --sidebar: #1e293b;
   --sidebar-foreground: #e5e7eb;
   --sidebar-accent: #334155;

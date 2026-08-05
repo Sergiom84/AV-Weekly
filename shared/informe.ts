@@ -111,8 +111,6 @@ export type DeckPageKind =
   | "pendingItems"
   | "closing";
 
-/** How a page decides its default visibility when the user has not forced it. */
-export type AutoVisibility = "always" | "firstTuesday";
 
 /**
  * Which weeks a weekly page renders.
@@ -166,9 +164,8 @@ export interface DeckPage {
   supportType: SupportType | null;
   /** Editable text slots: title, subtitle, footnote, bullets, etc. */
   text: Record<string, string>;
-  /** User-forced visibility. null means "follow autoVisibility". */
-  visible: boolean | null;
-  autoVisibility: AutoVisibility;
+  /** Whether the page is part of the deck. Every page ships visible. */
+  visible: boolean;
   /** Only meaningful for weeklySupport pages. */
   weekSelection: WeekSelection | null;
   /** Only meaningful for monthlyTrend pages. Years shown, ascending. */
@@ -193,18 +190,13 @@ export interface InformePayload {
 /* Visibility                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/** True when `date` is the first Tuesday of its month. */
-export function isFirstTuesday(date: Date): boolean {
-  return date.getDay() === 2 && date.getDate() <= 7;
-}
-
-/** Effective visibility of a page: manual override wins over the auto rule. */
-export function isPageVisible(page: DeckPage, reference: Date): boolean {
-  if (page.visible !== null) {
-    return page.visible;
-  }
-
-  return page.autoVisibility === "always" || isFirstTuesday(reference);
+/**
+ * Effective visibility of a page. Toggled by hand from the deck sidebar.
+ * Anything other than an explicit `false` counts as visible, so decks stored
+ * before `visible` became a plain boolean keep rendering.
+ */
+export function isPageVisible(page: DeckPage): boolean {
+  return page.visible !== false;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -280,8 +272,7 @@ export function createDefaultDeck(): DeckState {
         subtitle: "Servicio Audiovisuales BBVA",
         period: "",
       },
-      visible: null,
-      autoVisibility: "always",
+      visible: true,
       weekSelection: null,
       years: null,
       overrides: {},
@@ -300,8 +291,7 @@ export function createDefaultDeck(): DeckState {
         item5: "1.6 Mantenimientos correctivos",
         item6: "2. Asuntos pendientes",
       },
-      visible: null,
-      autoVisibility: "always",
+      visible: true,
       weekSelection: null,
       years: null,
       overrides: {},
@@ -312,8 +302,7 @@ export function createDefaultDeck(): DeckState {
       kind: "section",
       supportType: null,
       text: { title: "1 Revisión de métricas", subtitle: "" },
-      visible: null,
-      autoVisibility: "always",
+      visible: true,
       weekSelection: null,
       years: null,
       overrides: {},
@@ -327,8 +316,7 @@ export function createDefaultDeck(): DeckState {
       kind: "monthlyTrend",
       supportType: type,
       text: { title: TREND_LABEL[type], subtitle: "AUDIOVISUALES", footnote: "" },
-      visible: null,
-      autoVisibility: "firstTuesday",
+      visible: true,
       weekSelection: null,
       years: [2023, 2024, 2025, 2026],
       overrides: {},
@@ -344,8 +332,7 @@ export function createDefaultDeck(): DeckState {
         subtitle: "AUDIOVISUALES",
         footnote: TYPE_FOOTNOTE[type],
       },
-      visible: null,
-      autoVisibility: "always",
+      visible: true,
       weekSelection: defaultWeekSelection(31),
       years: null,
       overrides: {},

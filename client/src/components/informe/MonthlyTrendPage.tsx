@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -25,13 +24,16 @@ interface MonthlyTrendPageProps {
 
 const DEFAULT_YEARS = [2023, 2024, 2025, 2026];
 
+// Report palette, assigned by position in the ascending year list so adding or
+// removing a year keeps the sequence intact.
 const SERIES_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
+  "var(--informe-serie-1)",
+  "var(--informe-serie-2)",
+  "var(--informe-serie-3)",
+  "var(--informe-serie-4)",
 ];
+
+const seriesColor = (index: number) => SERIES_COLORS[index % SERIES_COLORS.length];
 
 // Recharts inlines its own tick fill, which overrides a Tailwind class and
 // leaves the axis unreadable in dark mode. Set the token explicitly.
@@ -51,7 +53,9 @@ export default function MonthlyTrendPage({
 }: MonthlyTrendPageProps) {
   const [yearDraft, setYearDraft] = useState("");
 
-  const years = page.years && page.years.length > 0 ? page.years : DEFAULT_YEARS;
+  const years = [
+    ...(page.years && page.years.length > 0 ? page.years : DEFAULT_YEARS),
+  ].sort((a, b) => a - b);
   const imported = page.supportType ? monthly.byType[page.supportType] : undefined;
 
   const isOverridden = (year: number, monthIndex: number) =>
@@ -72,10 +76,6 @@ export default function MonthlyTrendPage({
     }
     return point;
   });
-
-  const hasValues = years.some((year) =>
-    MONTH_LABELS.some((_, monthIndex) => valueAt(year, monthIndex) != null)
-  );
 
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
@@ -101,21 +101,21 @@ export default function MonthlyTrendPage({
   return (
     <div className="@container flex h-full w-full flex-col text-foreground">
       <header className="shrink-0">
-        <h2 className="text-[3.4cqi] leading-tight text-foreground">
+        <h2 className="text-[3.2cqi] leading-none font-bold tracking-wide text-foreground">
+          <EditableText
+            value={page.text.subtitle ?? ""}
+            onChange={setSlot("subtitle")}
+            editing={editing}
+            ariaLabel="Encabezado de la página"
+            className="block w-full"
+          />
+        </h2>
+        <p className="mt-[0.4cqi] font-mono text-[1.7cqi] leading-tight text-muted-foreground">
           <EditableText
             value={page.text.title ?? ""}
             onChange={setSlot("title")}
             editing={editing}
             ariaLabel="Título de la página"
-            className="block w-full"
-          />
-        </h2>
-        <p className="font-mono text-[1.6cqi] uppercase tracking-wide text-muted-foreground">
-          <EditableText
-            value={page.text.subtitle ?? ""}
-            onChange={setSlot("subtitle")}
-            editing={editing}
-            ariaLabel="Subtítulo de la página"
             className="block w-full"
           />
         </p>
@@ -158,23 +158,39 @@ export default function MonthlyTrendPage({
         </div>
       )}
 
+      <div className="mt-[1.2cqi] flex shrink-0 items-center justify-center gap-[2.4cqi] font-mono text-[1.3cqi] text-foreground">
+        {years.map((year, index) => (
+          <span key={year} className="flex items-center gap-[0.6cqi]">
+            <span
+              aria-hidden="true"
+              className="inline-block size-[1.1cqi] rounded-full"
+              style={{ backgroundColor: seriesColor(index) }}
+            />
+            <span className="tabular-nums">{year}</span>
+          </span>
+        ))}
+      </div>
+
       {/* Fixed share of the 16:9 frame: a flex-1 chart collapses to 0 because the
           table below keeps its natural height. */}
-      <div className="mt-[1.5cqi] h-[46%] shrink-0">
+      <div className="mt-[0.6cqi] h-[46%] shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <CartesianGrid vertical={false} stroke="var(--border)" />
             <XAxis
               dataKey="mes"
-              stroke="var(--border)"
-              tick={AXIS_TICK}
+              axisLine={false}
               tickLine={false}
+              tick={AXIS_TICK}
+              tickMargin={6}
             />
             <YAxis
-              stroke="var(--border)"
-              tick={AXIS_TICK}
+              axisLine={false}
               tickLine={false}
+              tick={AXIS_TICK}
               width={40}
+              domain={[0, "auto"]}
+              allowDecimals={false}
             />
             <Tooltip
               cursor={{ stroke: "var(--border)" }}
@@ -186,17 +202,16 @@ export default function MonthlyTrendPage({
                 fontSize: "1.2cqi",
               }}
             />
-            <Legend wrapperStyle={{ fontSize: "1.2cqi" }} />
             {years.map((year, index) => (
               <Line
                 key={year}
-                type="monotone"
+                type="natural"
                 dataKey={String(year)}
                 name={String(year)}
-                stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
-                strokeWidth={2}
-                dot={{ r: 2.5 }}
-                activeDot={{ r: 4 }}
+                stroke={seriesColor(index)}
+                strokeWidth={3}
+                dot={{ r: 4, fill: seriesColor(index), strokeWidth: 0 }}
+                activeDot={{ r: 5, strokeWidth: 0 }}
                 connectNulls={false}
                 isAnimationActive={false}
               />
@@ -205,33 +220,24 @@ export default function MonthlyTrendPage({
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-[1.5cqi] min-h-0 flex-1 overflow-auto">
+      {/* Months are not repeated here: the X axis above already labels them. */}
+      <div className="mt-[1.4cqi] min-h-0 flex-1 overflow-auto">
         <table className="w-full table-fixed border-collapse font-mono text-[1.15cqi] tabular-nums">
-          <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th scope="col" className="w-[9%] py-[0.3cqi] text-left font-normal">
-                Año
-              </th>
-              {MONTH_LABELS.map((label) => (
-                <th key={label} scope="col" className="py-[0.3cqi] text-center font-normal">
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
           <tbody>
             {years.map((year, index) => (
-              <tr key={year} className="border-b border-border/60 last:border-b-0">
-                <th scope="row" className="py-[0.25cqi] text-left font-normal whitespace-nowrap">
-                  <span
-                    aria-hidden="true"
-                    className="inline-block size-[0.9cqi] rounded-full align-middle"
-                    style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }}
-                  />
-                  <span className="ml-[0.6cqi] align-middle">{year}</span>
+              <tr key={year}>
+                <th
+                  scope="row"
+                  className="w-[9%] px-[0.4cqi] py-[0.45cqi] text-center text-[1.25cqi] font-bold text-white dark:text-[color:var(--background)]"
+                  style={{ backgroundColor: seriesColor(index) }}
+                >
+                  {year}
                 </th>
                 {MONTH_LABELS.map((label, monthIndex) => (
-                  <td key={label} className="px-[0.2cqi] py-[0.25cqi] text-center">
+                  <td
+                    key={label}
+                    className="border border-border px-[0.2cqi] py-[0.45cqi] text-center"
+                  >
                     <EditableNumber
                       value={valueAt(year, monthIndex)}
                       onChange={(value) => setCell(year, monthIndex, value)}
@@ -246,12 +252,6 @@ export default function MonthlyTrendPage({
             ))}
           </tbody>
         </table>
-
-        {!hasValues && (
-          <p className="mt-[0.8cqi] font-mono text-[1.15cqi] text-muted-foreground">
-            Sin datos importados para este tipo de soporte
-          </p>
-        )}
       </div>
     </div>
   );

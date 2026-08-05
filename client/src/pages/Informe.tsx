@@ -36,7 +36,6 @@ export default function Informe() {
     saving,
     error,
     uploadWeekly,
-    uploadMonthly,
     updatePage,
     resetDeck,
   } = useInformeData();
@@ -47,14 +46,13 @@ export default function Informe() {
     [updatePage]
   );
 
-  const today = new Date();
   const pages = deck?.pages ?? [];
-  const hasSource = Boolean(weekly.sourceFile || monthly.sourceFile);
+  const hasSource = Boolean(weekly.sourceFile);
 
   let visibleNumber = 0;
   const rendered = pages
     .map((page) => {
-      const visible = isPageVisible(page, today);
+      const visible = isPageVisible(page);
 
       if (visible) {
         visibleNumber += 1;
@@ -164,14 +162,13 @@ export default function Informe() {
               <DeckSidebar
                 deck={deck}
                 weekly={weekly}
-                monthly={monthly}
+
                 editing={editing}
                 onEditingChange={setEditing}
                 loading={loading}
                 saving={saving}
                 error={error}
                 onUploadWeekly={uploadWeekly}
-                onUploadMonthly={uploadMonthly}
                 onUpdatePage={updatePage}
                 onResetDeck={resetDeck}
                 onSelectPage={scrollToPage}

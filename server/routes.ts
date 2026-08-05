@@ -13,10 +13,6 @@ import {
   emptyWeeklyDataset,
 } from "../shared/informe.ts";
 import { client } from "./db.js";
-import {
-  mergeMonthlyDatasets,
-  parseInformeMonthlyWorkbook,
-} from "./parseInformeMonthly.js";
 import { parseInformeWeeklyWorkbook } from "./parseInformeWeekly.js";
 
 const router = Router();
@@ -167,40 +163,6 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Error al procesar el libro semanal del Informe";
-    res.status(500).json({ error: message });
-  }
-});
-
-router.post("/api/informe/upload/mensual", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "Debes adjuntar el libro mensual del Informe." });
-    }
-
-    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-    const parsed = parseInformeMonthlyWorkbook(workbook);
-    const incoming: InformeMonthlyDataset = {
-      ...parsed,
-      sourceFile: req.file.originalname,
-      uploadedAt: new Date().toISOString(),
-    };
-    const previous = (await readStoredInformeMonthly()) ?? emptyMonthlyDataset();
-    const merged = mergeMonthlyDatasets(previous, incoming);
-
-    await client.execute({
-      sql: `INSERT INTO informe_monthly (id, data, source_file, uploaded_at)
-            VALUES (1, ?, ?, datetime('now'))
-            ON CONFLICT(id) DO UPDATE
-            SET data = excluded.data,
-                source_file = excluded.source_file,
-                uploaded_at = excluded.uploaded_at`,
-      args: [JSON.stringify(merged), merged.sourceFile],
-    });
-
-    res.json(await buildInformePayload());
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Error al procesar el libro mensual del Informe";
     res.status(500).json({ error: message });
   }
 });

@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import { isPageVisible } from "@shared/informe";
+import { Switch } from "@/components/ui/switch";
 import type {
   DeckPage,
   DeckState,
-  InformeMonthlyDataset,
   InformeWeeklyDataset,
 } from "@shared/informe";
 import type { InformeActionResult } from "@/hooks/useInformeData";
@@ -18,25 +18,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-type VisibilityValue = "auto" | "on" | "off";
 
 interface DeckSidebarProps {
   deck: DeckState | null;
   weekly: InformeWeeklyDataset;
-  monthly: InformeMonthlyDataset;
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
   loading: boolean;
   saving: boolean;
   error: string | null;
   onUploadWeekly: (file: File) => Promise<InformeActionResult>;
-  onUploadMonthly: (file: File) => Promise<InformeActionResult>;
   onUpdatePage: (pageId: string, patch: Partial<DeckPage>) => void;
   onResetDeck: () => Promise<InformeActionResult>;
   onSelectPage: (pageId: string) => void;
@@ -69,14 +65,6 @@ function formatUploadedAt(value: string | null): string | null {
     month: "2-digit",
     year: "numeric",
   });
-}
-
-function visibilityValue(page: DeckPage): VisibilityValue {
-  if (page.visible === null) {
-    return "auto";
-  }
-
-  return page.visible ? "on" : "off";
 }
 
 interface UploadZoneProps {
@@ -166,19 +154,16 @@ function UploadZone({
 export default function DeckSidebar({
   deck,
   weekly,
-  monthly,
   editing,
   onEditingChange,
   loading,
   saving,
   error,
   onUploadWeekly,
-  onUploadMonthly,
   onUpdatePage,
   onResetDeck,
   onSelectPage,
 }: DeckSidebarProps) {
-  const today = new Date();
   const pages = deck?.pages ?? [];
 
   return (
@@ -195,14 +180,6 @@ export default function DeckSidebar({
             uploadedAt={weekly.uploadedAt}
             disabled={loading}
             onUpload={onUploadWeekly}
-          />
-          <UploadZone
-            id="informe-upload-mensual"
-            label="Resueltas del mes"
-            sourceFile={monthly.sourceFile}
-            uploadedAt={monthly.uploadedAt}
-            disabled={loading}
-            onUpload={onUploadMonthly}
           />
 
           {error && (
@@ -276,10 +253,10 @@ export default function DeckSidebar({
           )}
 
           {pages.map((page, index) => {
-            const visibleToday = isPageVisible(page, today);
+            const pageVisible = isPageVisible(page);
             // Match the canvas: only visible pages are numbered, correlatively.
-            const slideNumber = visibleToday
-              ? pages.slice(0, index + 1).filter((other) => isPageVisible(other, today)).length
+            const slideNumber = pageVisible
+              ? pages.slice(0, index + 1).filter((other) => isPageVisible(other)).length
               : null;
 
             return (
@@ -302,40 +279,14 @@ export default function DeckSidebar({
                     </span>
                   </button>
 
-                  {page.autoVisibility === "firstTuesday" && (
-                    <Badge variant="outline" className="font-mono text-[0.6rem]">
-                      {visibleToday ? "Hoy sí" : "Hoy no"}
-                    </Badge>
-                  )}
-                </div>
-
-                <ToggleGroup
-                  type="single"
-                  variant="outline"
-                  size="sm"
-                  value={visibilityValue(page)}
-                  onValueChange={(value) => {
-                    if (!value) {
-                      return;
+                  <Switch
+                    checked={pageVisible}
+                    onCheckedChange={(checked) =>
+                      onUpdatePage(page.id, { visible: checked })
                     }
-
-                    const next =
-                      value === "auto" ? null : value === "on" ? true : false;
-                    onUpdatePage(page.id, { visible: next });
-                  }}
-                  className="mt-2 w-full"
-                  aria-label={`Visibilidad de ${page.text.title || page.id}`}
-                >
-                  <ToggleGroupItem value="auto" className="flex-1 font-mono text-[0.65rem]">
-                    Auto
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="on" className="flex-1 font-mono text-[0.65rem]">
-                    Ver
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="off" className="flex-1 font-mono text-[0.65rem]">
-                    Ocultar
-                  </ToggleGroupItem>
-                </ToggleGroup>
+                    aria-label={`Mostrar ${page.text.title || page.id}`}
+                  />
+                </div>
               </div>
             );
           })}
