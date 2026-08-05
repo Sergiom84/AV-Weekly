@@ -445,5 +445,16 @@ export function createDefaultDeck(): DeckState {
     }
   }
 
+  pages.push({
+    id: "closing",
+    kind: "closing",
+    supportType: null,
+    text: { title: "Gracias", subtitle: "" },
+    visible: true,
+    weekSelection: null,
+    years: null,
+    overrides: {},
+  });
+
   return { pages, updatedAt: null };
 }

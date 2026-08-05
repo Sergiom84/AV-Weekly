@@ -11,6 +11,11 @@ interface CoverPageProps {
   muted?: boolean;
 }
 
+/**
+ * Cover slide: the corporate artwork fills the frame and the editable text sits
+ * on the dark panel to its left. Colours are fixed rather than themed, because
+ * the background image is the same in light and dark mode.
+ */
 export default function CoverPage({
   page,
   editing,
@@ -21,36 +26,39 @@ export default function CoverPage({
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
 
-  return (
-    <SlideFrame number={number} muted={muted}>
-      <div className="@container flex h-full w-full flex-col justify-center gap-[3cqi]">
-        <h1 className="text-[5.4cqi] leading-tight text-foreground">
-          <EditableText
-            value={page.text.title ?? ""}
-            onChange={setSlot("title")}
-            editing={editing}
-            ariaLabel="Título de la portada"
-            className="block w-full"
-          />
-        </h1>
+  const fieldRing = editing ? "ring-white/40 focus:ring-white" : "";
 
-        <div className="flex flex-col gap-[1.2cqi] border-t border-border pt-[2cqi]">
-          <p className="font-mono text-[2.2cqi] uppercase tracking-wide text-muted-foreground">
+  return (
+    <SlideFrame number={number} muted={muted} background="/informe/portada.png">
+      <div className="@container flex h-full w-full">
+        <div className="flex w-[44%] flex-col justify-end pb-[10%]">
+          <h1 className="text-[4.6cqi] leading-tight text-white">
+            <EditableText
+              value={page.text.title ?? ""}
+              onChange={setSlot("title")}
+              editing={editing}
+              ariaLabel="Título de la portada"
+              className={`block w-full ${fieldRing}`}
+            />
+          </h1>
+
+          <p className="mt-[2cqi] font-mono text-[1.9cqi] uppercase tracking-wide text-white/80">
             <EditableText
               value={page.text.subtitle ?? ""}
               onChange={setSlot("subtitle")}
               editing={editing}
               ariaLabel="Subtítulo de la portada"
-              className="block w-full"
+              className={`block w-full ${fieldRing}`}
             />
           </p>
-          <p className="font-mono text-[1.5cqi] text-muted-foreground">
+
+          <p className="mt-[0.8cqi] font-mono text-[1.4cqi] text-white/70">
             <EditableText
               value={page.text.period ?? ""}
               onChange={setSlot("period")}
               editing={editing}
               ariaLabel="Periodo del informe"
-              className="block w-full"
+              className={`block w-full ${fieldRing}`}
             />
           </p>
         </div>
