@@ -113,9 +113,24 @@
   filter: blur(0.5px);
 }
 
-.futura-title {
+.futura-cover-content {
   position: relative;
   z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.futura-title-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.futura-title {
+  position: relative;
+  z-index: 2;
   margin: 0;
   font-family: "JetBrains Mono", monospace;
   font-weight: 800;
@@ -123,6 +138,19 @@
   line-height: 0.92;
   letter-spacing: 0.18em;
   text-indent: 0.18em;
+  /* Arrival from the vanishing point. */
+  transform-origin: 50% 62%;
+  animation: futura-arrive 1.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.futura-title-face {
+  display: block;
+}
+
+/* The chrome fill lives on each letter: a filter on a descendant would break a
+   background-clip declared on the shared parent. */
+.futura-title-letter {
+  display: inline-block;
   background: linear-gradient(
     180deg,
     #ffffff 0%,
@@ -135,8 +163,48 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 0 22px rgba(220, 15, 115, 0.6))
-    drop-shadow(0 0 64px rgba(134, 77, 215, 0.5));
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 18px rgba(220, 15, 115, 0.55))
+    drop-shadow(0 0 52px rgba(134, 77, 215, 0.45));
+  animation: futura-letter-settle 0.5s cubic-bezier(0.25, 1, 0.5, 1) both;
+  animation-delay: calc(1.15s + var(--i) * 60ms);
+}
+
+@keyframes futura-arrive {
+  0% {
+    opacity: 0;
+    transform: perspective(900px) translate3d(0, 6%, -1500px) scale(0.12);
+    filter: blur(16px) brightness(4);
+  }
+  14% {
+    opacity: 1;
+  }
+  72% {
+    transform: perspective(900px) translate3d(0, 0, 90px) scale(1.07);
+    filter: blur(0) brightness(1.8);
+  }
+  86% {
+    transform: perspective(900px) translate3d(0, 0, 0) scale(0.985);
+    filter: blur(0) brightness(1.15);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(900px) translate3d(0, 0, 0) scale(1);
+    filter: none;
+  }
+}
+
+@keyframes futura-letter-settle {
+  0% {
+    transform: translateY(-7%);
+    filter: drop-shadow(0 0 26px rgba(255, 255, 255, 0.9))
+      drop-shadow(0 0 60px rgba(242, 4, 97, 0.8));
+  }
+  100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 0 18px rgba(220, 15, 115, 0.55))
+      drop-shadow(0 0 52px rgba(134, 77, 215, 0.45));
+  }
 }
 
 .futura-title-glitch {
@@ -146,8 +214,147 @@
   color: var(--fut-cyan);
   background: none;
   -webkit-text-fill-color: currentColor;
-  opacity: 0.55;
-  animation: futura-glitch 5.5s steps(1) infinite;
+  opacity: 0;
+  animation: futura-glitch 5.5s steps(1) 2s infinite;
+}
+
+/* Distant flare the title emerges from. */
+.futura-flare {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: 26rem;
+  aspect-ratio: 1;
+  margin: -13rem 0 0 -13rem;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #ffffff 0%,
+    rgba(242, 4, 97, 0.75) 26%,
+    rgba(134, 77, 215, 0.35) 52%,
+    transparent 70%
+  );
+  animation: futura-flare 1.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  pointer-events: none;
+}
+
+@keyframes futura-flare {
+  0% { opacity: 0.9; transform: scale(0.08); }
+  40% { opacity: 0.8; transform: scale(0.5); }
+  100% { opacity: 0; transform: scale(2.4); }
+}
+
+/* Shockwave ring at the moment of landing. */
+.futura-shockwave {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: 16rem;
+  aspect-ratio: 1;
+  margin: -8rem 0 0 -8rem;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  opacity: 0;
+  animation: futura-shockwave 0.85s ease-out 1.05s both;
+  pointer-events: none;
+}
+
+@keyframes futura-shockwave {
+  0% { opacity: 0.9; transform: scale(0.2); border-width: 3px; }
+  100% { opacity: 0; transform: scale(3.6); border-width: 0.5px; }
+}
+
+/* ---------- Tormenta ---------- */
+
+.futura-storm {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.futura-storm-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(70% 50% at 50% 0%, rgba(255, 255, 255, 0.26), transparent 70%);
+  animation: futura-flash 0.85s ease-out both;
+}
+
+@keyframes futura-flash {
+  0% { opacity: 0; }
+  6% { opacity: 1; }
+  14% { opacity: 0.18; }
+  22% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+.futura-storm-bolt {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 62%;
+}
+
+.futura-storm-trunk,
+.futura-storm-fork {
+  fill: none;
+  stroke: #ffffff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.9))
+    drop-shadow(0 0 18px rgba(242, 4, 97, 0.7));
+  animation: futura-flash 0.85s ease-out both;
+}
+
+.futura-storm-trunk { stroke-width: 2.5; }
+.futura-storm-fork { stroke-width: 1.4; }
+
+/* ---------- Capas del puntero ---------- */
+
+.futura-pointer-trail {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.futura-pointer-glow {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  background: radial-gradient(
+    26vmax 26vmax at 50% 50%,
+    rgba(168, 85, 247, 0.22) 0%,
+    rgba(242, 4, 97, 0.12) 38%,
+    transparent 68%
+  );
+  will-change: transform;
+}
+
+/* ---------- Salto a un módulo ---------- */
+
+.futura-warp {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 40% at 50% 50%, rgba(255, 255, 255, 0.95) 0%, transparent 62%),
+    linear-gradient(180deg, transparent 0%, rgba(242, 4, 97, 0.5) 100%);
+  animation: futura-warp 0.5s ease-in both;
+}
+
+@keyframes futura-warp {
+  0% { opacity: 0; transform: scale(0.6); }
+  100% { opacity: 1; transform: scale(2.2); }
 }
 
 @keyframes futura-glitch {
@@ -583,5 +790,15 @@
   .futura *::after {
     animation: none !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* Entrance-only decoration has no resting state worth showing. */
+  .futura-flare,
+  .futura-shockwave,
+  .futura-storm,
+  .futura-warp,
+  .futura-pointer-trail,
+  .futura-pointer-glow {
+    display: none !important;
   }
 }

@@ -1,4 +1,3 @@
-import { useLocation } from "wouter";
 import type { HoverTone } from "@/hooks/useHoverSound";
 
 export interface HomeCardSpec {
@@ -14,18 +13,17 @@ export interface HomeCardSpec {
 interface HomeCardProps {
   card: HomeCardSpec;
   onHover: (tone: HoverTone) => void;
+  onSelect: (card: HomeCardSpec) => void;
 }
 
-export default function HomeCard({ card, onHover }: HomeCardProps) {
-  const [, navigate] = useLocation();
-
+export default function HomeCard({ card, onHover, onSelect }: HomeCardProps) {
   return (
     <button
       type="button"
       className={`futura-card futura-skin-${card.id}`}
       onMouseEnter={() => onHover(card.id)}
       onFocus={() => onHover(card.id)}
-      onClick={() => navigate(card.href)}
+      onClick={() => onSelect(card)}
     >
       <span className="futura-card-inner" aria-hidden="true">
         <span className="futura-layer" />
