@@ -42,5 +42,21 @@ export async function initDb() {
       source_file TEXT,
       uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Informatica module. Separate singletons from the informe_* tables above:
+    -- the two decks are independent reports and never share a row.
+    CREATE TABLE IF NOT EXISTS informatica_deck (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Whole flat workbook as imported, one JSON payload per upload.
+    CREATE TABLE IF NOT EXISTS informatica_dataset (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      source_file TEXT,
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }

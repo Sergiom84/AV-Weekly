@@ -1,11 +1,11 @@
-import type { DeckPage } from "@shared/informe";
+import type { DeckPage } from "@shared/deck/core";
 import EditableText from "./EditableText";
 import SlideFrame from "./SlideFrame";
 
-interface CoverPageProps {
-  page: DeckPage;
+interface CoverPageProps<TPage extends DeckPage<string, string>> {
+  page: TPage;
   editing: boolean;
-  onChange: (patch: Partial<DeckPage>) => void;
+  onChange: (patch: Partial<TPage>) => void;
   /** Correlative number of the page inside the visible deck. */
   number?: number | null;
   muted?: boolean;
@@ -18,16 +18,16 @@ interface CoverPageProps {
  * on the dark panel to its left. Colours are fixed rather than themed, because
  * the background image is the same in light and dark mode.
  */
-export default function CoverPage({
+export default function CoverPage<TPage extends DeckPage<string, string>>({
   page,
   editing,
   onChange,
   number,
   muted,
   background = "/informe/portada.png",
-}: CoverPageProps) {
+}: CoverPageProps<TPage>) {
   const setSlot = (key: string) => (value: string) =>
-    onChange({ text: { ...page.text, [key]: value } });
+    onChange({ text: { ...page.text, [key]: value } } as Partial<TPage>);
 
   const fieldRing = editing ? "ring-white/40 focus:ring-white" : "";
 

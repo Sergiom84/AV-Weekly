@@ -1,27 +1,41 @@
+import type { ReactElement } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
+import { DECK_MODULES } from "@shared/deck/registry";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
+import Informatica from "./pages/Informatica";
 import Informe from "./pages/Informe";
 import ModuloPendiente from "./pages/ModuloPendiente";
+
+/** Deck screen of each module. A module with no entry is still a placeholder. */
+const MODULE_PAGES: Record<string, () => ReactElement> = {
+  av: Informe,
+  informatica: Informatica,
+};
 
 function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
-      <Route path={"/av"} component={Informe} />
-      <Route path={"/oficinas"}>
-        <ModuloPendiente name="Oficinas" meta="Módulo 01" />
-      </Route>
-      <Route path={"/informatica"}>
-        <ModuloPendiente name="Informática" meta="Módulo 02" />
-      </Route>
-      <Route path={"/compras"}>
-        <ModuloPendiente name="Compras" meta="Módulo 03" />
-      </Route>
+
+      {DECK_MODULES.map((module) => {
+        const Page = MODULE_PAGES[module.id];
+
+        if (Page) {
+          return <Route key={module.id} path={module.route} component={Page} />;
+        }
+
+        return (
+          <Route key={module.id} path={module.route}>
+            <ModuloPendiente name={module.name} meta={module.meta} />
+          </Route>
+        );
+      })}
+
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

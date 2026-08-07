@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isPageVisible } from "@shared/informe";
-import { Switch } from "@/components/ui/switch";
-import type {
-  DeckPage,
-  DeckState,
-  InformeMonthlyDataset,
-  InformeWeeklyDataset,
-} from "@shared/informe";
-import type { InformeActionResult } from "@/hooks/useInformeData";
+import { isPageVisible } from "@shared/deck/core";
+import type { DeckPage } from "@shared/deck/core";
+import type { DeckActionResult, DeckStateOf } from "@/hooks/useDeckData";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,37 +16,34 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
+/** One upload zone: the module resolves which file currently feeds the slot. */
+export interface SidebarUpload {
+  id: string;
+  label: string;
+  sourceFile: string | null;
+  uploadedAt: string | null;
+  onUpload: (file: File) => Promise<DeckActionResult>;
+}
 
-interface DeckSidebarProps {
-  deck: DeckState | null;
-  weekly: InformeWeeklyDataset;
-  monthly: InformeMonthlyDataset;
+interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
+  deck: DeckStateOf<TPage> | null;
+  uploads: SidebarUpload[];
+  /** Human label per page kind, provided by the module registry. */
+  kindLabels: Record<string, string>;
+  /** localStorage prefix of the collapsed state, one namespace per module. */
+  storagePrefix: string;
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
   loading: boolean;
   saving: boolean;
   error: string | null;
-  onUploadWeekly: (file: File) => Promise<InformeActionResult>;
-  onUploadTendencia: (file: File) => Promise<InformeActionResult>;
-  onUploadPlano: (file: File) => Promise<InformeActionResult>;
-  planoSource: { sourceFile: string | null; uploadedAt: string | null };
-  onUpdatePage: (pageId: string, patch: Partial<DeckPage>) => void;
-  onResetDeck: () => Promise<InformeActionResult>;
+  onUpdatePage: (pageId: string, patch: Partial<TPage>) => void;
+  onResetDeck: () => Promise<DeckActionResult>;
   onSelectPage: (pageId: string) => void;
 }
-
-const KIND_LABEL: Record<string, string> = {
-  cover: "Portada",
-  index: "Índice",
-  section: "Sección",
-  monthlyTrend: "Tendencia mensual",
-  weeklySupport: "Soporte semanal",
-  resolutionDetail: "Detalle de resolución",
-  pendingItems: "Asuntos pendientes",
-  closing: "Cierre",
-};
 
 function formatUploadedAt(value: string | null): string | null {
   if (!value) {
@@ -72,17 +63,16 @@ function formatUploadedAt(value: string | null): string | null {
   });
 }
 
-const COLLAPSE_STORAGE_PREFIX = "av-weekly:sidebar-collapsed:";
-
 interface SidebarSectionProps {
   id: string;
+  storagePrefix: string;
   title: string;
   children: React.ReactNode;
 }
 
 /** Sidebar card that the user can fold away to shorten the column. */
-function SidebarSection({ id, title, children }: SidebarSectionProps) {
-  const storageKey = `${COLLAPSE_STORAGE_PREFIX}${id}`;
+function SidebarSection({ id, storagePrefix, title, children }: SidebarSectionProps) {
+  const storageKey = `${storagePrefix}${id}`;
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -128,7 +118,7 @@ interface UploadZoneProps {
   sourceFile: string | null;
   uploadedAt: string | null;
   disabled: boolean;
-  onUpload: (file: File) => Promise<InformeActionResult>;
+  onUpload: (file: File) => Promise<DeckActionResult>;
 }
 
 function UploadZone({
@@ -206,53 +196,42 @@ function UploadZone({
   );
 }
 
-export default function DeckSidebar({
+/**
+ * Deck sidebar shared by every module: sources, editing controls and the page
+ * list with its visibility switches. Everything module-specific — the upload
+ * zones, the page kind labels and the storage namespace — arrives as props.
+ */
+export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   deck,
-  weekly,
-  monthly,
+  uploads,
+  kindLabels,
+  storagePrefix,
   editing,
   onEditingChange,
   loading,
   saving,
   error,
-  onUploadWeekly,
-  onUploadTendencia,
-  onUploadPlano,
-  planoSource,
   onUpdatePage,
   onResetDeck,
   onSelectPage,
-}: DeckSidebarProps) {
+}: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <SidebarSection id="fuentes" title="Fuentes">
+      <SidebarSection id="fuentes" storagePrefix={storagePrefix} title="Fuentes">
         <CardContent className="space-y-3">
-          <UploadZone
-            id="informe-upload-semanal"
-            label="Plantilla semanal"
-            sourceFile={weekly.sourceFile}
-            uploadedAt={weekly.uploadedAt}
-            disabled={loading}
-            onUpload={onUploadWeekly}
-          />
-          <UploadZone
-            id="informe-upload-tendencia"
-            label="Tendencia mensual"
-            sourceFile={monthly.sourceFile}
-            uploadedAt={monthly.uploadedAt}
-            disabled={loading}
-            onUpload={onUploadTendencia}
-          />
-          <UploadZone
-            id="informe-upload-plano"
-            label="Detalle por resolución"
-            sourceFile={planoSource.sourceFile}
-            uploadedAt={planoSource.uploadedAt}
-            disabled={loading}
-            onUpload={onUploadPlano}
-          />
+          {uploads.map((slot) => (
+            <UploadZone
+              key={slot.id}
+              id={slot.id}
+              label={slot.label}
+              sourceFile={slot.sourceFile}
+              uploadedAt={slot.uploadedAt}
+              disabled={loading}
+              onUpload={slot.onUpload}
+            />
+          ))}
 
           {error && (
             <p className="font-mono text-xs text-destructive" role="alert">
@@ -262,7 +241,7 @@ export default function DeckSidebar({
         </CardContent>
       </SidebarSection>
 
-      <SidebarSection id="edicion" title="Edición">
+      <SidebarSection id="edicion" storagePrefix={storagePrefix} title="Edición">
         <CardContent className="space-y-3">
           <ToggleGroup
             type="single"
@@ -312,7 +291,7 @@ export default function DeckSidebar({
         </CardContent>
       </SidebarSection>
 
-      <SidebarSection id="paginas" title="Páginas">
+      <SidebarSection id="paginas" storagePrefix={storagePrefix} title="Páginas">
         <CardContent className="space-y-2">
           {pages.length === 0 && (
             <p className="font-mono text-xs text-muted-foreground">Sin páginas</p>
@@ -340,7 +319,7 @@ export default function DeckSidebar({
                       {slideNumber ?? "—"}. {page.text.title || page.id}
                     </span>
                     <span className="block truncate font-mono text-[0.65rem] text-muted-foreground">
-                      {KIND_LABEL[page.kind] ?? page.kind}
+                      {kindLabels[page.kind] ?? page.kind}
                       {page.supportType ? ` · ${page.supportType}` : ""}
                     </span>
                   </button>
@@ -348,7 +327,7 @@ export default function DeckSidebar({
                   <Switch
                     checked={pageVisible}
                     onCheckedChange={(checked) =>
-                      onUpdatePage(page.id, { visible: checked })
+                      onUpdatePage(page.id, { visible: checked } as Partial<TPage>)
                     }
                     aria-label={`Mostrar ${page.text.title || page.id}`}
                   />

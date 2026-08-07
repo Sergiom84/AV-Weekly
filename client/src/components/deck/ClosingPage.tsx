@@ -1,11 +1,11 @@
-import type { DeckPage } from "@shared/informe";
+import type { DeckPage } from "@shared/deck/core";
 import EditableText from "./EditableText";
 import SlideFrame from "./SlideFrame";
 
-interface ClosingPageProps {
-  page: DeckPage;
+interface ClosingPageProps<TPage extends DeckPage<string, string>> {
+  page: TPage;
   editing: boolean;
-  onChange: (patch: Partial<DeckPage>) => void;
+  onChange: (patch: Partial<TPage>) => void;
   /** Correlative number of the page inside the visible deck. */
   number?: number | null;
   muted?: boolean;
@@ -17,16 +17,16 @@ interface ClosingPageProps {
  * Closing slide: the corporate back cover with the editable message on top.
  * The text sits above the logo, clear of the "Tech for the future" claim.
  */
-export default function ClosingPage({
+export default function ClosingPage<TPage extends DeckPage<string, string>>({
   page,
   editing,
   onChange,
   number,
   muted,
   background = "/informe/contraportada.png",
-}: ClosingPageProps) {
+}: ClosingPageProps<TPage>) {
   const setSlot = (key: string) => (value: string) =>
-    onChange({ text: { ...page.text, [key]: value } });
+    onChange({ text: { ...page.text, [key]: value } } as Partial<TPage>);
 
   const fieldRing = editing ? "ring-white/40 focus:ring-white" : "";
 

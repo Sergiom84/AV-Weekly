@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { isPageVisible } from "@shared/informe";
 import type { DeckPage } from "@shared/informe";
-import { useInformeData } from "@/hooks/useInformeData";
+import { getDeckModule } from "@shared/deck/registry";
+import { useAvDeck } from "@/modules/av/useAvDeck";
 import MainNav from "@/components/MainNav";
 import HomeLink from "@/components/HomeLink";
-import DeckSidebar from "@/components/informe/DeckSidebar";
+import DeckSidebar, { type SidebarUpload } from "@/components/deck/DeckSidebar";
 import CoverPage from "@/components/deck/CoverPage";
 import IndexPage from "@/components/deck/IndexPage";
 import SectionPage from "@/components/deck/SectionPage";
@@ -30,6 +31,8 @@ function scrollToPage(pageId: string) {
   node.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
 }
 
+const MODULE = getDeckModule("av");
+
 export default function Informe() {
   const {
     deck,
@@ -38,13 +41,27 @@ export default function Informe() {
     loading,
     saving,
     error,
-    uploadWeekly,
-    uploadTendencia,
-    uploadPlano,
+    uploadTo,
     updatePage,
     resetDeck,
-  } = useInformeData();
+  } = useAvDeck();
   const [editing, setEditing] = useState(false);
+
+  const uploads = useMemo<SidebarUpload[]>(() => {
+    const sources: Record<string, { sourceFile: string | null; uploadedAt: string | null }> = {
+      semanal: { sourceFile: weekly.sourceFile, uploadedAt: weekly.uploadedAt },
+      tendencia: { sourceFile: monthly.sourceFile, uploadedAt: monthly.uploadedAt },
+      plano: weekly.resolutionSource ?? { sourceFile: null, uploadedAt: null },
+    };
+
+    return (MODULE.deck?.uploads ?? []).map((slot) => ({
+      id: `informe-upload-${slot.id}`,
+      label: slot.label,
+      sourceFile: sources[slot.id]?.sourceFile ?? null,
+      uploadedAt: sources[slot.id]?.uploadedAt ?? null,
+      onUpload: (file: File) => uploadTo(slot.id, file),
+    }));
+  }, [monthly.sourceFile, monthly.uploadedAt, uploadTo, weekly.resolutionSource, weekly.sourceFile, weekly.uploadedAt]);
 
   const handlePageChange = useCallback(
     (pageId: string) => (patch: Partial<DeckPage>) => updatePage(pageId, patch),
@@ -188,18 +205,14 @@ export default function Informe() {
             <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2 print:max-h-none print:overflow-visible">
               <DeckSidebar
                 deck={deck}
-                weekly={weekly}
-
+                uploads={uploads}
+                kindLabels={MODULE.deck?.kindLabels ?? {}}
+                storagePrefix={MODULE.deck?.storagePrefix ?? ""}
                 editing={editing}
                 onEditingChange={setEditing}
                 loading={loading}
                 saving={saving}
                 error={error}
-                monthly={monthly}
-                onUploadWeekly={uploadWeekly}
-                onUploadTendencia={uploadTendencia}
-                onUploadPlano={uploadPlano}
-                planoSource={weekly.resolutionSource ?? { sourceFile: null, uploadedAt: null }}
                 onUpdatePage={updatePage}
                 onResetDeck={resetDeck}
                 onSelectPage={scrollToPage}

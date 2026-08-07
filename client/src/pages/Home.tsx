@@ -1,50 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Volume2, VolumeX } from "lucide-react";
+import { DECK_MODULES } from "@shared/deck/registry";
 import HomeCover from "@/components/home/HomeCover";
 import HomeCard, { type HomeCardSpec } from "@/components/home/HomeCard";
 import CursorField from "@/components/home/CursorField";
 import { useHoverSound } from "@/hooks/useHoverSound";
 import "@/components/home/futura.css";
 
-const CARDS: HomeCardSpec[] = [
-  {
-    id: "oficinas",
-    name: "Oficinas",
-    meta: "Módulo 01",
-    description:
-      "Espacios, puestos y ocupación. Módulo reservado, todavía sin datos conectados.",
-    href: "/oficinas",
-    layers: 3,
-  },
-  {
-    id: "informatica",
-    name: "Informática",
-    meta: "Módulo 02",
-    description:
-      "Parque, incidencias y sistemas. Módulo reservado, todavía sin datos conectados.",
-    href: "/informatica",
-    layers: 2,
-  },
-  {
-    id: "compras",
-    name: "Compras",
-    meta: "Módulo 03",
-    description:
-      "Pedidos, proveedores y contratación. Módulo reservado, todavía sin datos conectados.",
-    href: "/compras",
-    layers: 2,
-  },
-  {
-    id: "av",
-    name: "AV",
-    meta: "Módulo 04",
-    description:
-      "Informe semanal de Audiovisuales: soporte, detalle por resolución y tendencia.",
-    href: "/av",
-    layers: 2,
-  },
-];
+/** Cards come from the module registry, so a module is declared in one place. */
+const CARDS: HomeCardSpec[] = DECK_MODULES.map((module) => ({
+  id: module.id,
+  name: module.name,
+  meta: module.meta,
+  description: module.description,
+  href: module.route,
+  layers: module.layers,
+}));
 
 const WARP_MS = 460;
 

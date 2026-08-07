@@ -1,11 +1,11 @@
-import type { DeckPage } from "@shared/informe";
+import type { DeckPage } from "@shared/deck/core";
 import EditableText from "./EditableText";
 import SlideFrame from "./SlideFrame";
 
-interface SectionPageProps {
-  page: DeckPage;
+interface SectionPageProps<TPage extends DeckPage<string, string>> {
+  page: TPage;
   editing: boolean;
-  onChange: (patch: Partial<DeckPage>) => void;
+  onChange: (patch: Partial<TPage>) => void;
   /** Correlative number of the page inside the visible deck. */
   number?: number | null;
   muted?: boolean;
@@ -17,16 +17,16 @@ interface SectionPageProps {
  * Section divider over the corporate artwork. The title sits in the upper area
  * so it clears the logo band and the claim printed on the image.
  */
-export default function SectionPage({
+export default function SectionPage<TPage extends DeckPage<string, string>>({
   page,
   editing,
   onChange,
   number,
   muted,
   background = "/informe/contraportada.png",
-}: SectionPageProps) {
+}: SectionPageProps<TPage>) {
   const setSlot = (key: string) => (value: string) =>
-    onChange({ text: { ...page.text, [key]: value } });
+    onChange({ text: { ...page.text, [key]: value } } as Partial<TPage>);
 
   const subtitle = page.text.subtitle ?? "";
   const fieldRing = editing ? "ring-white/40 focus:ring-white" : "";

@@ -1,11 +1,11 @@
-import type { DeckPage } from "@shared/informe";
+import type { DeckPage } from "@shared/deck/core";
 import EditableText from "./EditableText";
 import SlideFrame from "./SlideFrame";
 
-interface IndexPageProps {
-  page: DeckPage;
+interface IndexPageProps<TPage extends DeckPage<string, string>> {
+  page: TPage;
   editing: boolean;
-  onChange: (patch: Partial<DeckPage>) => void;
+  onChange: (patch: Partial<TPage>) => void;
   /** Correlative number of the page inside the visible deck. */
   number?: number | null;
   muted?: boolean;
@@ -21,7 +21,7 @@ const DEFAULT_ITEM_KEYS = ["item1", "item2", "item3", "item4", "item5", "item6"]
  * Index slide over the corporate artwork. The block sits in the upper area so
  * it clears the logo band and the claim printed on the image.
  */
-export default function IndexPage({
+export default function IndexPage<TPage extends DeckPage<string, string>>({
   page,
   editing,
   onChange,
@@ -29,9 +29,9 @@ export default function IndexPage({
   muted,
   background = "/informe/contraportada.png",
   itemKeys = DEFAULT_ITEM_KEYS,
-}: IndexPageProps) {
+}: IndexPageProps<TPage>) {
   const setSlot = (key: string) => (value: string) =>
-    onChange({ text: { ...page.text, [key]: value } });
+    onChange({ text: { ...page.text, [key]: value } } as Partial<TPage>);
 
   const fieldRing = editing ? "ring-white/40 focus:ring-white" : "";
 
