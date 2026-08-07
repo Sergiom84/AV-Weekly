@@ -22,6 +22,12 @@ export interface DeckUploadSlot {
   path: string;
   /** Message shown when the upload fails without a server message. */
   error: string;
+  /**
+   * The slot takes several workbooks at once and the server merges them.
+   * Undefined or false means one file per upload, posted as the `file` field;
+   * true posts every chosen file under the repeated `files` field.
+   */
+  multiple?: boolean;
 }
 
 /** Full-bleed artwork of the cover-like pages. */
@@ -87,6 +93,7 @@ export const DECK_MODULES: DeckModule[] = [
           label: "Libro plano",
           path: "/api/informatica/upload/plano",
           error: "No se pudo cargar el libro plano",
+          multiple: true,
         },
       ],
       artwork: {

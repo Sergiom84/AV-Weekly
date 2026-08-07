@@ -25,7 +25,9 @@ export interface SidebarUpload {
   label: string;
   sourceFile: string | null;
   uploadedAt: string | null;
-  onUpload: (file: File) => Promise<DeckActionResult>;
+  /** The slot takes several workbooks at once and the server merges them. */
+  multiple?: boolean;
+  onUpload: (files: File[]) => Promise<DeckActionResult>;
 }
 
 interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
@@ -112,13 +114,43 @@ function SidebarSection({ id, storagePrefix, title, children }: SidebarSectionPr
   );
 }
 
+/**
+ * Number of workbooks the server says it merged, when it reports one.
+ * The field is optional on purpose: an older server answers without it and the
+ * zone simply falls back to the number of files the user picked.
+ */
+function readMergedCount(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const report = (payload as { report?: unknown }).report;
+
+  if (!report || typeof report !== "object") {
+    return null;
+  }
+
+  const { files, fileCount } = report as { files?: unknown; fileCount?: unknown };
+
+  if (Array.isArray(files)) {
+    return files.length;
+  }
+
+  if (typeof fileCount === "number" && Number.isFinite(fileCount)) {
+    return fileCount;
+  }
+
+  return null;
+}
+
 interface UploadZoneProps {
   id: string;
   label: string;
   sourceFile: string | null;
   uploadedAt: string | null;
+  multiple: boolean;
   disabled: boolean;
-  onUpload: (file: File) => Promise<DeckActionResult>;
+  onUpload: (files: File[]) => Promise<DeckActionResult>;
 }
 
 function UploadZone({
@@ -126,29 +158,36 @@ function UploadZone({
   label,
   sourceFile,
   uploadedAt,
+  multiple,
   disabled,
   onUpload,
 }: UploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [countLabel, setCountLabel] = useState<string | null>(null);
 
   const uploadedLabel = formatUploadedAt(uploadedAt);
 
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const picked = Array.from(event.target.files ?? []);
+    const files = multiple ? picked : picked.slice(0, 1);
 
-    if (!file) {
+    if (files.length === 0) {
       return;
     }
 
     setBusy(true);
     setLocalError(null);
-    const result = await onUpload(file);
+    setCountLabel(null);
+    const result = await onUpload(files);
     setBusy(false);
 
     if (!result.success) {
       setLocalError(result.error ?? "Carga fallida");
+    } else if (multiple) {
+      const merged = readMergedCount(result.payload) ?? files.length;
+      setCountLabel(merged === 1 ? "1 fichero" : `${merged} ficheros`);
     }
 
     if (inputRef.current) {
@@ -178,6 +217,7 @@ function UploadZone({
         id={id}
         type="file"
         accept=".xlsx,.xls"
+        multiple={multiple}
         className="sr-only"
         onChange={handleChange}
       />
@@ -185,6 +225,7 @@ function UploadZone({
       <p className="mt-2 font-mono text-xs text-muted-foreground">
         {sourceFile ?? "Sin fichero"}
         {uploadedLabel ? ` · ${uploadedLabel}` : ""}
+        {countLabel ? ` · ${countLabel}` : ""}
       </p>
 
       {localError && (
@@ -228,6 +269,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
               label={slot.label}
               sourceFile={slot.sourceFile}
               uploadedAt={slot.uploadedAt}
+              multiple={slot.multiple ?? false}
               disabled={loading}
               onUpload={slot.onUpload}
             />

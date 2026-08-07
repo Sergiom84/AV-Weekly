@@ -63,6 +63,12 @@ export interface InformaticaImportReport {
   sheetsFound: InformaticaSectionKey[];
   /** Sheets in the workbook that the contract does not know about. */
   unknownSheets: string[];
+  /**
+   * Original names of the uploaded files, in upload order. The parser works on
+   * a single (possibly merged) workbook and cannot know them, so the route
+   * fills this in; a client that only ever sends one file can ignore it.
+   */
+  files?: string[];
 }
 
 export interface InformaticaParseResult {
@@ -800,6 +806,141 @@ const renove: SectionSpec<InformaticaRenoveRow> = {
     target.equipos += incoming.equipos;
   },
 };
+
+/* -------------------------------------------------------------------------- */
+/* Workbook merging                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** A sheet under construction while several workbooks are folded together. */
+interface MergedSheet {
+  /** Display name of the first workbook that carried this sheet. */
+  name: string;
+  /** Normalised column name to its position in the merged header. */
+  columns: Map<string, number>;
+  /** Header labels in merged order, as written by the first file to bring them. */
+  header: unknown[];
+  rows: unknown[][];
+}
+
+/** Excel forbids these characters in a sheet name, and caps it at 31 chars. */
+function safeSheetName(name: string): string {
+  const cleaned = name.replace(/[\\/?*[\]:]/g, " ").replace(/\s+/g, " ").trim();
+  return (cleaned === "" ? "Hoja" : cleaned).slice(0, 31);
+}
+
+/**
+ * Folds several uploaded workbooks into one, sheet by sheet.
+ *
+ * Colleagues send one file per building or per kind of data, so the import has
+ * to be additive: a sheet only one file carries is kept as it is, and a sheet
+ * two files carry keeps the rows of both. Merging before parsing rather than
+ * merging parsed datasets is deliberate: the accumulation of repeated rows,
+ * the normalisation of headers and the discarding of invalid rows already live
+ * in `parseSection`, and this way they apply across files for free.
+ *
+ * Sheet names and column names are matched with the same normalisation the
+ * parser uses, so `Citas` from one file and `citas` from another are the same
+ * sheet, and a column the second file omits simply stays empty in its rows.
+ */
+export function mergeInformaticaWorkbooks(workbooks: XLSX.WorkBook[]): XLSX.WorkBook {
+  const usable = workbooks.filter(
+    (workbook) => workbook && Array.isArray(workbook.SheetNames)
+  );
+
+  // Nothing to fold: the single file is already the merged workbook.
+  if (usable.length === 1) {
+    return usable[0];
+  }
+
+  const merged = new Map<string, MergedSheet>();
+
+  for (const workbook of usable) {
+    for (const name of workbook.SheetNames) {
+      const sheet = workbook.Sheets[name];
+
+      if (!sheet) {
+        continue;
+      }
+
+      const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+        header: 1,
+        defval: null,
+        blankrows: false,
+      });
+
+      if (grid.length === 0) {
+        continue;
+      }
+
+      const key = normalize(name);
+      let target = merged.get(key);
+
+      if (!target) {
+        target = { name, columns: new Map(), header: [], rows: [] };
+        merged.set(key, target);
+      }
+
+      // Source column index to merged column index. -1 drops unnamed columns.
+      const positions: number[] = [];
+
+      ((grid[0] ?? []) as unknown[]).forEach((cell, index) => {
+        const column = normalize(cell);
+
+        if (column === "") {
+          positions[index] = -1;
+          return;
+        }
+
+        let position = target.columns.get(column);
+
+        if (position === undefined) {
+          position = target.header.length;
+          target.columns.set(column, position);
+          target.header.push(cell);
+        }
+
+        positions[index] = position;
+      });
+
+      for (const cells of grid.slice(1)) {
+        const source = (cells ?? []) as unknown[];
+
+        if (source.every((cell) => cell === null || cell === undefined || String(cell).trim() === "")) {
+          continue;
+        }
+
+        const row: unknown[] = [];
+
+        source.forEach((value, index) => {
+          const position = positions[index];
+
+          if (position !== undefined && position >= 0) {
+            row[position] = value;
+          }
+        });
+
+        target.rows.push(row);
+      }
+    }
+  }
+
+  const output = XLSX.utils.book_new();
+  const usedNames = new Set<string>();
+
+  for (const sheet of Array.from(merged.values())) {
+    let name = safeSheetName(sheet.name);
+
+    // Truncation can make two distinct sheets collide on the same name.
+    for (let suffix = 2; usedNames.has(normalize(name)); suffix += 1) {
+      name = `${safeSheetName(sheet.name).slice(0, 28)}(${suffix})`;
+    }
+
+    usedNames.add(normalize(name));
+    XLSX.utils.book_append_sheet(output, XLSX.utils.aoa_to_sheet([sheet.header, ...sheet.rows]), name);
+  }
+
+  return output;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Entry point                                                                 */

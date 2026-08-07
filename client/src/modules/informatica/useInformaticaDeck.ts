@@ -48,14 +48,23 @@ export function useInformaticaDeck() {
   const { upload } = state;
 
   const uploadTo = useCallback(
-    (slotId: string, file: File) => {
+    (slotId: string, input: File | File[]) => {
       const slot = MODULE.deck?.uploads.find((entry) => entry.id === slotId);
 
       if (!slot) {
         return Promise.resolve({ success: false, error: "Origen desconocido" });
       }
 
-      return upload(slot.path, file, slot.error);
+      // Slots without `multiple` keep the single-file contract of their endpoint.
+      const files = Array.isArray(input) ? input : [input];
+
+      if (files.length === 0) {
+        return Promise.resolve({ success: false, error: slot.error });
+      }
+
+      return upload(slot.path, slot.multiple ? files : files[0], slot.error, {
+        multiple: slot.multiple,
+      });
     },
     [upload]
   );

@@ -19,6 +19,14 @@ const SAVE_DEBOUNCE_MS = 800;
 export interface DeckActionResult {
   success: boolean;
   error?: string;
+  /** Raw server payload of a successful upload, for optional summaries. */
+  payload?: unknown;
+}
+
+/** Extra upload behaviour declared by the slot in the module registry. */
+export interface UploadOptions {
+  /** Post every file under the repeated `files` field instead of `file`. */
+  multiple?: boolean;
 }
 
 /** Minimal deck shape the hook stores, whatever the module page type is. */
@@ -312,13 +320,33 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
   );
 
   const upload = useCallback(
-    async (endpoint: string, file: File, fallback: string): Promise<DeckActionResult> => {
+    async (
+      endpoint: string,
+      input: File | File[],
+      fallback: string,
+      options?: UploadOptions
+    ): Promise<DeckActionResult> => {
+      const files = Array.isArray(input) ? input : [input];
+
+      if (files.length === 0) {
+        return { success: false, error: fallback };
+      }
+
       setLoading(true);
       setError(null);
 
       try {
         const formData = new FormData();
-        formData.append("file", file);
+
+        // A multi-file slot always posts the `files` array, even for one file.
+        // Single-file slots keep the original `file` field of their endpoint.
+        if (options?.multiple) {
+          for (const file of files) {
+            formData.append("files", file);
+          }
+        } else {
+          formData.append("file", files[0]);
+        }
 
         const res = await fetch(endpoint, { method: "POST", body: formData });
 
@@ -338,7 +366,7 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
           applyPayload(body);
         }
 
-        return { success: true };
+        return { success: true, payload: body };
       } catch (err) {
         const message = err instanceof Error ? err.message : fallback;
 

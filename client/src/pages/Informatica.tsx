@@ -80,7 +80,8 @@ export default function Informatica() {
         label: slot.label,
         sourceFile: dataset.source?.sourceFile ?? null,
         uploadedAt: dataset.source?.uploadedAt ?? null,
-        onUpload: (file: File) => uploadTo(slot.id, file),
+        multiple: slot.multiple ?? false,
+        onUpload: (files: File[]) => uploadTo(slot.id, files),
       })),
     [dataset.source, uploadTo]
   );

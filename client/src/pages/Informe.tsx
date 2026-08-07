@@ -59,7 +59,8 @@ export default function Informe() {
       label: slot.label,
       sourceFile: sources[slot.id]?.sourceFile ?? null,
       uploadedAt: sources[slot.id]?.uploadedAt ?? null,
-      onUpload: (file: File) => uploadTo(slot.id, file),
+      // AV keeps one workbook per zone: the sidebar never sends more than one.
+      onUpload: (files: File[]) => uploadTo(slot.id, files[0]),
     }));
   }, [monthly.sourceFile, monthly.uploadedAt, uploadTo, weekly.resolutionSource, weekly.sourceFile, weekly.uploadedAt]);
 

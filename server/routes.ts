@@ -27,6 +27,7 @@ import {
 } from "../shared/modules/informatica/deck.ts";
 import { client } from "./db.js";
 import {
+  mergeInformaticaWorkbooks,
   parseInformaticaPlanoWorkbook,
   type InformaticaImportReport,
 } from "./parseInformaticaPlano.js";
@@ -568,20 +569,92 @@ router.put("/api/informatica/deck", async (req, res) => {
   }
 });
 
-router.post("/api/informatica/upload/plano", upload.single("file"), async (req, res) => {
+/** Upper bound of the additive import: enough for one file per building. */
+const MAX_INFORMATICA_PLANO_FILES = 10;
+
+/**
+ * `files` is the current field, repeated once per workbook. `file` is the
+ * legacy single-file field, accepted so an older client keeps working while a
+ * deployment is half rolled out.
+ */
+const uploadInformaticaPlano = upload.fields([
+  { name: "files", maxCount: MAX_INFORMATICA_PLANO_FILES },
+  { name: "file", maxCount: MAX_INFORMATICA_PLANO_FILES },
+]);
+
+/**
+ * Whether the bytes are a workbook container at all.
+ *
+ * `XLSX.read` happily parses anything as delimited text, so a `.txt` renamed
+ * `.xlsx` would import as a one-sheet workbook with no known sheet and no data
+ * instead of failing. The signature is checked first: `PK` for the zip formats
+ * (xlsx, xlsm, xlsb, ods) and the OLE magic for the legacy xls.
+ */
+function looksLikeWorkbook(buffer: Buffer): boolean {
+  if (buffer.length < 8) {
+    return false;
+  }
+
+  const zip = buffer[0] === 0x50 && buffer[1] === 0x4b;
+  const ole = buffer.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+
+  return zip || ole;
+}
+
+/** How the merged upload is labelled in the dataset source. */
+function describeSourceFiles(names: string[]): string {
+  return names.length === 1 ? names[0] : `${names.length} ficheros: ${names.join(", ")}`;
+}
+
+router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "Debes adjuntar el libro plano de Informática." });
+    const grouped = (req.files ?? {}) as Record<string, Express.Multer.File[] | undefined>;
+    const uploaded = [...(grouped.files ?? []), ...(grouped.file ?? [])];
+
+    if (uploaded.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "Debes adjuntar al menos un libro plano de Informática." });
     }
 
-    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-    const { dataset, report } = parseInformaticaPlanoWorkbook(workbook);
+    const workbooks: XLSX.WorkBook[] = [];
 
-    // The whole workbook replaces the stored one: a sheet removed from the
-    // file is a sheet the user wants back on "Próximamente".
+    // Every file is validated before anything is stored, and the answer names
+    // the offending file instead of failing the whole upload anonymously.
+    for (const file of uploaded) {
+      try {
+        if (!looksLikeWorkbook(file.buffer)) {
+          throw new Error("el fichero no es un libro de Excel");
+        }
+
+        const workbook = XLSX.read(file.buffer, { type: "buffer" });
+
+        if (!workbook || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length === 0) {
+          throw new Error("no contiene ninguna hoja");
+        }
+
+        workbooks.push(workbook);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : "error desconocido";
+
+        return res.status(400).json({
+          error: `No se pudo leer "${file.originalname}" como libro de Excel: ${detail}.`,
+        });
+      }
+    }
+
+    const files = uploaded.map((file) => file.originalname);
+    // Several files are folded into one workbook before parsing, so rows of the
+    // same sheet coming from different files add up instead of overwriting.
+    const { dataset, report } = parseInformaticaPlanoWorkbook(
+      mergeInformaticaWorkbooks(workbooks)
+    );
+
+    // The whole upload replaces the stored dataset: a sheet removed from the
+    // files is a sheet the user wants back on "Próximamente".
     const stored: InformaticaDataset = {
       ...dataset,
-      source: { sourceFile: req.file.originalname, uploadedAt: new Date().toISOString() },
+      source: { sourceFile: describeSourceFiles(files), uploadedAt: new Date().toISOString() },
     };
 
     await client.execute({
@@ -598,7 +671,7 @@ router.post("/api/informatica/upload/plano", upload.single("file"), async (req, 
     // without a second fetch, plus what the import actually read.
     const payload = await buildInformaticaPayload();
 
-    res.json({ ...payload, report } satisfies InformaticaResponse & {
+    res.json({ ...payload, report: { ...report, files } } satisfies InformaticaResponse & {
       report: InformaticaImportReport;
     });
   } catch (err) {
