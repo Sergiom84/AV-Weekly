@@ -10,9 +10,9 @@ import {
 } from "recharts";
 import type { DeckPage, InformeMonthlyDataset } from "@shared/informe";
 import { MONTH_LABELS } from "@shared/informe";
-import EditableNumber from "./EditableNumber";
-import EditableText from "./EditableText";
-import SlideHeading from "./SlideHeading";
+import EditableNumber from "@/components/deck/EditableNumber";
+import EditableText from "@/components/deck/EditableText";
+import SlideHeading from "@/components/deck/SlideHeading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 

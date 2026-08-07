@@ -5,12 +5,12 @@ import {
   defaultWeekSelection,
   resolveWeekSelection,
 } from "@shared/informe";
-import EditableText from "./EditableText";
-import RowFilterPanel from "./RowFilterPanel";
-import SlideHeading from "./SlideHeading";
-import WeekRangeSelector from "./WeekRangeSelector";
-import WeeklyBarChart, { type WeeklySeries } from "./WeeklyBarChart";
-import WeeklyTable from "./WeeklyTable";
+import EditableText from "@/components/deck/EditableText";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
+import SlideHeading from "@/components/deck/SlideHeading";
+import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
+import WeeklyBarChart, { type WeeklySeries } from "@/components/deck/WeeklyBarChart";
+import WeeklyTable from "@/components/deck/WeeklyTable";
 
 interface WeeklySupportPageProps {
   page: DeckPage;

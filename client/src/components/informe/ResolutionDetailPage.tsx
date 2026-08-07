@@ -1,9 +1,9 @@
 import type { DeckPage, InformeWeeklyDataset, WeekSelection } from "@shared/informe";
 import { defaultWeekSelection, resolveWeekSelection } from "@shared/informe";
-import EditableNumber from "./EditableNumber";
-import EditableText from "./EditableText";
-import SlideHeading from "./SlideHeading";
-import WeekRangeSelector from "./WeekRangeSelector";
+import EditableNumber from "@/components/deck/EditableNumber";
+import EditableText from "@/components/deck/EditableText";
+import SlideHeading from "@/components/deck/SlideHeading";
+import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 
 interface ResolutionDetailPageProps {
   page: DeckPage;

@@ -13,6 +13,8 @@ interface WeeklyTableProps {
   totalFor: (week: number) => number;
   /** Previous-year totals per week, rendered as extra read-only rows. */
   comparisonRows: { label: string; valueFor: (week: number) => number | null }[];
+  /** Column header for a week. Defaults to the "S<week>" convention. */
+  weekLabel?: (week: number) => string;
 }
 
 /** Editable weekly breakdown, with a computed total row and comparison rows. */
@@ -26,6 +28,7 @@ export default function WeeklyTable({
   onCellChange,
   totalFor,
   comparisonRows,
+  weekLabel = (week) => `S${week}`,
 }: WeeklyTableProps) {
   return (
     <table className="w-full min-w-full table-fixed border-collapse font-mono text-[1.15cqi] tabular-nums">
@@ -36,7 +39,7 @@ export default function WeeklyTable({
           </th>
           {weeks.map((week) => (
             <th key={week} scope="col" className="py-[0.3cqi] text-center font-normal">
-              {`S${week}`}
+              {weekLabel(week)}
             </th>
           ))}
         </tr>

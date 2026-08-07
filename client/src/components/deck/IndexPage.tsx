@@ -9,9 +9,13 @@ interface IndexPageProps {
   /** Correlative number of the page inside the visible deck. */
   number?: number | null;
   muted?: boolean;
+  /** Artwork behind the slide. Defaults to the AV corporate divider. */
+  background?: string;
+  /** Text slots rendered as index entries. Defaults to six. */
+  itemKeys?: string[];
 }
 
-const ITEM_KEYS = ["item1", "item2", "item3", "item4", "item5", "item6"] as const;
+const DEFAULT_ITEM_KEYS = ["item1", "item2", "item3", "item4", "item5", "item6"];
 
 /**
  * Index slide over the corporate artwork. The block sits in the upper area so
@@ -23,6 +27,8 @@ export default function IndexPage({
   onChange,
   number,
   muted,
+  background = "/informe/contraportada.png",
+  itemKeys = DEFAULT_ITEM_KEYS,
 }: IndexPageProps) {
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
@@ -30,7 +36,7 @@ export default function IndexPage({
   const fieldRing = editing ? "ring-white/40 focus:ring-white" : "";
 
   return (
-    <SlideFrame number={number} muted={muted} background="/informe/contraportada.png">
+    <SlideFrame number={number} muted={muted} background={background}>
       <div className="@container flex h-full w-full">
         {/* Offset to the right: the list is tall enough to reach the logo band
             printed on the artwork, which sits in the left margin. */}
@@ -46,7 +52,7 @@ export default function IndexPage({
           </h2>
 
           <ol className="mt-[1.6cqi] flex flex-col gap-[0.9cqi] border-l border-white/30 pl-[2.4cqi]">
-            {ITEM_KEYS.map((key, position) => (
+            {itemKeys.map((key, position) => (
               <li key={key} className="font-mono text-[1.5cqi] text-white/85">
                 <EditableText
                   value={page.text[key] ?? ""}

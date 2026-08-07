@@ -9,6 +9,8 @@ interface SectionPageProps {
   /** Correlative number of the page inside the visible deck. */
   number?: number | null;
   muted?: boolean;
+  /** Artwork behind the slide. Defaults to the AV corporate divider. */
+  background?: string;
 }
 
 /**
@@ -21,6 +23,7 @@ export default function SectionPage({
   onChange,
   number,
   muted,
+  background = "/informe/contraportada.png",
 }: SectionPageProps) {
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
@@ -29,7 +32,7 @@ export default function SectionPage({
   const fieldRing = editing ? "ring-white/40 focus:ring-white" : "";
 
   return (
-    <SlideFrame number={number} muted={muted} background="/informe/contraportada.png">
+    <SlideFrame number={number} muted={muted} background={background}>
       <div className="@container flex h-full w-full">
         <div className="flex w-[62%] flex-col justify-start pt-[6%]">
           <h2 className="text-[4.4cqi] leading-tight text-white">
