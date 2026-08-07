@@ -25,6 +25,13 @@ import {
   createDefaultInformaticaDeck,
   emptyInformaticaDataset,
 } from "../shared/modules/informatica/deck.ts";
+import {
+  convertRawInformaticaCsv,
+  convertRawPeticionesWorkbook,
+  decodeInformaticaCsv,
+  detectRawInformaticaFormat,
+  hasFlatInformaticaSheet,
+} from "./convertInformaticaRaw.js";
 import { client } from "./db.js";
 import {
   mergeInformaticaWorkbooks,
@@ -589,6 +596,9 @@ const uploadInformaticaPlano = upload.fields([
  * `.xlsx` would import as a one-sheet workbook with no known sheet and no data
  * instead of failing. The signature is checked first: `PK` for the zip formats
  * (xlsx, xlsm, xlsb, ods) and the OLE magic for the legacy xls.
+ *
+ * A file that fails this check is not rejected outright any more: the raw CSV
+ * exports of Informatica are plain text and are handled further down.
  */
 function looksLikeWorkbook(buffer: Buffer): boolean {
   if (buffer.length < 8) {
@@ -599,6 +609,48 @@ function looksLikeWorkbook(buffer: Buffer): boolean {
   const ole = buffer.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
 
   return zip || ole;
+}
+
+/**
+ * Reads one uploaded file into a flat Informatica workbook.
+ *
+ * The colleagues do not fill in the flat template: they forward the exports
+ * their tools already produce. So the upload accepts both, and the raw ones are
+ * converted here, before the additive merge, which keeps the merge, the parser
+ * and the storage below completely unaware of the raw formats.
+ *
+ * Throws with a short reason when the file is neither a flat book nor a known
+ * raw export; the caller turns that into a 400 naming the file.
+ */
+function readInformaticaUpload(buffer: Buffer): XLSX.WorkBook {
+  if (looksLikeWorkbook(buffer)) {
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+
+    if (!workbook || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length === 0) {
+      throw new Error("no contiene ninguna hoja");
+    }
+
+    if (detectRawInformaticaFormat(workbook) === "peticiones") {
+      return convertRawPeticionesWorkbook(workbook);
+    }
+
+    if (!hasFlatInformaticaSheet(workbook)) {
+      throw new Error(
+        "es un libro de Excel pero no trae ninguna hoja del esquema plano ni la cabecera del export de peticiones"
+      );
+    }
+
+    return workbook;
+  }
+
+  const text = decodeInformaticaCsv(buffer);
+  const format = detectRawInformaticaFormat(text);
+
+  if (format === "citas" || format === "workorders") {
+    return convertRawInformaticaCsv(text, format);
+  }
+
+  throw new Error("no es un libro de Excel ni un CSV con la cabecera de un export conocido");
 }
 
 /** How the merged upload is labelled in the dataset source. */
@@ -621,24 +673,20 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
 
     // Every file is validated before anything is stored, and the answer names
     // the offending file instead of failing the whole upload anonymously.
+    //
+    // Three shapes are accepted here and all three leave this loop as a flat
+    // workbook, so everything below stays untouched: the flat book itself, the
+    // request exports (xlsx) and the appointment and work-order exports (csv).
+    // The raw formats are converted to their flat sheets before merging, which
+    // is also where person names are dropped: only aggregates go downstream.
     for (const file of uploaded) {
       try {
-        if (!looksLikeWorkbook(file.buffer)) {
-          throw new Error("el fichero no es un libro de Excel");
-        }
-
-        const workbook = XLSX.read(file.buffer, { type: "buffer" });
-
-        if (!workbook || !Array.isArray(workbook.SheetNames) || workbook.SheetNames.length === 0) {
-          throw new Error("no contiene ninguna hoja");
-        }
-
-        workbooks.push(workbook);
+        workbooks.push(readInformaticaUpload(file.buffer));
       } catch (err) {
         const detail = err instanceof Error ? err.message : "error desconocido";
 
         return res.status(400).json({
-          error: `No se pudo leer "${file.originalname}" como libro de Excel: ${detail}.`,
+          error: `No se pudo leer "${file.originalname}" como fichero de Informática: ${detail}.`,
         });
       }
     }

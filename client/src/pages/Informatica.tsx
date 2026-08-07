@@ -81,6 +81,7 @@ export default function Informatica() {
         sourceFile: dataset.source?.sourceFile ?? null,
         uploadedAt: dataset.source?.uploadedAt ?? null,
         multiple: slot.multiple ?? false,
+        accept: slot.accept,
         onUpload: (files: File[]) => uploadTo(slot.id, files),
       })),
     [dataset.source, uploadTo]

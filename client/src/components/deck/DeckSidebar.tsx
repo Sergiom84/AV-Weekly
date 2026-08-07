@@ -27,6 +27,8 @@ export interface SidebarUpload {
   uploadedAt: string | null;
   /** The slot takes several workbooks at once and the server merges them. */
   multiple?: boolean;
+  /** File picker filter. Defaults to ".xlsx,.xls" when omitted. */
+  accept?: string;
   onUpload: (files: File[]) => Promise<DeckActionResult>;
 }
 
@@ -149,6 +151,7 @@ interface UploadZoneProps {
   sourceFile: string | null;
   uploadedAt: string | null;
   multiple: boolean;
+  accept: string;
   disabled: boolean;
   onUpload: (files: File[]) => Promise<DeckActionResult>;
 }
@@ -159,6 +162,7 @@ function UploadZone({
   sourceFile,
   uploadedAt,
   multiple,
+  accept,
   disabled,
   onUpload,
 }: UploadZoneProps) {
@@ -216,7 +220,7 @@ function UploadZone({
         ref={inputRef}
         id={id}
         type="file"
-        accept=".xlsx,.xls"
+        accept={accept}
         multiple={multiple}
         className="sr-only"
         onChange={handleChange}
@@ -270,6 +274,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
               sourceFile={slot.sourceFile}
               uploadedAt={slot.uploadedAt}
               multiple={slot.multiple ?? false}
+              accept={slot.accept ?? ".xlsx,.xls"}
               disabled={loading}
               onUpload={slot.onUpload}
             />

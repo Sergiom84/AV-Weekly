@@ -28,6 +28,8 @@ export interface DeckUploadSlot {
    * true posts every chosen file under the repeated `files` field.
    */
   multiple?: boolean;
+  /** File picker filter. Defaults to ".xlsx,.xls" when omitted. */
+  accept?: string;
 }
 
 /** Full-bleed artwork of the cover-like pages. */
@@ -94,6 +96,7 @@ export const DECK_MODULES: DeckModule[] = [
           path: "/api/informatica/upload/plano",
           error: "No se pudo cargar el libro plano",
           multiple: true,
+          accept: ".xlsx,.xls,.csv",
         },
       ],
       artwork: {
