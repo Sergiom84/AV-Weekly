@@ -98,16 +98,115 @@ export interface AgaWeekAggregate {
 /* Dataset                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* Managed positions (section 2)                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One breakdown row across the weeks it was reported on.
+ *
+ * Deliberately a series and not a pair of numbers: the presented charts only
+ * compare two weeks, but the future source (the ZPT025 / Office raw exports)
+ * carries every week, and a `{previous, current}` shape would have to be
+ * rewritten the day the third week arrives. A row simply carries the weeks it
+ * has; a chart that shows two takes the last two.
+ *
+ * `week` is the same key as `AgaWeekAggregate.week`: the `YYYY-MM-DD` of the
+ * Monday, so a row joins the section 1 history without a translation table.
+ */
+export interface AgaWeekCount {
+  week: string;
+  count: number;
+}
+
+export interface AgaBreakdownRow {
+  label: string;
+  counts: AgaWeekCount[];
+}
+
+/** Breakdown of one department by product (slides 2.5 to 2.7). */
+export interface AgaDepartmentBreakdown {
+  /** Department label, as the deck writes it ("GAM", "Plataforma Portátiles", "Almacén"). */
+  department: string;
+  rows: AgaBreakdownRow[];
+}
+
+/**
+ * Positions closed in the week, as opposed to the ones still in management that
+ * `weeks` carries.
+ *
+ * Not derivable from the GPS: it is a different export, so it lives in its own
+ * optional section and a deck whose dataset predates it simply shows the pages
+ * as pending.
+ */
+export interface AgaManagedSection {
+  /** Total closed per week, ascending by date. */
+  weeklyTotals: { week: string; total: number }[];
+  byDepartment: AgaBreakdownRow[];
+  byProduct: AgaBreakdownRow[];
+  byLocation: AgaBreakdownRow[];
+  /** Product detail of the departments the deck breaks out, in deck order. */
+  byDepartmentProduct: AgaDepartmentBreakdown[];
+  source?: DatasetSource;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Office (2.8) and annual evolution (section 3)                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Monthly Office series.
+ *
+ * `values` is aligned with `months` and carries `null`, not `0`, for a month a
+ * family was not reported on: the chart must leave a gap there rather than draw
+ * a zero, which reads as "none requested" instead of "not measured".
+ */
+export interface AgaOfficeSection {
+  /** Reported months, `YYYY-MM`, ascending. */
+  months: string[];
+  families: { label: string; values: (number | null)[] }[];
+  source?: DatasetSource;
+}
+
+/** One year of a twelve-month series. `values` always has twelve entries. */
+export interface AgaYearSeries {
+  year: number;
+  /** January to December. `null` for a month with no data yet. */
+  values: (number | null)[];
+}
+
+export interface AgaAnnualSection {
+  peticiones: AgaYearSeries[];
+  posiciones: AgaYearSeries[];
+  source?: DatasetSource;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dataset                                                                     */
+/* -------------------------------------------------------------------------- */
+
 export interface AgaDataset {
   /** Every week ever imported, ascending by date. */
   weeks: AgaWeekAggregate[];
+  /** Section 2. Absent until the managed-positions import has run. */
+  managed?: AgaManagedSection;
+  /** Slide 2.8. Absent until the Office import has run. */
+  office?: AgaOfficeSection;
+  /** Section 3. Absent until the annual import has run. */
+  annual?: AgaAnnualSection;
   source: DatasetSource;
   /** Names of the sheets the last upload read, in workbook order. */
   sheetsFound?: string[];
 }
 
-/** Section keys a page can depend on. The GPS only feeds one. */
-export type AgaSectionKey = "weeks";
+/**
+ * Section keys a page can depend on.
+ *
+ * `weeks` is the GPS upload; the other three come from imports the module does
+ * not read yet, which is why every page declares what it needs instead of
+ * assuming a dataset is complete.
+ */
+export type AgaSectionKey = "weeks" | "managed" | "office" | "annual";
 
 /* -------------------------------------------------------------------------- */
 /* Deck                                                                        */
@@ -119,7 +218,17 @@ export type AgaPageKind =
   | "agaTotalWeekly"
   | "agaDeptEvolution"
   | "agaDeptCompare"
-  | "agaProjectCompare";
+  | "agaProjectCompare"
+  | "agaGestTotal"
+  | "agaGestDept"
+  | "agaGestProduct"
+  | "agaGestLocation"
+  | "agaGestGam"
+  | "agaGestPortatiles"
+  | "agaGestAlmacen"
+  | "agaGestOffice"
+  | "agaAnualPeticiones"
+  | "agaAnualPosiciones";
 
 /** Series a page reports on. AGA pages are not typed by series. */
 export type AgaSeries = string;

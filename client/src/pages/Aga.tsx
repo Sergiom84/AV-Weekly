@@ -28,9 +28,17 @@ import SectionPage from "@/components/deck/SectionPage";
 import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAgaDeck } from "@/modules/aga/useAgaDeck";
+import AnualPeticionesPage from "@/modules/aga/pages/AnualPeticionesPage";
+import AnualPosicionesPage from "@/modules/aga/pages/AnualPosicionesPage";
 import ComparativaDepartamentoPage from "@/modules/aga/pages/ComparativaDepartamentoPage";
 import ComparativaProyectoPage from "@/modules/aga/pages/ComparativaProyectoPage";
 import EvolucionDepartamentoPage from "@/modules/aga/pages/EvolucionDepartamentoPage";
+import GestionadasDepartamentoPage from "@/modules/aga/pages/GestionadasDepartamentoPage";
+import GestionadasDepartamentoProductoPage from "@/modules/aga/pages/GestionadasDepartamentoProductoPage";
+import GestionadasOfficePage from "@/modules/aga/pages/GestionadasOfficePage";
+import GestionadasProductoPage from "@/modules/aga/pages/GestionadasProductoPage";
+import GestionadasTotalPage from "@/modules/aga/pages/GestionadasTotalPage";
+import GestionadasUbicacionPage from "@/modules/aga/pages/GestionadasUbicacionPage";
 import TotalSemanalPage from "@/modules/aga/pages/TotalSemanalPage";
 import type { AgaPageProps } from "@/modules/aga/pages/PageShell";
 
@@ -49,6 +57,16 @@ const DATA_PAGES: Record<
   "aga-evolucion-departamento": EvolucionDepartamentoPage,
   "aga-comparativa-departamento": ComparativaDepartamentoPage,
   "aga-comparativa-proyecto": ComparativaProyectoPage,
+  "aga-gestionadas-total-semanal": GestionadasTotalPage,
+  "aga-gestionadas-departamento": GestionadasDepartamentoPage,
+  "aga-gestionadas-producto": GestionadasProductoPage,
+  "aga-gestionadas-ubicacion": GestionadasUbicacionPage,
+  "aga-gestionadas-gam": GestionadasDepartamentoProductoPage,
+  "aga-gestionadas-portatiles": GestionadasDepartamentoProductoPage,
+  "aga-gestionadas-almacen": GestionadasDepartamentoProductoPage,
+  "aga-gestionadas-office": GestionadasOfficePage,
+  "aga-anual-peticiones": AnualPeticionesPage,
+  "aga-anual-posiciones": AnualPosicionesPage,
 };
 
 function scrollToPage(pageId: string) {

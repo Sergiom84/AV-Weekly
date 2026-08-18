@@ -49,7 +49,7 @@ import {
 } from "../shared/modules/aga/deck.ts";
 import { client } from "./db.js";
 import {
-  mergeAgaWeeks,
+  mergeAgaDataset,
   parseAgaWorkbook,
   type AgaImportReport,
 } from "./parseAgaPlano.js";
@@ -916,14 +916,17 @@ router.post("/api/aga/upload/plano", upload.single("file"), async (req, res) => 
     // replaced, which is what re-uploading a corrected export must do.
     const existing = await readStoredAgaDataset();
 
-    const stored: AgaDataset = {
-      weeks: mergeAgaWeeks(existing?.weeks ?? [], weeks),
-      source: {
+    // Sections 2 and 3 are seeded from other exports and must survive the
+    // upload untouched, so the dataset is folded rather than rebuilt.
+    const stored: AgaDataset = mergeAgaDataset(
+      existing,
+      weeks,
+      {
         sourceFile: req.file.originalname,
         uploadedAt: new Date().toISOString(),
       },
-      sheetsFound: report.sheetsFound,
-    };
+      report.sheetsFound
+    );
 
     await client.execute({
       sql: `INSERT INTO aga_dataset (id, data, source_file, uploaded_at)

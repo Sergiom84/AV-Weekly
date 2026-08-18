@@ -516,10 +516,26 @@ export function mergeAgaWeeks(
   return Array.from(byWeek.values()).sort((a, b) => a.week.localeCompare(b.week));
 }
 
-/** The stored dataset with the upload folded in. `source` is left to the route. */
+/**
+ * The stored dataset with a GPS upload folded in.
+ *
+ * The GPS only feeds `weeks`. The other sections are seeded from different
+ * exports, and rebuilding the dataset literally around the parsed weeks — which
+ * is what the route used to do — silently dropped them on the next upload.
+ * Carrying them across is the whole reason this returns a dataset rather than
+ * an array: an upload must never be able to erase a section it knows nothing
+ * about.
+ */
 export function mergeAgaDataset(
   existing: AgaDataset | null,
-  incoming: AgaWeekAggregate[]
-): AgaWeekAggregate[] {
-  return mergeAgaWeeks(existing?.weeks ?? [], incoming);
+  incoming: AgaWeekAggregate[],
+  source: AgaDataset["source"],
+  sheetsFound?: string[]
+): AgaDataset {
+  return {
+    ...(existing ?? {}),
+    weeks: mergeAgaWeeks(existing?.weeks ?? [], incoming),
+    source,
+    ...(sheetsFound ? { sheetsFound } : {}),
+  };
 }

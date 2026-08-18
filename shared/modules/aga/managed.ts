@@ -1,0 +1,153 @@
+import type {
+  AgaBreakdownRow,
+  AgaManagedSection,
+  AgaWeekCount,
+} from "./types.ts";
+
+/**
+ * Readers of the managed-positions section (slides 2.1 to 2.7).
+ *
+ * The headline figures of those slides are NOT stored. The presented deck
+ * carries them as typed sentences ("desciende en un 30,6%"), and a percentage
+ * pasted next to a chart drifts from the chart the first time the data is
+ * corrected. They are derived here instead, from the same series the chart
+ * draws, so the sentence cannot disagree with the bars above it.
+ */
+
+/** The weeks the section reports on, ascending. */
+export function managedWeeks(section: AgaManagedSection | undefined): string[] {
+  return (section?.weeklyTotals ?? []).map((entry) => entry.week);
+}
+
+/** The last two weeks of the section, oldest first. Fewer when there are fewer. */
+export function lastTwoWeeks(section: AgaManagedSection | undefined): string[] {
+  return managedWeeks(section).slice(-2);
+}
+
+function countAt(counts: AgaWeekCount[], week: string): number {
+  return counts.find((entry) => entry.week === week)?.count ?? 0;
+}
+
+/**
+ * The rows of a breakdown restricted to the given weeks, descending by the
+ * count of the last one — the order the deck draws them in.
+ *
+ * Rows that are zero across every requested week are dropped: they are labels
+ * of another week, not bars of this one.
+ */
+export function breakdownForWeeks(
+  rows: AgaBreakdownRow[] | undefined,
+  weeks: string[]
+): { label: string; counts: number[] }[] {
+  return (rows ?? [])
+    .map((row) => ({
+      label: row.label,
+      counts: weeks.map((week) => countAt(row.counts, week)),
+    }))
+    .filter((row) => row.counts.some((count) => count > 0))
+    .sort(
+      (a, b) =>
+        b.counts[b.counts.length - 1] - a.counts[a.counts.length - 1] ||
+        a.label.localeCompare(b.label, "es")
+    );
+}
+
+/**
+ * Week-on-week movement of the managed total.
+ *
+ * Both bases are returned rather than one, because the deck and the arithmetic
+ * disagree and the module must not pick a winner silently:
+ *
+ * - `overPrevious` is the variation as it is normally read, `(actual −
+ *   previa) / previa`. For weeks 32 and 33 of 2026 that is −23,5%.
+ * - `overCurrent` is `(previa − actual) / actual`, 30,7% for the same pair.
+ *
+ * The presented slide 2.1 says "desciende en un 30,6%", which neither base
+ * reproduces exactly: `overCurrent` lands on 30,67% and only matches once
+ * truncated to one decimal, and the responsible's own workbook uses the other
+ * base elsewhere. The figure is typed by hand in the pptx and appears in no
+ * cell of the source workbook, so it is treated as unverified until the
+ * responsible confirms the base.
+ */
+export interface AgaManagedDelta {
+  previousWeek: string;
+  currentWeek: string;
+  previous: number;
+  current: number;
+  overPrevious: number;
+  overCurrent: number;
+}
+
+export function managedWeeklyDelta(
+  section: AgaManagedSection | undefined
+): AgaManagedDelta | null {
+  const totals = section?.weeklyTotals ?? [];
+
+  if (totals.length < 2) {
+    return null;
+  }
+
+  const previous = totals[totals.length - 2];
+  const current = totals[totals.length - 1];
+
+  return {
+    previousWeek: previous.week,
+    currentWeek: current.week,
+    previous: previous.total,
+    current: current.total,
+    overPrevious: previous.total === 0 ? 0 : (current.total - previous.total) / previous.total,
+    overCurrent: current.total === 0 ? 0 : (previous.total - current.total) / current.total,
+  };
+}
+
+/**
+ * Share of the busiest location in the last reported week.
+ *
+ * The denominator is the sum of the reported locations, not the week total of
+ * slide 2.1: the two disagree by design, since a position with no building is
+ * counted in the total and in no bar.
+ *
+ * For week 33 of 2026 this yields 58,9% (175 of 297) against the 58,5% the
+ * presented slide states. The gap is the chart's own truncation: the
+ * responsible's pivot totals 299 locations, and the two rows with a single
+ * position each (Valencia, Oviedo) do not make it into the fifteen bars the
+ * slide draws. Seeded from the chart, the module can only see 297.
+ */
+export function topLocationShare(
+  section: AgaManagedSection | undefined
+): { label: string; count: number; total: number; share: number } | null {
+  const week = managedWeeks(section).slice(-1)[0];
+
+  if (!week) {
+    return null;
+  }
+
+  const rows = (section?.byLocation ?? []).map((row) => ({
+    label: row.label,
+    count: countAt(row.counts, week),
+  }));
+
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  const top = rows.reduce(
+    (best, row) => (best === null || row.count > best.count ? row : best),
+    null as { label: string; count: number } | null
+  );
+
+  if (!top || total === 0) {
+    return null;
+  }
+
+  return { ...top, total, share: top.count / total };
+}
+
+/** Product rows of one of the departments broken out by slides 2.5 to 2.7. */
+export function departmentProducts(
+  section: AgaManagedSection | undefined,
+  department: string
+): AgaBreakdownRow[] {
+  return (
+    (section?.byDepartmentProduct ?? []).find(
+      (entry) => entry.department === department
+    )?.rows ?? []
+  );
+}

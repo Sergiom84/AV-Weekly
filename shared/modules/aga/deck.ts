@@ -55,64 +55,102 @@ export const AGA_PAGE_SPECS: PageSpec[] = [
 ];
 
 /**
- * Pages of the presented PPTX that are not automated yet.
+ * Pages of sections 2 and 3.
  *
- * They come from exports the module does not read, so they ship as free-form
- * `notes` slides carrying nothing but their title: the responsible pastes the
- * chart image or writes the text by hand. No sample figures and no sample copy
- * are seeded — a placeholder number in a corporate report is worse than a gap.
+ * They do not come from the GPS: section 2 is the managed-positions export and
+ * section 3 the annual one, both seeded separately. They are data pages all the
+ * same — each declares the dataset section it needs, and falls back to the
+ * pending slide while that section is missing rather than shipping a sample
+ * figure, which in a corporate report is worse than a gap.
  *
- * Declared as data, not as literals inside `createDefaultAgaDeck`, so the
- * merge that repairs already stored decks stays generic over this list.
+ * The `section` dividers carry no data and declare no sections.
+ *
+ * Declared as data, not as literals inside `createDefaultAgaDeck`, so the merge
+ * that repairs already stored decks stays generic over this list.
  */
 interface TemplatePageSpec {
   id: string;
-  kind: "section" | "notes";
+  kind: AgaDeckPage["kind"];
   title: string;
+  sections?: AgaSectionKey[];
 }
 
 export const AGA_TEMPLATE_PAGE_SPECS: TemplatePageSpec[] = [
   { id: "seccion-gestionadas", kind: "section", title: "2. Peticiones gestionadas" },
   {
     id: "aga-gestionadas-total-semanal",
-    kind: "notes",
+    kind: "agaGestTotal",
     title: "2.1 Total posiciones gestionadas por semana",
+    sections: ["managed"],
   },
   {
     id: "aga-gestionadas-departamento",
-    kind: "notes",
+    kind: "agaGestDept",
     title: "2.2 Top gestionadas por departamento",
+    sections: ["managed"],
   },
   {
     id: "aga-gestionadas-producto",
-    kind: "notes",
+    kind: "agaGestProduct",
     title: "2.3 Top gestionadas por producto",
+    sections: ["managed"],
   },
   {
     id: "aga-gestionadas-ubicacion",
-    kind: "notes",
+    kind: "agaGestLocation",
     title: "2.4 Top gestionadas por ubicación",
+    sections: ["managed"],
   },
-  { id: "aga-gestionadas-gam", kind: "notes", title: "2.5 GAM por producto" },
+  {
+    id: "aga-gestionadas-gam",
+    kind: "agaGestGam",
+    title: "2.5 GAM por producto",
+    sections: ["managed"],
+  },
   {
     id: "aga-gestionadas-portatiles",
-    kind: "notes",
+    kind: "agaGestPortatiles",
     title: "2.6 Plataforma Portátiles por producto",
+    sections: ["managed"],
   },
-  { id: "aga-gestionadas-almacen", kind: "notes", title: "2.7 Almacén por producto" },
-  { id: "aga-gestionadas-office", kind: "notes", title: "2.8 Office" },
+  {
+    id: "aga-gestionadas-almacen",
+    kind: "agaGestAlmacen",
+    title: "2.7 Almacén por producto",
+    sections: ["managed"],
+  },
+  {
+    id: "aga-gestionadas-office",
+    kind: "agaGestOffice",
+    title: "2.8 Office",
+    sections: ["office"],
+  },
   { id: "seccion-anual", kind: "section", title: "3. Evolución anual" },
   {
     id: "aga-anual-peticiones",
-    kind: "notes",
+    kind: "agaAnualPeticiones",
     title: "3.1 Evolución anual de peticiones",
+    sections: ["annual"],
   },
   {
     id: "aga-anual-posiciones",
-    kind: "notes",
+    kind: "agaAnualPosiciones",
     title: "3.2 Evolución anual de posiciones",
+    sections: ["annual"],
   },
 ];
+
+/**
+ * Department each per-department product page reports on.
+ *
+ * The label is the key into `managed.byDepartmentProduct`, so the page picks its
+ * rows without the renderer hardcoding a department per slide id.
+ */
+export const AGA_PAGE_DEPARTMENT: Record<string, string> = {
+  "aga-gestionadas-gam": "GAM",
+  "aga-gestionadas-portatiles": "Plataforma Portátiles",
+  "aga-gestionadas-almacen": "Almacén",
+};
 
 function createTemplatePage(spec: TemplatePageSpec): AgaDeckPage {
   const base = {
@@ -129,16 +167,56 @@ function createTemplatePage(spec: TemplatePageSpec): AgaDeckPage {
     return { ...base, text: { title: spec.title, subtitle: SERVICE } };
   }
 
-  return {
-    ...base,
-    text: { title: spec.title, subtitle: SERVICE, body: "" },
-    images: [],
-  };
+  if (spec.kind === "notes") {
+    return {
+      ...base,
+      text: { title: spec.title, subtitle: SERVICE, body: "" },
+      images: [],
+    };
+  }
+
+  return { ...base, text: { title: spec.title, subtitle: SERVICE, footnote: "" } };
 }
 
 /** Sections a page needs, by page id. Empty for the pages with no dataset. */
-export const AGA_PAGE_SECTIONS: Record<string, AgaSectionKey[]> =
-  Object.fromEntries(AGA_PAGE_SPECS.map((spec) => [spec.id, spec.sections]));
+export const AGA_PAGE_SECTIONS: Record<string, AgaSectionKey[]> = {
+  ...Object.fromEntries(AGA_PAGE_SPECS.map((spec) => [spec.id, spec.sections])),
+  ...Object.fromEntries(
+    AGA_TEMPLATE_PAGE_SPECS.filter((spec) => spec.sections).map((spec) => [
+      spec.id,
+      spec.sections!,
+    ])
+  ),
+};
+
+/**
+ * True when the section carries something to draw.
+ *
+ * Per section rather than a generic "is a non-empty array": `weeks` is a list,
+ * but `managed` is an object whose emptiness means "no week reported", and
+ * `office`/`annual` are empty when they have no series. A section present but
+ * empty must still fall back to the pending slide.
+ */
+function sectionHasRows(dataset: AgaDataset, section: AgaSectionKey): boolean {
+  switch (section) {
+    case "weeks":
+      return Array.isArray(dataset.weeks) && dataset.weeks.length > 0;
+    case "managed":
+      return (dataset.managed?.weeklyTotals?.length ?? 0) > 0;
+    case "office":
+      return (
+        (dataset.office?.months?.length ?? 0) > 0 &&
+        (dataset.office?.families?.length ?? 0) > 0
+      );
+    case "annual":
+      return (
+        (dataset.annual?.peticiones?.length ?? 0) > 0 ||
+        (dataset.annual?.posiciones?.length ?? 0) > 0
+      );
+    default:
+      return false;
+  }
+}
 
 /** True when every section the page needs carries at least one row. */
 export function hasSectionData(
@@ -149,10 +227,7 @@ export function hasSectionData(
     return false;
   }
 
-  return sections.every((section) => {
-    const rows = dataset[section];
-    return Array.isArray(rows) && rows.length > 0;
-  });
+  return sections.every((section) => sectionHasRows(dataset, section));
 }
 
 export function emptyAgaDataset(): AgaDataset {
@@ -257,7 +332,19 @@ export function createDefaultAgaDeck(): AgaDeckState {
  */
 export function mergeAgaDeckTemplate(deck: AgaDeckState): AgaDeckState {
   const reference = createDefaultAgaDeck().pages;
-  const pages = [...deck.pages];
+  const kinds = new Map(reference.map((page) => [page.id, page.kind]));
+
+  // A page the specs promoted from a placeholder to a data page keeps its stored
+  // id, so the deck saved before the promotion still carries the old kind and
+  // would render as a placeholder forever. Only the kind is realigned: the
+  // title, the body, the images, the visibility and the position the user chose
+  // are the user's, not the template's.
+  const pages = deck.pages.map((page) => {
+    const kind = kinds.get(page.id);
+
+    return kind && kind !== page.kind ? { ...page, kind } : page;
+  });
+
   const present = new Set(pages.map((page) => page.id));
 
   reference.forEach((refPage, refIndex) => {
