@@ -42,7 +42,11 @@ import type {
   AgaDeckState,
   AgaPayload,
 } from "../shared/modules/aga/types.ts";
-import { createDefaultAgaDeck, emptyAgaDataset } from "../shared/modules/aga/deck.ts";
+import {
+  createDefaultAgaDeck,
+  emptyAgaDataset,
+  mergeAgaDeckTemplate,
+} from "../shared/modules/aga/deck.ts";
 import { client } from "./db.js";
 import {
   mergeAgaWeeks,
@@ -810,10 +814,13 @@ async function readStoredAgaDeck(): Promise<AgaDeckState | null> {
       return null;
     }
 
-    return {
+    // A deck stored before a template page existed would never show it again,
+    // since the deck is persisted whole. Reconciling on read adds only what is
+    // missing, instead of forcing a reset that drops the user's texts.
+    return mergeAgaDeckTemplate({
       pages: deck.pages,
       updatedAt: deck.updatedAt ?? ((result.rows[0].updated_at as string) ?? null),
-    };
+    });
   } catch {
     // Ignore malformed deck rows instead of breaking the API.
     return null;

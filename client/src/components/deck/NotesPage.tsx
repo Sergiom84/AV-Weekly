@@ -8,8 +8,12 @@ interface NotesPageProps<TPage extends DeckPage<string, string>> {
   page: TPage;
   editing: boolean;
   onChange: (patch: Partial<TPage>) => void;
-  /** Removes this page from the deck entirely. Only offered while editing. */
-  onRemove: () => void;
+  /**
+   * Removes this page from the deck entirely. Only offered while editing, and
+   * only for pages added by hand: a sheet that ships with the deck template is
+   * hidden, never deleted.
+   */
+  onRemove?: () => void;
 }
 
 const ACCEPTED_TYPES = "image/png,image/jpeg,image/gif,image/webp";
@@ -108,7 +112,7 @@ export default function NotesPage<TPage extends DeckPage<string, string>>({
           />
         </div>
 
-        {editing && (
+        {editing && onRemove && (
           <button
             type="button"
             onClick={onRemove}

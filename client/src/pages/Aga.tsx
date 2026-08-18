@@ -204,7 +204,9 @@ export default function Aga() {
               page={page}
               editing={isEditing}
               onChange={onChange}
-              onRemove={() => removePage(page.id)}
+              onRemove={
+                seededIds.has(page.id) ? undefined : () => removePage(page.id)
+              }
             />
           </SlideFrame>
         );
