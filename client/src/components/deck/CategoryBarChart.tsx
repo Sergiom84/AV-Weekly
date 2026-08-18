@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -38,9 +39,210 @@ interface CategoryBarChartProps {
 /** Above this many categories the value labels need the compact size to fit. */
 const COMPACT_LABELS_FROM = 14;
 
+/** Below this value a stacked segment is never labelled, however tall it draws. */
+const MIN_STACK_LABEL_VALUE = 9;
+
+/** Pixel box a stacked segment needs before its label fits inside. */
+const MIN_STACK_LABEL_HEIGHT = 14;
+const MIN_STACK_LABEL_WIDTH = 20;
+
+/** Tilt of the category labels, in degrees below the axis. */
+const CATEGORY_ANGLE = 32;
+
+/** Share of the plot box the angled labels may take before the text shrinks. */
+const CATEGORY_BAND = 0.4;
+
+/** Nominal category font, as a fraction of the chart width (matches `1.1cqi`). */
+const CATEGORY_FONT = 0.011;
+
+/** Floor of the same font: below this the axis stops being readable. */
+const CATEGORY_FONT_MIN = 0.0065;
+
+/** Advance width of one JetBrains Mono glyph, relative to the font size. */
+const MONO_ADVANCE = 0.6;
+
+const RADIANS = (CATEGORY_ANGLE * Math.PI) / 180;
+
+interface AngledTickProps {
+  x?: number;
+  y?: number;
+  fontSize: number;
+  payload?: { value?: string | number };
+}
+
+/**
+ * Category label drawn at `CATEGORY_ANGLE`, in an explicit pixel size so the
+ * axis can be measured. Recharts' own `angle` prop keeps the CSS font size,
+ * which leaves the tick box and the text free to disagree and spill out of the
+ * slide.
+ */
+function AngledTick({ x, y, fontSize, payload }: AngledTickProps) {
+  return (
+    <g transform={`translate(${Number(x)}, ${Number(y)})`}>
+      <text
+        transform={`rotate(-${CATEGORY_ANGLE})`}
+        dy={fontSize * 0.8}
+        textAnchor="end"
+        fontSize={fontSize}
+        fill="var(--muted-foreground)"
+        className="font-mono"
+      >
+        {payload?.value}
+      </text>
+    </g>
+  );
+}
+
+/**
+ * Font size and axis box the angled categories need at the current chart size.
+ *
+ * The labels are rotated, so a long name eats both height (it descends below
+ * the axis) and width (it reaches left past the first bar). Both are derived
+ * from the longest label: the text shrinks only once the tilted text no longer
+ * fits inside `CATEGORY_BAND` of the plot.
+ */
+function angledAxisMetrics(labels: string[], width: number, height: number) {
+  const longest = labels.reduce((max, label) => Math.max(max, label.length), 0);
+  const band = height * CATEGORY_BAND;
+
+  // Largest font whose rotated text still fits the band, capped at the nominal
+  // size so short labels are not blown up.
+  const fitting = band / (longest * MONO_ADVANCE * Math.sin(RADIANS) + 1.8);
+  const fontSize = Math.max(
+    width * CATEGORY_FONT_MIN,
+    Math.min(width * CATEGORY_FONT, fitting)
+  );
+
+  const textWidth = longest * MONO_ADVANCE * fontSize;
+  const tickHeight = Math.ceil(textWidth * Math.sin(RADIANS) + fontSize * 1.8);
+
+  // The leftmost label reaches back from its own tick; the Y axis and half a
+  // slot already absorb part of that reach, the rest becomes left margin.
+  const slot = Math.max(1, (width - Y_AXIS_WIDTH) / Math.max(1, labels.length));
+  const overhang = textWidth * Math.cos(RADIANS) - Y_AXIS_WIDTH - slot / 2;
+  const marginLeft = Math.round(Math.min(Math.max(overhang, 0), width * 0.12));
+
+  return { fontSize, tickHeight, marginLeft };
+}
+
+/** Measures the box the chart is drawn into, so the axis can be sized in pixels. */
+function useChartBox() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ width: 0, height: 0 });
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const measure = (width: number, height: number) =>
+      setBox(current =>
+        current.width === width && current.height === height
+          ? current
+          : { width, height }
+      );
+
+    // Measured once up front: a `ResizeObserver` only delivers on a rendering
+    // step, so a deck built off-screen — a hidden tab, the PDF pass — would
+    // otherwise never get its size and would fall back to unmeasured axes.
+    const first = node.getBoundingClientRect();
+    measure(first.width, first.height);
+
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      measure(width, height);
+    });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, box };
+}
+
+interface StackLabelProps {
+  x?: number | string;
+  y?: number | string;
+  width?: number | string;
+  height?: number | string;
+  value?: number | string;
+  index?: number;
+}
+
+/**
+ * Stack total, written above the column. Rendered from the topmost series, the
+ * only one whose `y` is the top of the whole stack.
+ */
+function StackTotalLabel({
+  x,
+  y,
+  width,
+  index,
+  totals,
+}: StackLabelProps & { totals: number[] }) {
+  const total = totals[Number(index)];
+  const box = { x: Number(x), y: Number(y), width: Number(width) };
+
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(box.x))
+    return null;
+
+  return (
+    <text
+      x={box.x + box.width / 2}
+      y={box.y - 4}
+      textAnchor="middle"
+      className="fill-foreground text-[1.2cqi] font-medium"
+    >
+      {total}
+    </text>
+  );
+}
+
+/**
+ * Value written inside a stacked segment. Recharts has no built-in position for
+ * this that also skips the segments too small to hold text, so the segment box
+ * is measured here and the label is dropped when it would not fit.
+ *
+ * White with a dark outline: the stack palette mixes light and dark fills and a
+ * single flat colour is unreadable on half of them.
+ */
+function StackValueLabel({ x, y, width, height, value }: StackLabelProps) {
+  const numeric = Number(value);
+  const box = {
+    x: Number(x),
+    y: Number(y),
+    width: Number(width),
+    height: Number(height),
+  };
+
+  if (!Number.isFinite(numeric) || numeric < MIN_STACK_LABEL_VALUE) return null;
+  if (box.height < MIN_STACK_LABEL_HEIGHT || box.width < MIN_STACK_LABEL_WIDTH)
+    return null;
+
+  return (
+    <text
+      x={box.x + box.width / 2}
+      y={box.y + box.height / 2}
+      textAnchor="middle"
+      dominantBaseline="central"
+      className="fill-white text-[1.1cqi] font-medium"
+      stroke="rgba(0, 0, 0, 0.45)"
+      strokeWidth={2}
+      paintOrder="stroke"
+    >
+      {numeric}
+    </text>
+  );
+}
+
 // Recharts inlines its own tick fill, which overrides a Tailwind class and
 // leaves the axis unreadable in dark mode. Set the token explicitly.
-const AXIS_TICK = { fill: "var(--muted-foreground)", className: "text-[1.1cqi]" };
+const AXIS_TICK = {
+  fill: "var(--muted-foreground)",
+  className: "text-[1.1cqi]",
+};
+
+/** Kept in sync with the `<YAxis width>` below; the axis maths needs the number. */
+const Y_AXIS_WIDTH = 40;
 
 /**
  * Grouped or stacked bars over an arbitrary category axis: month, year, week or
@@ -54,6 +256,21 @@ export default function CategoryBarChart({
   angledCategories = false,
 }: CategoryBarChartProps) {
   const animate = usePresentationAnimation();
+  const { ref: chartRef, box } = useChartBox();
+  const angledAxis =
+    angledCategories && box.width > 0 && box.height > 0
+      ? angledAxisMetrics(
+          data.map(entry => String(entry[categoryKey] ?? "")),
+          box.width,
+          box.height
+        )
+      : null;
+  const stackTotals = stacked
+    ? data.map(entry =>
+        series.reduce((sum, item) => sum + (Number(entry[item.key]) || 0), 0)
+      )
+    : [];
+  const topSeriesKey = series[series.length - 1]?.key;
   const labelClass =
     data.length > COMPACT_LABELS_FROM
       ? "fill-foreground text-[0.75cqi]"
@@ -61,13 +278,18 @@ export default function CategoryBarChart({
 
   return (
     <>
+      {/* Wrapping matters once a stack carries ten-plus departments: on a single
+          row the long names collide and each item breaks mid-label. */}
       {series.length > 1 && (
-        <ul className="flex shrink-0 items-center justify-center gap-[2cqi] pb-[0.5cqi] font-mono text-[1.2cqi] text-muted-foreground">
-          {series.map((entry) => (
-            <li key={entry.key} className="flex items-center gap-[0.6cqi]">
+        <ul className="flex shrink-0 flex-wrap items-center justify-center gap-x-[1.8cqi] gap-y-[0.5cqi] pb-[0.8cqi] font-mono text-[1.2cqi] text-muted-foreground">
+          {series.map(entry => (
+            <li
+              key={entry.key}
+              className="flex items-center gap-[0.6cqi] whitespace-nowrap"
+            >
               <span
                 aria-hidden="true"
-                className="inline-block h-[1.1cqi] w-[1.1cqi] rounded-full"
+                className="inline-block h-[1.1cqi] w-[1.1cqi] shrink-0 rounded-full"
                 style={{ backgroundColor: entry.color }}
               />
               {entry.label}
@@ -78,27 +300,44 @@ export default function CategoryBarChart({
 
       {/* The chart needs its own flexible box: sharing height with the legend
           above collapses ResponsiveContainer to zero. */}
-      <div className="min-h-0 flex-1">
+      <div ref={chartRef} className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
-            margin={{ top: 16, right: 8, bottom: angledCategories ? 24 : 0, left: 0 }}
+            margin={{
+              top: 16,
+              right: 8,
+              bottom: angledCategories ? 8 : 0,
+              left: angledAxis?.marginLeft ?? 0,
+            }}
             barGap={1}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="var(--border)"
+              vertical={false}
+            />
             <XAxis
               dataKey={categoryKey}
               stroke="var(--border)"
-              tick={AXIS_TICK}
               tickLine={false}
               // Spread rather than passing `undefined` per prop: Recharts still
               // relies on defaultProps for `height`, and React 19 no longer
               // fills them in, so an explicit `undefined` reaches the SVG as NaN.
-              {...(angledCategories
-                ? { interval: 0 as const, angle: -25, textAnchor: "end", height: 52 }
-                : {})}
+              {...(angledAxis
+                ? {
+                    interval: 0 as const,
+                    tick: <AngledTick fontSize={angledAxis.fontSize} />,
+                    height: angledAxis.tickHeight,
+                  }
+                : { tick: AXIS_TICK })}
             />
-            <YAxis stroke="var(--border)" tick={AXIS_TICK} tickLine={false} width={40} />
+            <YAxis
+              stroke="var(--border)"
+              tick={AXIS_TICK}
+              tickLine={false}
+              width={40}
+            />
             <Tooltip
               cursor={{ fill: "var(--muted)", fillOpacity: 0.4 }}
               contentStyle={{
@@ -109,7 +348,7 @@ export default function CategoryBarChart({
                 fontSize: "1.2cqi",
               }}
             />
-            {series.map((entry) => (
+            {series.map(entry => (
               <Bar
                 key={entry.key}
                 dataKey={entry.key}
@@ -120,8 +359,30 @@ export default function CategoryBarChart({
                 isAnimationActive={animate}
                 animationDuration={700}
               >
-                {!stacked && (
-                  <LabelList dataKey={entry.key} position="top" className={labelClass} />
+                {/* An array, not a fragment: Recharts walks the children of a
+                    `Bar` with `Children.forEach`, which flattens arrays but
+                    steps over fragments, and the labels would never render. */}
+                {stacked ? (
+                  [
+                    <LabelList
+                      key="value"
+                      dataKey={entry.key}
+                      content={<StackValueLabel />}
+                    />,
+                    entry.key === topSeriesKey ? (
+                      <LabelList
+                        key="total"
+                        dataKey={entry.key}
+                        content={<StackTotalLabel totals={stackTotals} />}
+                      />
+                    ) : null,
+                  ]
+                ) : (
+                  <LabelList
+                    dataKey={entry.key}
+                    position="top"
+                    className={labelClass}
+                  />
                 )}
               </Bar>
             ))}
