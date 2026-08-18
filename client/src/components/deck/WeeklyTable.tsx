@@ -11,8 +11,6 @@ interface WeeklyTableProps {
   isOverridden: (rowLabel: string, week: number) => boolean;
   onCellChange: (rowLabel: string, week: number, value: number | null) => void;
   totalFor: (week: number) => number;
-  /** Previous-year totals per week, rendered as extra read-only rows. */
-  comparisonRows: { label: string; valueFor: (week: number) => number | null }[];
   /** Column header for a week. Defaults to the "S<week>" convention. */
   weekLabel?: (week: number) => string;
 }
@@ -27,7 +25,6 @@ export default function WeeklyTable({
   isOverridden,
   onCellChange,
   totalFor,
-  comparisonRows,
   weekLabel = (week) => `S${week}`,
 }: WeeklyTableProps) {
   return (
@@ -65,7 +62,7 @@ export default function WeeklyTable({
           </tr>
         ))}
 
-        <tr className="border-t border-border font-medium">
+        <tr className="bg-[var(--informe-serie-4)] font-medium text-white">
           <th scope="row" className="py-[0.3cqi] text-left">
             Total
           </th>
@@ -75,22 +72,6 @@ export default function WeeklyTable({
             </td>
           ))}
         </tr>
-
-        {comparisonRows.map((comparison) => (
-          <tr key={comparison.label} className="border-t border-border/60 text-muted-foreground">
-            <th scope="row" className="py-[0.3cqi] text-left font-normal">
-              {comparison.label}
-            </th>
-            {weeks.map((week) => {
-              const value = comparison.valueFor(week);
-              return (
-                <td key={week} className="px-[0.2cqi] py-[0.3cqi] text-center">
-                  {value ?? ""}
-                </td>
-              );
-            })}
-          </tr>
-        ))}
       </tbody>
     </table>
   );

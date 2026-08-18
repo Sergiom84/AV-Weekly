@@ -46,6 +46,7 @@ export type {
 } from "./modules/av/types.ts";
 
 export {
+  AV_SERVICE,
   DEFAULT_VISIBLE_ROWS,
   INFORME_SUPPORT_TYPES,
   RESOLUTION_DETAIL_TYPES,

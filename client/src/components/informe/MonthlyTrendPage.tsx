@@ -15,6 +15,7 @@ import EditableText from "@/components/deck/EditableText";
 import SlideHeading from "@/components/deck/SlideHeading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 
 interface MonthlyTrendPageProps {
   page: DeckPage;
@@ -53,6 +54,7 @@ export default function MonthlyTrendPage({
   onChange,
 }: MonthlyTrendPageProps) {
   const [yearDraft, setYearDraft] = useState("");
+  const animate = usePresentationAnimation();
 
   const years = [
     ...(page.years && page.years.length > 0 ? page.years : DEFAULT_YEARS),
@@ -201,7 +203,8 @@ export default function MonthlyTrendPage({
                 dot={{ r: 4, fill: seriesColor(index), strokeWidth: 0 }}
                 activeDot={{ r: 5, strokeWidth: 0 }}
                 connectNulls={false}
-                isAnimationActive={false}
+                isAnimationActive={animate}
+                animationDuration={900}
               />
             ))}
           </LineChart>

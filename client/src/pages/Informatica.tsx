@@ -1,9 +1,16 @@
 import { useCallback, useMemo, useState, type ReactElement } from "react";
-import { Loader2 } from "lucide-react";
-import { isPageVisible } from "@shared/deck/core";
+import { nanoid } from "nanoid";
+import { Eye, EyeOff, Loader2, Plus } from "lucide-react";
+import {
+  createNotesPage,
+  createSectionPage,
+  isPageVisible,
+} from "@shared/deck/core";
 import { getDeckModule } from "@shared/deck/registry";
 import {
   INFORMATICA_PAGE_SECTIONS,
+  INFORMATICA_SERVICE,
+  createDefaultInformaticaDeck,
   hasSectionData,
 } from "@shared/modules/informatica/deck";
 import type { InformaticaDeckPage } from "@shared/modules/informatica/types";
@@ -14,6 +21,9 @@ import ComingSoonPage from "@/components/deck/ComingSoonPage";
 import CoverPage from "@/components/deck/CoverPage";
 import DeckSidebar, { type SidebarUpload } from "@/components/deck/DeckSidebar";
 import IndexPage from "@/components/deck/IndexPage";
+import NotesPage from "@/components/deck/NotesPage";
+import PageOrderControls from "@/components/deck/PageOrderControls";
+import PresentationOverlay from "@/components/deck/PresentationOverlay";
 import SectionPage from "@/components/deck/SectionPage";
 import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,7 +47,9 @@ const MODULE = getDeckModule("informatica");
  */
 const DATA_PAGES: Record<
   string,
-  (props: InformaticaPageProps & { dataset: InformaticaDataset }) => ReactElement
+  (
+    props: InformaticaPageProps & { dataset: InformaticaDataset }
+  ) => ReactElement
 > = {
   workorders: WorkOrdersPage,
   "workorders-anual": WorkOrdersAnualPage,
@@ -59,13 +71,35 @@ function scrollToPage(pageId: string) {
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  node.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  node.scrollIntoView({
+    behavior: reduced ? "auto" : "smooth",
+    block: "start",
+  });
 }
 
 export default function Informatica() {
-  const { deck, dataset, loading, saving, error, uploadTo, updatePage, resetDeck } =
-    useInformaticaDeck();
+  const {
+    deck,
+    dataset,
+    loading,
+    saving,
+    error,
+    uploadTo,
+    updatePage,
+    addPage,
+    movePage,
+    removePage,
+    resetDeck,
+  } = useInformaticaDeck();
   const [editing, setEditing] = useState(false);
+  const [presenting, setPresenting] = useState(false);
+
+  // Pages that ship with the deck are never deletable: only the ones a user
+  // added by hand carry a remove control.
+  const seededIds = useMemo(
+    () => new Set(createDefaultInformaticaDeck().pages.map(page => page.id)),
+    []
+  );
 
   const handlePageChange = useCallback(
     (pageId: string) => (patch: Partial<InformaticaDeckPage>) =>
@@ -75,7 +109,7 @@ export default function Informatica() {
 
   const uploads = useMemo<SidebarUpload[]>(
     () =>
-      (MODULE.deck?.uploads ?? []).map((slot) => ({
+      (MODULE.deck?.uploads ?? []).map(slot => ({
         id: `informatica-upload-${slot.id}`,
         label: slot.label,
         sourceFile: dataset.source?.sourceFile ?? null,
@@ -93,7 +127,7 @@ export default function Informatica() {
 
   let visibleNumber = 0;
   const rendered = pages
-    .map((page) => {
+    .map(page => {
       const visible = isPageVisible(page);
 
       if (visible) {
@@ -109,15 +143,20 @@ export default function Informatica() {
     .filter(
       (
         entry
-      ): entry is { page: InformaticaDeckPage; visible: boolean; number: number | null } =>
-        entry !== null
+      ): entry is {
+        page: InformaticaDeckPage;
+        visible: boolean;
+        number: number | null;
+      } => entry !== null
     );
 
   const renderPage = (
     page: InformaticaDeckPage,
     number: number | null,
-    muted: boolean
+    muted: boolean,
+    editingOverride?: boolean
   ) => {
+    const isEditing = editingOverride ?? editing;
     const onChange = handlePageChange(page.id);
 
     switch (page.kind) {
@@ -125,7 +164,7 @@ export default function Informatica() {
         return (
           <CoverPage
             page={page}
-            editing={editing}
+            editing={isEditing}
             onChange={onChange}
             number={number}
             muted={muted}
@@ -136,7 +175,7 @@ export default function Informatica() {
         return (
           <IndexPage
             page={page}
-            editing={editing}
+            editing={isEditing}
             onChange={onChange}
             number={number}
             muted={muted}
@@ -147,23 +186,37 @@ export default function Informatica() {
         return (
           <SectionPage
             page={page}
-            editing={editing}
+            editing={isEditing}
             onChange={onChange}
             number={number}
             muted={muted}
             background={artwork?.divider}
+            onRemove={
+              seededIds.has(page.id) ? undefined : () => removePage(page.id)
+            }
           />
         );
       case "closing":
         return (
           <ClosingPage
             page={page}
-            editing={editing}
+            editing={isEditing}
             onChange={onChange}
             number={number}
             muted={muted}
             background={artwork?.divider}
           />
+        );
+      case "notes":
+        return (
+          <SlideFrame number={number} muted={muted}>
+            <NotesPage
+              page={page}
+              editing={isEditing}
+              onChange={onChange}
+              onRemove={() => removePage(page.id)}
+            />
+          </SlideFrame>
         );
       default: {
         const DataPage = DATA_PAGES[page.id];
@@ -175,7 +228,7 @@ export default function Informatica() {
           return (
             <ComingSoonPage
               page={page}
-              editing={editing}
+              editing={isEditing}
               onChange={onChange}
               number={number}
               muted={muted}
@@ -187,7 +240,7 @@ export default function Informatica() {
           <SlideFrame number={number} muted={muted}>
             <DataPage
               page={page}
-              editing={editing}
+              editing={isEditing}
               onChange={onChange}
               dataset={dataset}
             />
@@ -197,6 +250,13 @@ export default function Informatica() {
     }
   };
 
+  const presentationSlides = pages
+    .filter(page => isPageVisible(page))
+    .map((page, index) => ({
+      id: page.id,
+      node: renderPage(page, index + 1, false, false),
+    }));
+
   if (loading && !deck) {
     return (
       <div className="min-h-screen bg-background">
@@ -204,7 +264,9 @@ export default function Informatica() {
         <div className="flex min-h-[60vh] items-center justify-center">
           <div className="text-center">
             <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-primary" />
-            <p className="font-mono text-sm text-muted-foreground">Cargando informe</p>
+            <p className="font-mono text-sm text-muted-foreground">
+              Cargando informe
+            </p>
           </div>
         </div>
       </div>
@@ -217,7 +279,7 @@ export default function Informatica() {
 
       <main className="container py-8">
         <div className="flex flex-col gap-8 lg:flex-row">
-          <div className="w-full flex-shrink-0 lg:w-80">
+          <div className="w-full flex-shrink-0 lg:w-80 print:hidden">
             {/* Own scroll track: the sidebar reaches its last page without moving the deck. */}
             <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2 print:max-h-none print:overflow-visible">
               <DeckSidebar
@@ -233,6 +295,8 @@ export default function Informatica() {
                 onUpdatePage={updatePage}
                 onResetDeck={resetDeck}
                 onSelectPage={scrollToPage}
+                pdfHref="/api/informatica/pdf"
+                onPresent={() => setPresenting(true)}
               />
             </div>
           </div>
@@ -241,7 +305,9 @@ export default function Informatica() {
             {error && (
               <Card className="border-destructive/40">
                 <CardHeader>
-                  <CardTitle className="text-base text-destructive">Error</CardTitle>
+                  <CardTitle className="text-base text-destructive">
+                    Error
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="font-mono text-sm text-destructive">{error}</p>
@@ -262,19 +328,94 @@ export default function Informatica() {
               </Card>
             )}
 
-            {rendered.map(({ page, visible, number }) => (
-              <section key={page.id} id={`slide-${page.id}`} className="scroll-mt-24">
-                {!visible && (
-                  <p className="mb-2 font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                    Oculta
-                  </p>
-                )}
+            {rendered.map(({ page, visible, number }, index) => (
+              <section
+                key={page.id}
+                id={`slide-${page.id}`}
+                className="scroll-mt-24"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2 print:hidden">
+                  {!visible ? (
+                    <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
+                      Oculta
+                    </p>
+                  ) : (
+                    <span />
+                  )}
+                  <div className="flex items-center gap-2">
+                    {editing && (
+                      <PageOrderControls
+                        onMove={delta => movePage(page.id, delta)}
+                        atStart={index === 0}
+                        atEnd={index === rendered.length - 1}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => updatePage(page.id, { visible: !visible })}
+                      aria-label={visible ? "Ocultar página" : "Mostrar página"}
+                      aria-pressed={visible}
+                      title={
+                        visible
+                          ? "Se muestra en el informe"
+                          : "No se muestra en el informe"
+                      }
+                      className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {visible ? (
+                        <Eye className="h-3.5 w-3.5" />
+                      ) : (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
                 {renderPage(page, number, !visible)}
               </section>
             ))}
+
+            {editing && (
+              <div className="flex gap-3 print:hidden">
+                <button
+                  type="button"
+                  onClick={() =>
+                    addPage(
+                      createSectionPage(
+                        nanoid(),
+                        "section",
+                        "2. Asuntos pendientes"
+                      )
+                    )
+                  }
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border py-10 font-mono text-sm text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+                >
+                  <Plus className="h-5 w-5" />
+                  Añadir carátula
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    addPage(
+                      createNotesPage(nanoid(), "notes", INFORMATICA_SERVICE)
+                    )
+                  }
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border py-10 font-mono text-sm text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+                >
+                  <Plus className="h-5 w-5" />
+                  Añadir hoja
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </main>
+
+      {presenting && (
+        <PresentationOverlay
+          slides={presentationSlides}
+          onClose={() => setPresenting(false)}
+        />
+      )}
     </div>
   );
 }

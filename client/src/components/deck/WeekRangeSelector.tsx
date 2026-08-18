@@ -62,6 +62,10 @@ export default function WeekRangeSelector({
     });
   };
 
+  const setWindow = (size: number) => {
+    onChange({ mode: "window", from: first, to: last, weeks: [], size });
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
       <div className="flex items-center gap-1">
@@ -133,6 +137,16 @@ export default function WeekRangeSelector({
           }}
         >
           Último mes
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={selection.mode === "window" ? "default" : "outline"}
+          className="h-7 px-2 font-mono text-xs"
+          disabled={disabled}
+          onClick={() => setWindow(20)}
+        >
+          Últimas 20 semanas
         </Button>
       </div>
     </div>

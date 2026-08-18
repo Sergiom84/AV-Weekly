@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 
 export interface WeeklySeries {
   /** Key inside each chart row. */
@@ -36,6 +37,7 @@ const AXIS_TICK = { fill: "var(--muted-foreground)", className: "text-[1.1cqi]" 
  * Every bar carries its value on top, as in the printed report.
  */
 export default function WeeklyBarChart({ weeks, series, data }: WeeklyBarChartProps) {
+  const animate = usePresentationAnimation();
   const labelClass =
     weeks.length > COMPACT_LABELS_FROM
       ? "fill-foreground text-[0.75cqi]"
@@ -83,7 +85,8 @@ export default function WeeklyBarChart({ weeks, series, data }: WeeklyBarChartPr
               name={entry.label}
               fill={entry.color}
               radius={[2, 2, 0, 0]}
-              isAnimationActive={false}
+              isAnimationActive={animate}
+              animationDuration={700}
             >
               <LabelList dataKey={entry.key} position="top" className={labelClass} />
             </Bar>

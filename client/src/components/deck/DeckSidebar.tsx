@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, Play } from "lucide-react";
 import { isPageVisible } from "@shared/deck/core";
 import type { DeckPage } from "@shared/deck/core";
 import type { DeckActionResult, DeckStateOf } from "@/hooks/useDeckData";
@@ -47,6 +48,10 @@ interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
   onUpdatePage: (pageId: string, patch: Partial<TPage>) => void;
   onResetDeck: () => Promise<DeckActionResult>;
   onSelectPage: (pageId: string) => void;
+  /** GET endpoint that streams the deck as a PDF, one slide per page. */
+  pdfHref: string;
+  /** Opens the fullscreen, one-slide-at-a-time viewer. */
+  onPresent: () => void;
 }
 
 function formatUploadedAt(value: string | null): string | null {
@@ -259,6 +264,8 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   onUpdatePage,
   onResetDeck,
   onSelectPage,
+  pdfHref,
+  onPresent,
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
 
@@ -335,6 +342,28 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        </CardContent>
+      </SidebarSection>
+
+      <SidebarSection id="exportar" storagePrefix={storagePrefix} title="Exportar">
+        <CardContent className="space-y-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2"
+            onClick={onPresent}
+          >
+            <Play className="h-4 w-4" />
+            Presentar
+          </Button>
+
+          <Button type="button" variant="outline" size="sm" className="w-full justify-start gap-2" asChild>
+            <a href={pdfHref} download>
+              <Download className="h-4 w-4" />
+              Descargar PDF
+            </a>
+          </Button>
         </CardContent>
       </SidebarSection>
 

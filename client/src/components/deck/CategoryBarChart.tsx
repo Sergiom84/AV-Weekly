@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 
 export interface CategorySeries {
   /** Key inside each chart row. */
@@ -25,6 +26,13 @@ interface CategoryBarChartProps {
   data: Record<string, number | string>[];
   /** Stacks the series instead of grouping them side by side. */
   stacked?: boolean;
+  /**
+   * Draws every category tick, angled, instead of letting Recharts drop the
+   * ones that overlap. Opt-in: only needed for long text categories such as the
+   * department axis of the AGA deck, where a hidden tick loses a whole bar's
+   * identity. Month and year axes read better with the default.
+   */
+  angledCategories?: boolean;
 }
 
 /** Above this many categories the value labels need the compact size to fit. */
@@ -43,7 +51,9 @@ export default function CategoryBarChart({
   series,
   data,
   stacked = false,
+  angledCategories = false,
 }: CategoryBarChartProps) {
+  const animate = usePresentationAnimation();
   const labelClass =
     data.length > COMPACT_LABELS_FROM
       ? "fill-foreground text-[0.75cqi]"
@@ -70,13 +80,23 @@ export default function CategoryBarChart({
           above collapses ResponsiveContainer to zero. */}
       <div className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 16, right: 8, bottom: 0, left: 0 }} barGap={1}>
+          <BarChart
+            data={data}
+            margin={{ top: 16, right: 8, bottom: angledCategories ? 24 : 0, left: 0 }}
+            barGap={1}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey={categoryKey}
               stroke="var(--border)"
               tick={AXIS_TICK}
               tickLine={false}
+              // Spread rather than passing `undefined` per prop: Recharts still
+              // relies on defaultProps for `height`, and React 19 no longer
+              // fills them in, so an explicit `undefined` reaches the SVG as NaN.
+              {...(angledCategories
+                ? { interval: 0 as const, angle: -25, textAnchor: "end", height: 52 }
+                : {})}
             />
             <YAxis stroke="var(--border)" tick={AXIS_TICK} tickLine={false} width={40} />
             <Tooltip
@@ -97,7 +117,8 @@ export default function CategoryBarChart({
                 fill={entry.color}
                 stackId={stacked ? "stack" : undefined}
                 radius={[2, 2, 0, 0]}
-                isAnimationActive={false}
+                isAnimationActive={animate}
+                animationDuration={700}
               >
                 {!stacked && (
                   <LabelList dataKey={entry.key} position="top" className={labelClass} />

@@ -1,3 +1,4 @@
+import { Trash2 } from "lucide-react";
 import type { DeckPage } from "@shared/deck/core";
 import EditableText from "./EditableText";
 import SlideFrame from "./SlideFrame";
@@ -11,6 +12,8 @@ interface SectionPageProps<TPage extends DeckPage<string, string>> {
   muted?: boolean;
   /** Artwork behind the slide. Defaults to the AV corporate divider. */
   background?: string;
+  /** Removes the page from the deck. Only offered while editing, for pages added by hand. */
+  onRemove?: () => void;
 }
 
 /**
@@ -24,6 +27,7 @@ export default function SectionPage<TPage extends DeckPage<string, string>>({
   number,
   muted,
   background = "/informe/contraportada.png",
+  onRemove,
 }: SectionPageProps<TPage>) {
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } } as Partial<TPage>);
@@ -34,6 +38,18 @@ export default function SectionPage<TPage extends DeckPage<string, string>>({
   return (
     <SlideFrame number={number} muted={muted} background={background}>
       <div className="@container flex h-full w-full">
+        {editing && onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label="Eliminar carátula"
+            title="Eliminar carátula"
+            className="absolute right-[1.5cqi] top-[1.5cqi] rounded-md border border-white/40 p-[0.4cqi] text-white/70 transition-colors hover:border-white hover:text-white"
+          >
+            <Trash2 className="h-[1.6cqi] w-[1.6cqi]" />
+          </button>
+        )}
+
         <div className="flex w-[62%] flex-col justify-start pt-[6%]">
           <h2 className="text-[4.4cqi] leading-tight text-white">
             <EditableText

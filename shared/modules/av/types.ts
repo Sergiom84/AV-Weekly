@@ -28,6 +28,9 @@ export type SupportType =
   | "Incidencias"
   | "Correctivos";
 
+/** Service name shown as the dominant heading line on every AV slide. */
+export const AV_SERVICE = "AUDIOVISUALES";
+
 export const INFORME_SUPPORT_TYPES: SupportType[] = [
   "Remotos",
   "Programados",
@@ -294,7 +297,7 @@ export function createDefaultDeck(): AvDeckState {
       id: `trend-${type.toLowerCase()}`,
       kind: "monthlyTrend",
       supportType: type,
-      text: { title: TREND_LABEL[type], subtitle: "AUDIOVISUALES", footnote: "" },
+      text: { title: TREND_LABEL[type], subtitle: AV_SERVICE, footnote: "" },
       visible: true,
       weekSelection: null,
       years: [2023, 2024, 2025, 2026],
@@ -308,7 +311,7 @@ export function createDefaultDeck(): AvDeckState {
       supportType: type,
       text: {
         title: SECTION_LABEL[type],
-        subtitle: "AUDIOVISUALES",
+        subtitle: AV_SERVICE,
         footnote: TYPE_FOOTNOTE[type],
       },
       visible: true,
@@ -325,7 +328,7 @@ export function createDefaultDeck(): AvDeckState {
         supportType: type,
         text: {
           title: RESOLUTION_LABEL[type] ?? "",
-          subtitle: "AUDIOVISUALES",
+          subtitle: AV_SERVICE,
           footnote: "",
         },
         visible: true,

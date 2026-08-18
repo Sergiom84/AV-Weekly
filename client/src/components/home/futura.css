@@ -611,14 +611,14 @@
   background: radial-gradient(70% 55% at 30% 30%, rgba(83, 254, 139, 0.22), transparent 70%);
 }
 
-/* --- Skin 3: Compras. Radar magenta con barrido --- */
+/* --- Skin 3: AGA. Radar magenta con barrido --- */
 
-.futura-skin-compras {
+.futura-skin-aga {
   background: linear-gradient(140deg, var(--fut-violet-900) 0%, #520b3c 60%, #1a0320 100%);
   color: var(--fut-pink-400);
 }
 
-.futura-skin-compras .futura-layer {
+.futura-skin-aga .futura-layer {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -633,7 +633,7 @@
   );
 }
 
-.futura-skin-compras .futura-layer-2 {
+.futura-skin-aga .futura-layer-2 {
   position: absolute;
   inset: -60%;
   border-radius: 50%;

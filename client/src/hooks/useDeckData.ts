@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeckPage } from "@shared/deck/core";
+import { insertBeforeClosing } from "@shared/deck/core";
 
 /**
  * Deck state and persistence for any report module.
@@ -319,6 +320,70 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
     [scheduleSave]
   );
 
+  /** Swaps a page with its neighbour, so a hand-added slide can be placed anywhere. */
+  const movePage = useCallback(
+    (pageId: string, delta: -1 | 1) => {
+      setDeck((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const index = current.pages.findIndex((page) => page.id === pageId);
+        const target = index + delta;
+
+        if (index < 0 || target < 0 || target >= current.pages.length) {
+          return current;
+        }
+
+        const pages = [...current.pages];
+        [pages[index], pages[target]] = [pages[target], pages[index]];
+
+        const next: DeckStateOf<TPage> = { ...current, pages };
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [scheduleSave]
+  );
+
+  const addPage = useCallback(
+    (page: TPage) => {
+      setDeck((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const next: DeckStateOf<TPage> = {
+          ...current,
+          pages: insertBeforeClosing(current.pages, page),
+        };
+
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [scheduleSave]
+  );
+
+  const removePage = useCallback(
+    (pageId: string) => {
+      setDeck((current) => {
+        if (!current) {
+          return current;
+        }
+
+        const next: DeckStateOf<TPage> = {
+          ...current,
+          pages: current.pages.filter((page) => page.id !== pageId),
+        };
+
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [scheduleSave]
+  );
+
   const upload = useCallback(
     async (
       endpoint: string,
@@ -435,6 +500,9 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
     error,
     upload,
     updatePage,
+    addPage,
+    movePage,
+    removePage,
     reorderPages,
     resetDeck,
     saveNow,

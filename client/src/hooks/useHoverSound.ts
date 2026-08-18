@@ -13,13 +13,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * so it is resumed on the first pointer or key event and on every play attempt.
  */
 
-export type HoverTone = "oficinas" | "informatica" | "compras" | "av";
+export type HoverTone = "oficinas" | "informatica" | "aga" | "av";
 
 /** Minor pentatonic steps, one per card, low to high. */
 const HOVER_PITCH: Record<HoverTone, number> = {
   oficinas: 523.25, // C5
   informatica: 622.25, // D#5
-  compras: 698.46, // F5
+  aga: 698.46, // F5
   av: 830.61, // G#5
 };
 

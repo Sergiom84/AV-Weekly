@@ -11,8 +11,12 @@
  * deck without knowing the module.
  */
 
-/** Page kinds every deck has, regardless of module. */
-export type CoreDeckPageKind = "cover" | "index" | "section" | "closing";
+/**
+ * Page kinds every deck has, regardless of module. `notes` is a free-form
+ * slide any department can add by hand — plain text plus uploaded images,
+ * with no data source behind it.
+ */
+export type CoreDeckPageKind = "cover" | "index" | "section" | "closing" | "notes";
 
 export const MONTH_LABELS = [
   "Ene",
@@ -69,12 +73,17 @@ export interface DatasetSource {
  * Which weeks a weekly page renders.
  * - range: every week between `from` and `to` inclusive.
  * - list: exactly the weeks in `weeks`, in the given order.
+ * - window: the trailing `size` available weeks. Recomputed against the
+ *   latest upload every time, so as new weeks arrive the oldest ones drop
+ *   off automatically instead of the range staying pinned to old numbers.
  */
 export interface WeekSelection {
-  mode: "range" | "list";
+  mode: "range" | "list" | "window";
   from: number;
   to: number;
   weeks: number[];
+  /** Trailing window size, only meaningful when `mode` is "window". */
+  size?: number;
 }
 
 export function defaultWeekSelection(maxWeek: number): WeekSelection {
@@ -93,6 +102,11 @@ export function resolveWeekSelection(
   if (selection.mode === "list") {
     const wanted = selection.weeks.filter((week) => available.includes(week));
     return wanted.length > 0 ? wanted : available;
+  }
+
+  if (selection.mode === "window") {
+    const size = Math.max(1, selection.size ?? 20);
+    return available.slice(-size);
   }
 
   const from = Math.min(selection.from, selection.to);
@@ -134,6 +148,20 @@ export interface DeckPage<
   overrides: CellOverrides;
   /** Rows hidden by the user, by row label. Absent means "use the defaults". */
   hiddenRows?: string[];
+  /** Uploaded image URLs, in display order. Only meaningful for `notes` pages. */
+  images?: string[];
+  /** Freeform placement of the text block on the page canvas. `notes` pages only. */
+  textBox?: LayoutBox;
+  /** Freeform placement of each image, keyed by its URL, percent (0-100) of the page canvas. `notes` pages only. */
+  imageLayout?: Record<string, LayoutBox>;
+}
+
+/** Position and size of a freeform block, in percent (0-100) of its canvas. */
+export interface LayoutBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface DeckState<
@@ -142,6 +170,62 @@ export interface DeckState<
 > {
   pages: DeckPage<Kind, Series>[];
   updatedAt: string | null;
+}
+
+/**
+ * A blank free-text page a department adds by hand, e.g. "what happened this
+ * week" notes with a few photos. Inserted right before the closing page (see
+ * `insertBeforeClosing`) so it never lands after "Gracias".
+ */
+export function createNotesPage<Kind extends string, Series extends string>(
+  id: string,
+  kind: Kind,
+  /** Service name of the module, shown as the dominant heading line like every other slide. */
+  service: string
+): DeckPage<Kind, Series> {
+  return {
+    id,
+    kind,
+    supportType: null,
+    text: { subtitle: service, title: "2. Asuntos pendientes", body: "" },
+    visible: true,
+    weekSelection: null,
+    years: null,
+    overrides: {},
+    images: [],
+  };
+}
+
+/**
+ * A section divider a department adds by hand, same corporate artwork as the
+ * ones that ship with the deck. Inserted before the closing page and reordered
+ * from the sidebar like any other page.
+ */
+export function createSectionPage<Kind extends string, Series extends string>(
+  id: string,
+  kind: Kind,
+  title: string
+): DeckPage<Kind, Series> {
+  return {
+    id,
+    kind,
+    supportType: null,
+    text: { title, subtitle: "" },
+    visible: true,
+    weekSelection: null,
+    years: null,
+    overrides: {},
+  };
+}
+
+/** Inserts a page right before the deck's closing page, or at the end if it has none. */
+export function insertBeforeClosing<TPage extends DeckPage<string, string>>(
+  pages: TPage[],
+  page: TPage
+): TPage[] {
+  const closingIndex = pages.findIndex((entry) => entry.kind === "closing");
+  const insertAt = closingIndex === -1 ? pages.length : closingIndex;
+  return [...pages.slice(0, insertAt), page, ...pages.slice(insertAt)];
 }
 
 /* -------------------------------------------------------------------------- */

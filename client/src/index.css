@@ -258,9 +258,17 @@
     page-break-inside: avoid;
   }
 
+  /* One deck slide = one PDF page. */
   section {
     break-inside: avoid;
     page-break-inside: avoid;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  section:last-child {
+    break-after: auto;
+    page-break-after: auto;
   }
 
   /* Force single column layout in print */

@@ -11,7 +11,7 @@
  */
 
 /** Module identifier. Doubles as the home card skin and hover tone. */
-export type DeckModuleId = "oficinas" | "informatica" | "compras" | "av";
+export type DeckModuleId = "oficinas" | "informatica" | "aga" | "av";
 
 /** One upload zone of the sidebar. */
 export interface DeckUploadSlot {
@@ -66,6 +66,7 @@ const CORE_KIND_LABELS: Record<string, string> = {
   index: "Índice",
   section: "Sección",
   closing: "Cierre",
+  notes: "Notas",
 };
 
 export const DECK_MODULES: DeckModule[] = [
@@ -121,14 +122,40 @@ export const DECK_MODULES: DeckModule[] = [
     },
   },
   {
-    id: "compras",
-    name: "Compras",
+    id: "aga",
+    name: "AGA",
     meta: "Módulo 03",
     description:
-      "Pedidos, proveedores y contratación. Módulo reservado, todavía sin datos conectados.",
-    route: "/compras",
+      "Informe semanal de PetMicro: peticiones en gestión, gestionadas y evolución anual.",
+    route: "/aga",
     layers: 2,
-    deck: null,
+    deck: {
+      apiBase: "/api/aga",
+      uploads: [
+        {
+          id: "plano",
+          label: "Excel GPS semanal",
+          path: "/api/aga/upload/plano",
+          error: "No se pudo cargar el excel GPS",
+          multiple: false,
+          accept: ".xlsx,.xls",
+        },
+      ],
+      // No AGA artwork has been produced yet, so it reuses the corporate
+      // covers the other decks already ship.
+      artwork: {
+        cover: "/informe/portada.png",
+        divider: "/informe/contraportada.png",
+      },
+      kindLabels: {
+        ...CORE_KIND_LABELS,
+        agaTotalWeekly: "Total por semana",
+        agaDeptEvolution: "Evolución por departamento",
+        agaDeptCompare: "Comparativa por departamento",
+        agaProjectCompare: "Comparativa por proyecto",
+      },
+      storagePrefix: "av-weekly:aga-sidebar-collapsed:",
+    },
   },
   {
     id: "av",

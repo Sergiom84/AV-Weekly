@@ -171,10 +171,6 @@ export default function WeeklySupportPage({
           isOverridden={isOverridden}
           onCellChange={setCell}
           totalFor={totalFor}
-          comparisonRows={comparisons.map((comparison) => ({
-            label: String(comparison.year),
-            valueFor: (week: number) => comparisonValue(comparison, week),
-          }))}
         />
       </div>
 

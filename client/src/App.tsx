@@ -6,6 +6,7 @@ import { Route, Switch } from "wouter";
 import { DECK_MODULES } from "@shared/deck/registry";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import Aga from "./pages/Aga";
 import Home from "./pages/Home";
 import Informatica from "./pages/Informatica";
 import Informe from "./pages/Informe";
@@ -15,6 +16,7 @@ import ModuloPendiente from "./pages/ModuloPendiente";
 const MODULE_PAGES: Record<string, () => ReactElement> = {
   av: Informe,
   informatica: Informatica,
+  aga: Aga,
 };
 
 function Router() {

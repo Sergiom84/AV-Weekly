@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
-import { isPageVisible } from "@shared/informe";
+import { nanoid } from "nanoid";
+import { AV_SERVICE, createDefaultDeck, isPageVisible } from "@shared/informe";
 import type { DeckPage } from "@shared/informe";
+import { createNotesPage, createSectionPage } from "@shared/deck/core";
 import { getDeckModule } from "@shared/deck/registry";
 import { useAvDeck } from "@/modules/av/useAvDeck";
 import MainNav from "@/components/MainNav";
@@ -8,14 +10,17 @@ import HomeLink from "@/components/HomeLink";
 import DeckSidebar, { type SidebarUpload } from "@/components/deck/DeckSidebar";
 import CoverPage from "@/components/deck/CoverPage";
 import IndexPage from "@/components/deck/IndexPage";
+import PageOrderControls from "@/components/deck/PageOrderControls";
 import SectionPage from "@/components/deck/SectionPage";
 import MonthlyTrendPage from "@/components/informe/MonthlyTrendPage";
 import ResolutionDetailPage from "@/components/informe/ResolutionDetailPage";
 import ClosingPage from "@/components/deck/ClosingPage";
+import NotesPage from "@/components/deck/NotesPage";
+import PresentationOverlay from "@/components/deck/PresentationOverlay";
 import WeeklySupportPage from "@/components/informe/WeeklySupportPage";
 import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Plus } from "lucide-react";
 
 function scrollToPage(pageId: string) {
   const node = document.getElementById(`slide-${pageId}`);
@@ -28,7 +33,10 @@ function scrollToPage(pageId: string) {
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  node.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  node.scrollIntoView({
+    behavior: reduced ? "auto" : "smooth",
+    block: "start",
+  });
 }
 
 const MODULE = getDeckModule("av");
@@ -43,18 +51,35 @@ export default function Informe() {
     error,
     uploadTo,
     updatePage,
+    addPage,
+    movePage,
+    removePage,
     resetDeck,
   } = useAvDeck();
   const [editing, setEditing] = useState(false);
+  const [presenting, setPresenting] = useState(false);
+
+  // Pages that ship with the deck are never deletable: only the ones a user
+  // added by hand carry a remove control.
+  const seededIds = useMemo(
+    () => new Set(createDefaultDeck().pages.map(page => page.id)),
+    []
+  );
 
   const uploads = useMemo<SidebarUpload[]>(() => {
-    const sources: Record<string, { sourceFile: string | null; uploadedAt: string | null }> = {
+    const sources: Record<
+      string,
+      { sourceFile: string | null; uploadedAt: string | null }
+    > = {
       semanal: { sourceFile: weekly.sourceFile, uploadedAt: weekly.uploadedAt },
-      tendencia: { sourceFile: monthly.sourceFile, uploadedAt: monthly.uploadedAt },
+      tendencia: {
+        sourceFile: monthly.sourceFile,
+        uploadedAt: monthly.uploadedAt,
+      },
       plano: weekly.resolutionSource ?? { sourceFile: null, uploadedAt: null },
     };
 
-    return (MODULE.deck?.uploads ?? []).map((slot) => ({
+    return (MODULE.deck?.uploads ?? []).map(slot => ({
       id: `informe-upload-${slot.id}`,
       label: slot.label,
       sourceFile: sources[slot.id]?.sourceFile ?? null,
@@ -62,7 +87,14 @@ export default function Informe() {
       // AV keeps one workbook per zone: the sidebar never sends more than one.
       onUpload: (files: File[]) => uploadTo(slot.id, files[0]),
     }));
-  }, [monthly.sourceFile, monthly.uploadedAt, uploadTo, weekly.resolutionSource, weekly.sourceFile, weekly.uploadedAt]);
+  }, [
+    monthly.sourceFile,
+    monthly.uploadedAt,
+    uploadTo,
+    weekly.resolutionSource,
+    weekly.sourceFile,
+    weekly.uploadedAt,
+  ]);
 
   const handlePageChange = useCallback(
     (pageId: string) => (patch: Partial<DeckPage>) => updatePage(pageId, patch),
@@ -74,7 +106,7 @@ export default function Informe() {
 
   let visibleNumber = 0;
   const rendered = pages
-    .map((page) => {
+    .map(page => {
       const visible = isPageVisible(page);
 
       if (visible) {
@@ -87,11 +119,20 @@ export default function Informe() {
 
       return { page, visible, number: visible ? visibleNumber : null };
     })
-    .filter((entry): entry is { page: DeckPage; visible: boolean; number: number | null } =>
-      entry !== null
+    .filter(
+      (
+        entry
+      ): entry is { page: DeckPage; visible: boolean; number: number | null } =>
+        entry !== null
     );
 
-  const renderPage = (page: DeckPage, number: number | null, muted: boolean) => {
+  const renderPage = (
+    page: DeckPage,
+    number: number | null,
+    muted: boolean,
+    editingOverride?: boolean
+  ) => {
+    const isEditing = editingOverride ?? editing;
     const onChange = handlePageChange(page.id);
 
     switch (page.kind) {
@@ -99,7 +140,7 @@ export default function Informe() {
         return (
           <CoverPage
             page={page}
-            editing={editing}
+            editing={isEditing}
             onChange={onChange}
             number={number}
             muted={muted}
@@ -109,7 +150,7 @@ export default function Informe() {
         return (
           <IndexPage
             page={page}
-            editing={editing}
+            editing={isEditing}
             onChange={onChange}
             number={number}
             muted={muted}
@@ -119,10 +160,13 @@ export default function Informe() {
         return (
           <SectionPage
             page={page}
-            editing={editing}
+            editing={isEditing}
             onChange={onChange}
             number={number}
             muted={muted}
+            onRemove={
+              seededIds.has(page.id) ? undefined : () => removePage(page.id)
+            }
           />
         );
       case "monthlyTrend":
@@ -131,7 +175,7 @@ export default function Informe() {
             <MonthlyTrendPage
               page={page}
               monthly={monthly}
-              editing={editing}
+              editing={isEditing}
               onChange={onChange}
             />
           </SlideFrame>
@@ -140,7 +184,7 @@ export default function Informe() {
         return (
           <ClosingPage
             page={page}
-            editing={editing}
+            editing={isEditing}
             onChange={onChange}
             number={number}
             muted={muted}
@@ -152,7 +196,7 @@ export default function Informe() {
             <ResolutionDetailPage
               page={page}
               weekly={weekly}
-              editing={editing}
+              editing={isEditing}
               onChange={onChange}
             />
           </SlideFrame>
@@ -163,8 +207,19 @@ export default function Informe() {
             <WeeklySupportPage
               page={page}
               weekly={weekly}
-              editing={editing}
+              editing={isEditing}
               onChange={onChange}
+            />
+          </SlideFrame>
+        );
+      case "notes":
+        return (
+          <SlideFrame number={number} muted={muted}>
+            <NotesPage
+              page={page}
+              editing={isEditing}
+              onChange={onChange}
+              onRemove={() => removePage(page.id)}
             />
           </SlideFrame>
         );
@@ -181,6 +236,13 @@ export default function Informe() {
     }
   };
 
+  const presentationSlides = pages
+    .filter(page => isPageVisible(page))
+    .map((page, index) => ({
+      id: page.id,
+      node: renderPage(page, index + 1, false, false),
+    }));
+
   if (loading && !deck) {
     return (
       <div className="min-h-screen bg-background">
@@ -188,7 +250,9 @@ export default function Informe() {
         <div className="flex min-h-[60vh] items-center justify-center">
           <div className="text-center">
             <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-primary" />
-            <p className="font-mono text-sm text-muted-foreground">Cargando informe</p>
+            <p className="font-mono text-sm text-muted-foreground">
+              Cargando informe
+            </p>
           </div>
         </div>
       </div>
@@ -201,7 +265,7 @@ export default function Informe() {
 
       <main className="container py-8">
         <div className="flex flex-col gap-8 lg:flex-row">
-          <div className="w-full flex-shrink-0 lg:w-80">
+          <div className="w-full flex-shrink-0 lg:w-80 print:hidden">
             {/* Own scroll track: the sidebar reaches its last page without moving the deck. */}
             <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2 print:max-h-none print:overflow-visible">
               <DeckSidebar
@@ -217,6 +281,8 @@ export default function Informe() {
                 onUpdatePage={updatePage}
                 onResetDeck={resetDeck}
                 onSelectPage={scrollToPage}
+                pdfHref="/api/informe/pdf"
+                onPresent={() => setPresenting(true)}
               />
             </div>
           </div>
@@ -225,7 +291,9 @@ export default function Informe() {
             {error && (
               <Card className="border-destructive/40">
                 <CardHeader>
-                  <CardTitle className="text-base text-destructive">Error</CardTitle>
+                  <CardTitle className="text-base text-destructive">
+                    Error
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="font-mono text-sm text-destructive">{error}</p>
@@ -246,19 +314,92 @@ export default function Informe() {
               </Card>
             )}
 
-            {rendered.map(({ page, visible, number }) => (
-              <section key={page.id} id={`slide-${page.id}`} className="scroll-mt-24">
-                {!visible && (
-                  <p className="mb-2 font-mono text-xs uppercase tracking-wide text-muted-foreground">
-                    Oculta
-                  </p>
-                )}
+            {rendered.map(({ page, visible, number }, index) => (
+              <section
+                key={page.id}
+                id={`slide-${page.id}`}
+                className="scroll-mt-24"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2 print:hidden">
+                  {!visible ? (
+                    <p className="font-mono text-xs uppercase tracking-wide text-muted-foreground">
+                      Oculta
+                    </p>
+                  ) : (
+                    <span />
+                  )}
+                  <div className="flex items-center gap-2">
+                    {editing && (
+                      <PageOrderControls
+                        onMove={delta => movePage(page.id, delta)}
+                        atStart={index === 0}
+                        atEnd={index === rendered.length - 1}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => updatePage(page.id, { visible: !visible })}
+                      aria-label={visible ? "Ocultar página" : "Mostrar página"}
+                      aria-pressed={visible}
+                      title={
+                        visible
+                          ? "Se muestra en el informe"
+                          : "No se muestra en el informe"
+                      }
+                      className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {visible ? (
+                        <Eye className="h-3.5 w-3.5" />
+                      ) : (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
                 {renderPage(page, number, !visible)}
               </section>
             ))}
+
+            {editing && (
+              <div className="flex gap-3 print:hidden">
+                <button
+                  type="button"
+                  onClick={() =>
+                    addPage(
+                      createSectionPage(
+                        nanoid(),
+                        "section",
+                        "2. Asuntos pendientes"
+                      )
+                    )
+                  }
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border py-10 font-mono text-sm text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+                >
+                  <Plus className="h-5 w-5" />
+                  Añadir carátula
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    addPage(createNotesPage(nanoid(), "notes", AV_SERVICE))
+                  }
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border py-10 font-mono text-sm text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+                >
+                  <Plus className="h-5 w-5" />
+                  Añadir hoja
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </main>
+
+      {presenting && (
+        <PresentationOverlay
+          slides={presentationSlides}
+          onClose={() => setPresenting(false)}
+        />
+      )}
     </div>
   );
 }

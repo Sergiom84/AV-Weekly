@@ -7,6 +7,9 @@ dist/
 build/
 *.dist
 
+# User-uploaded images (notes pages)
+server/uploads/
+
 # Environment variables
 .env
 .env.local

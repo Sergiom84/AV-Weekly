@@ -58,5 +58,22 @@ export async function initDb() {
       source_file TEXT,
       uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- AGA module (weekly PetMicro report). Same singleton pattern as the
+    -- informatica_* tables: the decks are independent reports.
+    CREATE TABLE IF NOT EXISTS aga_deck (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Weekly aggregates accumulated across uploads: the GPS export only ever
+    -- carries two weeks and the charts need the whole history.
+    CREATE TABLE IF NOT EXISTS aga_dataset (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      source_file TEXT,
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }

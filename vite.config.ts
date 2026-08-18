@@ -169,12 +169,12 @@ export default defineConfig({
   },
   server: {
     // Ports are configurable so the app can run next to other local projects.
-    port: Number(process.env.CLIENT_PORT ?? 3200),
+    port: Number(process.env.CLIENT_PORT ?? 3500),
     strictPort: true,
     host: true,
     proxy: {
       '/api': {
-        target: `http://localhost:${process.env.PORT ?? 3201}`,
+        target: `http://localhost:${process.env.PORT ?? 3501}`,
         changeOrigin: true,
       },
     },

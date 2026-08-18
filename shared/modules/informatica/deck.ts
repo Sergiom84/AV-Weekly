@@ -19,7 +19,9 @@ import type {
  * renaming one orphans the saved deck.
  */
 
-const SERVICE = "INFORMÁTICA";
+/** Service name shown as the dominant heading line on every Informática slide. */
+export const INFORMATICA_SERVICE = "INFORMÁTICA";
+const SERVICE = INFORMATICA_SERVICE;
 
 interface PageSpec {
   id: string;
