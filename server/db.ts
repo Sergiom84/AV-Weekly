@@ -75,5 +75,23 @@ export async function initDb() {
       source_file TEXT,
       uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Oficinas module (weekly Soporte Oficinas report). Same singleton pattern
+    -- as the other modules: the decks are independent reports.
+    CREATE TABLE IF NOT EXISTS oficinas_deck (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Weekly figures accumulated across uploads, plus the office master seeded
+    -- by scripts/importar-maestro-oficinas.mjs. Each upload folds in the weeks
+    -- it carries; the charts need the whole year.
+    CREATE TABLE IF NOT EXISTS oficinas_dataset (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      source_file TEXT,
+      uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }

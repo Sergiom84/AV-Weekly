@@ -11,12 +11,14 @@ import Home from "./pages/Home";
 import Informatica from "./pages/Informatica";
 import Informe from "./pages/Informe";
 import ModuloPendiente from "./pages/ModuloPendiente";
+import Oficinas from "./pages/Oficinas";
 
 /** Deck screen of each module. A module with no entry is still a placeholder. */
 const MODULE_PAGES: Record<string, () => ReactElement> = {
   av: Informe,
   informatica: Informatica,
   aga: Aga,
+  oficinas: Oficinas,
 };
 
 function Router() {

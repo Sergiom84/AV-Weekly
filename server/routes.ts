@@ -47,12 +47,27 @@ import {
   emptyAgaDataset,
   mergeAgaDeckTemplate,
 } from "../shared/modules/aga/deck.ts";
+import type {
+  OficinasDataset,
+  OficinasDeckState,
+  OficinasPayload,
+} from "../shared/modules/oficinas/types.ts";
+import {
+  createDefaultOficinasDeck,
+  emptyOficinasDataset,
+  mergeOficinasDeckTemplate,
+} from "../shared/modules/oficinas/deck.ts";
 import { client } from "./db.js";
 import {
   mergeAgaDataset,
   parseAgaWorkbook,
   type AgaImportReport,
 } from "./parseAgaPlano.js";
+import {
+  mergeOficinasDataset,
+  parseOficinasWorkbook,
+  type OficinasImportReport,
+} from "./parseOficinasPlano.js";
 import {
   mergeInformaticaWorkbooks,
   parseInformaticaPlanoWorkbook,
@@ -963,6 +978,186 @@ router.post("/api/aga/reset-deck", async (_req, res) => {
   }
 });
 
+/* -------------------------------------------------------------------------- */
+/* Oficinas                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** Response of the Oficinas endpoints, as declared by `OficinasPayload`. */
+type OficinasResponse = OficinasPayload;
+
+async function readStoredOficinasDeck(): Promise<OficinasDeckState | null> {
+  const result = await client.execute(
+    "SELECT data, updated_at FROM oficinas_deck WHERE id = 1"
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  try {
+    const deck = JSON.parse(result.rows[0].data as string) as OficinasDeckState;
+
+    if (!deck || !Array.isArray(deck.pages)) {
+      return null;
+    }
+
+    // A deck stored before a template page existed would never show it again,
+    // since the deck is persisted whole. Reconciling on read adds only what is
+    // missing, instead of forcing a reset that drops the user's texts.
+    return mergeOficinasDeckTemplate({
+      pages: deck.pages,
+      updatedAt: deck.updatedAt ?? ((result.rows[0].updated_at as string) ?? null),
+    });
+  } catch {
+    // Ignore malformed deck rows instead of breaking the API.
+    return null;
+  }
+}
+
+async function readStoredOficinasDataset(): Promise<OficinasDataset | null> {
+  const result = await client.execute(
+    "SELECT data, source_file, uploaded_at FROM oficinas_dataset WHERE id = 1"
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  try {
+    const dataset = JSON.parse(result.rows[0].data as string) as OficinasDataset;
+
+    return {
+      ...dataset,
+      source: {
+        sourceFile: dataset.source?.sourceFile ?? ((result.rows[0].source_file as string) ?? null),
+        uploadedAt: dataset.source?.uploadedAt ?? ((result.rows[0].uploaded_at as string) ?? null),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function buildOficinasPayload(): Promise<OficinasResponse> {
+  const [deck, dataset] = await Promise.all([
+    readStoredOficinasDeck(),
+    readStoredOficinasDataset(),
+  ]);
+
+  return {
+    deck: deck ?? createDefaultOficinasDeck(),
+    data: dataset ?? emptyOficinasDataset(),
+  };
+}
+
+router.get("/api/oficinas", async (_req, res) => {
+  try {
+    res.json(await buildOficinasPayload());
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error al obtener el informe de Oficinas";
+    res.status(500).json({ error: message });
+  }
+});
+
+router.put("/api/oficinas/deck", async (req, res) => {
+  try {
+    // Accept both { deck } and a bare deck payload.
+    const body = req.body as { deck?: OficinasDeckState } & Partial<OficinasDeckState>;
+    const deck = (body?.deck ?? body) as OficinasDeckState | undefined;
+
+    if (!deck || !Array.isArray(deck.pages)) {
+      return res
+        .status(400)
+        .json({ error: "El deck enviado no es válido: falta la lista de páginas." });
+    }
+
+    const updatedAt = new Date().toISOString();
+    const storedDeck: OficinasDeckState = { pages: deck.pages, updatedAt };
+
+    await client.execute({
+      sql: `INSERT INTO oficinas_deck (id, data, updated_at) VALUES (1, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+      args: [JSON.stringify(storedDeck)],
+    });
+
+    res.json({ success: true, deck: storedDeck });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error al guardar el deck de Oficinas";
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post("/api/oficinas/upload/plano", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Debes adjuntar el template semanal de Oficinas." });
+    }
+
+    if (!looksLikeWorkbook(req.file.buffer)) {
+      return res.status(400).json({
+        error: `No se pudo leer "${req.file.originalname}": no es un libro de Excel.`,
+      });
+    }
+
+    // The template stamps no year anywhere, so the current-year sheets are dated
+    // by the caller. It defaults to the year of the upload, which is right for
+    // the weekly routine, and is overridable for a backfill of an old export.
+    const requested = Number(req.body?.year ?? req.query?.year);
+    const year =
+      Number.isInteger(requested) && requested >= 2000 && requested <= 2100
+        ? requested
+        : new Date().getFullYear();
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const { dataset, report } = parseOficinasWorkbook(workbook, year);
+
+    // Like AGA and unlike Informática, the upload does NOT replace the dataset:
+    // it folds the (year, week) cells it carries into the stored history, so a
+    // corrected export overwrites exactly the weeks it contains and the office
+    // master seeded from the other workbook survives untouched.
+    const existing = await readStoredOficinasDataset();
+
+    const stored: OficinasDataset = mergeOficinasDataset(existing, dataset, {
+      sourceFile: req.file.originalname,
+      uploadedAt: new Date().toISOString(),
+    });
+
+    await client.execute({
+      sql: `INSERT INTO oficinas_dataset (id, data, source_file, uploaded_at)
+            VALUES (1, ?, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE
+            SET data = excluded.data,
+                source_file = excluded.source_file,
+                uploaded_at = excluded.uploaded_at`,
+      args: [JSON.stringify(stored), stored.source.sourceFile],
+    });
+
+    // The upload answers with the full payload so the client rehydrates without
+    // a second fetch, plus what the import actually read.
+    const payload = await buildOficinasPayload();
+
+    res.json({
+      ...payload,
+      report: { ...report, file: req.file.originalname },
+    } satisfies OficinasResponse & { report: OficinasImportReport });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Error al procesar el template de Oficinas";
+    res.status(400).json({ error: message });
+  }
+});
+
+router.post("/api/oficinas/reset-deck", async (_req, res) => {
+  try {
+    await client.execute("DELETE FROM oficinas_deck WHERE id = 1");
+
+    res.json({ success: true, deck: createDefaultOficinasDeck() });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error al restaurar el deck de Oficinas";
+    res.status(500).json({ error: message });
+  }
+});
+
 /**
  * The client and the server can run on different origins (Vite dev proxy: the
  * browser only ever talks to the Vite port, which forwards `/api` to this
@@ -1045,6 +1240,10 @@ router.get("/api/informatica/pdf", (req, res) => {
 
 router.get("/api/aga/pdf", (req, res) => {
   sendDeckPdf(req, res, "/aga", "informe-aga");
+});
+
+router.get("/api/oficinas/pdf", (req, res) => {
+  sendDeckPdf(req, res, "/oficinas", "informe-oficinas");
 });
 
 router.post("/api/uploads/image", (req, res) => {

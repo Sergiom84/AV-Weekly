@@ -7,7 +7,7 @@ import type { AgaBreakdownRow, AgaDataset } from "@shared/modules/aga/types";
 import { COMPARE_COLORS, agaColor, variationLabel, weekLabel } from "../aggregate";
 import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
-import ValueGrid from "./ValueGrid";
+import ValueGrid from "@/components/deck/ValueGrid";
 
 interface ManagedBreakdownProps extends AgaPageProps {
   dataset: AgaDataset;

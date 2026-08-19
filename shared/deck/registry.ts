@@ -75,10 +75,41 @@ export const DECK_MODULES: DeckModule[] = [
     name: "Oficinas",
     meta: "Módulo 01",
     description:
-      "Espacios, puestos y ocupación. Módulo reservado, todavía sin datos conectados.",
+      "Informe semanal de Soporte Oficinas: incidencias, peticiones, encuestas y recicladores.",
     route: "/oficinas",
     layers: 3,
-    deck: null,
+    deck: {
+      apiBase: "/api/oficinas",
+      uploads: [
+        {
+          id: "plano",
+          label: "Template semanal",
+          path: "/api/oficinas/upload/plano",
+          error: "No se pudo cargar el template semanal de Oficinas",
+          multiple: false,
+          accept: ".xlsx,.xls",
+        },
+      ],
+      // No Oficinas artwork has been produced yet, so it reuses the corporate
+      // covers the other decks already ship.
+      artwork: {
+        cover: "/informe/portada.png",
+        divider: "/informe/contraportada.png",
+      },
+      kindLabels: {
+        ...CORE_KIND_LABELS,
+        ofiAsignadasDT: "Asignadas por DT",
+        ofiAsignadasElemento: "Asignadas por elemento",
+        ofiResueltasDT: "Resueltas por DT",
+        ofiResueltasElemento: "Resueltas por elemento",
+        ofiPeticionesDT: "Peticiones por DT",
+        ofiPeticionesTipo: "Peticiones por tipo",
+        ofiEncuestas: "Encuestas",
+        ofiRecicladoresDT: "Recicladores por DT",
+        ofiRecicladoresElemento: "Recicladores por elemento",
+      },
+      storagePrefix: "av-weekly:oficinas-sidebar-collapsed:",
+    },
   },
   {
     id: "informatica",

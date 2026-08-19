@@ -4,8 +4,8 @@ import KpiRow from "@/components/deck/KpiRow";
 import { agaColor } from "../aggregate";
 import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
-import SeriesLineChart, { type LineSeries } from "./SeriesLineChart";
-import ValueGrid from "./ValueGrid";
+import SeriesLineChart, { type LineSeries } from "@/components/deck/SeriesLineChart";
+import ValueGrid from "@/components/deck/ValueGrid";
 
 interface AnualEvolutionProps extends AgaPageProps {
   /** One entry per year, ascending, each with the twelve months. */

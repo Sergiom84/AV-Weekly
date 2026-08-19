@@ -3,8 +3,8 @@ import type { AgaDataset } from "@shared/modules/aga/types";
 import { agaColor } from "../aggregate";
 import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
-import SeriesLineChart, { type LineSeries } from "./SeriesLineChart";
-import ValueGrid from "./ValueGrid";
+import SeriesLineChart, { type LineSeries } from "@/components/deck/SeriesLineChart";
+import ValueGrid from "@/components/deck/ValueGrid";
 
 interface GestionadasOfficePageProps extends AgaPageProps {
   dataset: AgaDataset;
