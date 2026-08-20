@@ -1,6 +1,13 @@
 import MatrixTable, { type MatrixRow } from "@/components/deck/MatrixTable";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import { latestOf, orderColumns, pivot, uniqueSorted } from "../aggregate";
+import {
+  coverageEnd,
+  inWeek,
+  lastClosedWeek,
+  orderColumns,
+  pivot,
+  uniqueSorted,
+} from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface PeticionesPageProps extends InformaticaPageProps {
@@ -20,6 +27,10 @@ const TOP_PRODUCTS = 10;
  * "Peticiones" and "Posiciones" are two different counts of the same week, not
  * a total and its breakdown: the workbook carries both because they diverge in
  * the source system.
+ *
+ * The week is resolved by date rather than by the highest `Semana`, which over
+ * a sheet spanning more than a year lands on the previous December. The two
+ * sections get their own window because they are not cut on the same day.
  */
 export default function PeticionesPage({
   page,
@@ -28,8 +39,9 @@ export default function PeticionesPage({
   dataset,
 }: PeticionesPageProps) {
   const rows = dataset.peticiones ?? [];
-  const week = latestOf(rows, (row) => row.semana);
-  const current = rows.filter((row) => row.semana === week);
+  const cutoff = coverageEnd(dataset);
+  const window = lastClosedWeek(rows, (row) => row.fecha, cutoff);
+  const current = rows.filter((row) => inWeek(row.fecha, window));
 
   const columns = orderColumns(uniqueSorted(current.map((row) => row.estado)), STATES);
 
@@ -48,10 +60,10 @@ export default function PeticionesPage({
   ]);
 
   const productRows = dataset.peticionesProducto ?? [];
-  const productWeek = latestOf(productRows, (row) => row.semana);
+  const productWindow = lastClosedWeek(productRows, (row) => row.fecha, cutoff);
   const topProducts: MatrixRow[] = Array.from(
     productRows
-      .filter((row) => row.semana === productWeek)
+      .filter((row) => inWeek(row.fecha, productWindow))
       .reduce((totals, row) => {
         totals.set(row.producto, (totals.get(row.producto) ?? 0) + row.total);
         return totals;

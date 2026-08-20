@@ -1,7 +1,7 @@
 import KpiRow from "@/components/deck/KpiRow";
 import MatrixTable from "@/components/deck/MatrixTable";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import { latestOf, monthLabel, pivot } from "../aggregate";
+import { monthLabel, pivot, reportMonth } from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface WorkOrdersPageProps extends InformaticaPageProps {
@@ -11,6 +11,11 @@ interface WorkOrdersPageProps extends InformaticaPageProps {
 /**
  * `2.1.6 WorkOrders`: matrix of buildings by work order type for the reported
  * month, with the month total and the average per building above it.
+ *
+ * The month is the last closed one, the same one every other page of the
+ * report reads. Taking the most recent month instead would put the fortnight
+ * the extract was cut in — 462 orders against July's 1.152 — next to full
+ * months on the neighbouring slides.
  */
 export default function WorkOrdersPage({
   page,
@@ -19,7 +24,7 @@ export default function WorkOrdersPage({
   dataset,
 }: WorkOrdersPageProps) {
   const rows = dataset.workOrders ?? [];
-  const month = latestOf(rows, (row) => row.mes);
+  const month = reportMonth(dataset, rows, (row) => row.mes);
   const current = rows.filter((row) => row.mes === month);
 
   const matrix = pivot(

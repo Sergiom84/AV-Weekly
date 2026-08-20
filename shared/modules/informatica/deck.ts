@@ -33,23 +33,33 @@ interface PageSpec {
 }
 
 /**
- * The seventeen data pages of the report, in the order of the original deck.
+ * The data pages of the report, in the order of the original deck.
  *
  * `sections` drives the "Próximamente" fallback: a page whose sections are not
  * all present in the imported workbook renders the notice instead of a chart.
  */
 export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
+  /**
+   * Both 2.1.1 pages read the `Hic` sheet, not `Incidencias`.
+   *
+   * `Incidencias` is the daily ticket detail; the two volumetry slides of the
+   * original deck are the monthly series the provider reports, which is exactly
+   * what `Hic` carries. Recomputing them from the daily detail would give a
+   * number close to but not equal to the reported one — 754 against 722 for
+   * 2026/07 — and the report must print the figure the client signs off, not
+   * ours.
+   */
   {
     id: "volumetria-incidencias-wo",
-    kind: "itIncidencias",
+    kind: "itHic",
     title: "2.1.1 Volumetría de Incidencias y Work Orders",
-    sections: ["incidencias", "workOrders"],
+    sections: ["hic"],
   },
   {
     id: "volumetria-incidencias",
-    kind: "itIncidencias",
+    kind: "itHic",
     title: "2.1.1 Volumetría de Incidencias",
-    sections: ["incidencias"],
+    sections: ["hic"],
   },
   {
     id: "top5-incidencias",
@@ -59,9 +69,9 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
   },
   {
     id: "top-ten-incidencias",
-    kind: "itIncidencias",
+    kind: "itComparativas",
     title: "2.1.3 Top Ten incidencias SSCC",
-    sections: ["incidencias"],
+    sections: ["comparativas"],
   },
   {
     id: "encuestas-incidencias",
@@ -74,6 +84,18 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
     kind: "itWorkOrders",
     title: "2.1.6 WorkOrders",
     sections: ["workOrders"],
+  },
+  /**
+   * SLAs closes the 2.1 block. The original deck pastes it as an image and
+   * gives it no number, so `2.1.7` is ours: it is the first free slot after
+   * `2.1.6 WorkOrders`, which is also where the page belongs — next to the
+   * incident pages whose response and resolution times it measures.
+   */
+  {
+    id: "slas",
+    kind: "itSlas",
+    title: "2.1.7 SLAs",
+    sections: ["slas"],
   },
   {
     id: "workorders-anual",
@@ -213,4 +235,83 @@ export function createDefaultInformaticaDeck(): InformaticaDeckState {
   }
 
   return { pages, updatedAt: null };
+}
+
+/**
+ * Brings a stored deck up to date with the pages the specs declare.
+ *
+ * The deck is persisted whole, so the first time anybody edits it the saved
+ * copy freezes the page list of that moment: a page added to
+ * `INFORMATICA_PAGE_SPECS` afterwards would never appear again without a manual
+ * reset. This adds only what is missing, matched by id, and never touches a page
+ * that is already stored — titles, footnotes, visibility, overrides, week and
+ * year selections and the order the user chose all survive, and pages the user
+ * added by hand stay where they are.
+ *
+ * A missing page is inserted right after the nearest preceding reference page
+ * the stored deck still has, so it lands in its intended slot without assuming
+ * the rest of the deck kept the default order. When none of its predecessors
+ * survive it goes to the front, which is the only position that is still
+ * defensible.
+ *
+ * Unlike AGA and Oficinas, this deck has no closing page: the reference ends on
+ * the last data page. The clamp that keeps an inserted page ahead of the closing
+ * slide is kept anyway because it is guarded by "is there one at all", so it
+ * costs nothing today and does the right thing the day a closing page is seeded.
+ *
+ * Deliberately a copy of `mergeAgaDeckTemplate` and `mergeOficinasDeckTemplate`
+ * rather than a shared helper: the three decks are typed over different page
+ * kinds, and the note left in the Oficinas copy — generalise once a third module
+ * needs it — is now due. Doing it here would mean touching the two modules
+ * already in production in the same change that fixes this one, so it is left as
+ * the next step instead of bundled in.
+ */
+export function mergeInformaticaDeckTemplate(
+  deck: InformaticaDeckState
+): InformaticaDeckState {
+  const reference = createDefaultInformaticaDeck().pages;
+  const kinds = new Map(reference.map((page) => [page.id, page.kind]));
+
+  // A page whose spec changed kind — a placeholder promoted to a data page, or
+  // an incident page re-pointed at the `hic`/`comparativas` sections — keeps its
+  // stored id, so a deck saved before the change carries the old kind and would
+  // render the old page forever. Only the kind is realigned; everything the user
+  // wrote or moved is theirs, not the template's.
+  const pages = deck.pages.map((page) => {
+    const kind = kinds.get(page.id);
+
+    return kind && kind !== page.kind ? { ...page, kind } : page;
+  });
+
+  const present = new Set(pages.map((page) => page.id));
+
+  reference.forEach((refPage, refIndex) => {
+    if (present.has(refPage.id)) {
+      return;
+    }
+
+    let insertAt = 0;
+
+    for (let i = refIndex - 1; i >= 0; i -= 1) {
+      const anchor = pages.findIndex((page) => page.id === reference[i].id);
+
+      if (anchor !== -1) {
+        insertAt = anchor + 1;
+        break;
+      }
+    }
+
+    if (refPage.kind !== "closing") {
+      const closingIndex = pages.findIndex((page) => page.kind === "closing");
+
+      if (closingIndex !== -1 && insertAt > closingIndex) {
+        insertAt = closingIndex;
+      }
+    }
+
+    pages.splice(insertAt, 0, refPage);
+    present.add(refPage.id);
+  });
+
+  return { ...deck, pages };
 }

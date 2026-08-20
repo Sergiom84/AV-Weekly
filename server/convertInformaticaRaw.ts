@@ -32,7 +32,7 @@ import { INFORMATICA_SHEETS } from "../shared/modules/informatica/types.ts";
 /* Raw formats                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export type RawInformaticaFormat = "peticiones" | "citas" | "workorders";
+export type RawInformaticaFormat = "peticiones" | "citas" | "workorders" | "template";
 
 /**
  * Columns that identify a request export beyond doubt.
@@ -49,17 +49,19 @@ export type RawInformaticaFormat = "peticiones" | "citas" | "workorders";
  */
 const RAW_PETICIONES_REQUIRED = ["Denominación Producto", "Estatus de la Posición"] as const;
 
-/** Header of the SmartTech appointments export. */
+/**
+ * Columns that identify the SmartTech appointments export.
+ *
+ * The standalone CSV also carries `Remitente`, `Estado`, `Descripcion`,
+ * `Asignado_a` and `Instancia`, but the same table inside the weekly template
+ * ships without `Instancia`, and none of those columns is read here anyway. Only
+ * the four that are actually used are required, so both shapes import.
+ */
 const RAW_CITAS_COLUMNS = [
   "Incidencia",
   "Walkup",
   "Cita_Previa",
-  "Remitente",
-  "Estado",
-  "Descripcion",
-  "Asignado_a",
   "Smart_Tech",
-  "Instancia",
 ] as const;
 
 /** Header of the work-order export. */
@@ -389,7 +391,11 @@ export function detectRawInformaticaFormat(
     return null;
   }
 
-  return findRawPeticionesSheet(input) === null ? null : "peticiones";
+  if (findRawPeticionesSheet(input) !== null) {
+    return "peticiones";
+  }
+
+  return isInformaticaTemplateWorkbook(input) ? "template" : null;
 }
 
 /**
@@ -595,9 +601,8 @@ function isExcludedSmartTech(value: string): boolean {
  *
  * `Remitente`, `Asignado_a`, `Descripcion` and `Incidencia` are never read.
  */
-export function convertRawCitasCsv(text: string): XLSX.WorkBook {
-  const records = parseDelimited(text, "\t");
-  const columns = indexHeader(records[0] ?? []);
+function citasRowsOf(header: readonly unknown[], records: readonly unknown[][]): (string | number)[][] {
+  const columns = indexHeader(header);
 
   if (!hasAll(columns, RAW_CITAS_COLUMNS)) {
     throw new Error("el fichero no tiene la cabecera del export de citas SmartTech");
@@ -609,15 +614,15 @@ export function convertRawCitasCsv(text: string): XLSX.WorkBook {
 
   const citas = new Counter();
 
-  for (const record of records.slice(1)) {
+  for (const record of records) {
     const edificio = textOf(record[smartTechAt]);
 
     if (edificio === "" || isExcludedSmartTech(edificio)) {
       continue;
     }
 
-    const conCita = parseSpanishDateTime(String(record[citaAt] ?? ""));
-    const walkup = conCita ? null : parseSpanishDateTime(String(record[walkupAt] ?? ""));
+    const conCita = parseWorkbookDate(record[citaAt]);
+    const walkup = conCita ? null : parseWorkbookDate(record[walkupAt]);
     const date = conCita ?? walkup;
 
     if (!date) {
@@ -631,11 +636,17 @@ export function convertRawCitasCsv(text: string): XLSX.WorkBook {
     ]);
   }
 
+  return citas.toRows();
+}
+
+export function convertRawCitasCsv(text: string): XLSX.WorkBook {
+  const records = parseDelimited(text, "\t");
+
   return buildWorkbook([
     {
       name: INFORMATICA_SHEETS.citas.sheet,
       header: INFORMATICA_SHEETS.citas.columns,
-      rows: citas.toRows(),
+      rows: citasRowsOf(records[0] ?? [], records.slice(1)),
     },
   ]);
 }
@@ -656,9 +667,11 @@ export function convertRawCitasCsv(text: string): XLSX.WorkBook {
  * `Submitter`, `ContactFullName`, `Chg Location Address` and
  * `Detailed Description` are never read.
  */
-export function convertRawWorkOrdersCsv(text: string): XLSX.WorkBook {
-  const records = parseDelimited(text, "\t");
-  const columns = indexHeader(records[0] ?? []);
+function workOrdersRowsOf(
+  header: readonly unknown[],
+  records: readonly unknown[][]
+): (string | number)[][] {
+  const columns = indexHeader(header);
 
   if (!hasAll(columns, RAW_WORKORDERS_COLUMNS)) {
     throw new Error("el fichero no tiene la cabecera del export de work orders");
@@ -671,8 +684,8 @@ export function convertRawWorkOrdersCsv(text: string): XLSX.WorkBook {
 
   const ordenes = new Counter();
 
-  for (const record of records.slice(1)) {
-    const date = parseSpanishDateTime(String(record[submitAt] ?? ""));
+  for (const record of records) {
+    const date = parseWorkbookDate(record[submitAt]);
 
     if (!date) {
       continue;
@@ -684,13 +697,632 @@ export function convertRawWorkOrdersCsv(text: string): XLSX.WorkBook {
     ordenes.add([...periodCells(date), edificio, tipo]);
   }
 
+  return ordenes.toRows();
+}
+
+export function convertRawWorkOrdersCsv(text: string): XLSX.WorkBook {
+  const records = parseDelimited(text, "\t");
+
   return buildWorkbook([
     {
       name: INFORMATICA_SHEETS.workOrders.sheet,
       header: INFORMATICA_SHEETS.workOrders.columns,
-      rows: ordenes.toRows(),
+      rows: workOrdersRowsOf(records[0] ?? [], records.slice(1)),
     },
   ]);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Weekly template (one xlsx, thirteen raw tabs)                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * "Templates SSCC para presentación - Email semanal.xlsx": the workbook the
+ * department actually receives every week.
+ *
+ * It is not the flat book and it is not one of the single-table exports: it is
+ * thirteen raw tabs, three of which repeat tables this module already digests
+ * (appointments, work orders) and the rest of which have no equivalent yet.
+ * Everything here converts those tabs to flat sheets, so the parser, the merge
+ * and the storage stay unaware that this format exists.
+ *
+ * Tabs are recognised by their header, never by their name. The names are
+ * truncated to the 31 characters Excel allows ("11-10 - Comparativa Comonente_ "),
+ * carry a typo, and their numbering shifts between weeks.
+ */
+
+/** Columns that identify each raw tab. */
+const TEMPLATE_INCIDENCIAS_COLUMNS = [
+  "Numero_incidencia",
+  "Abierta",
+  "Resuelta",
+  "Categorization Tier 1",
+  "Categorization Tier 2",
+] as const;
+
+const TEMPLATE_HIC_SERIE_COLUMNS = [
+  "Fecha",
+  "Incidencias resueltas",
+  "Asignadas",
+  "Asignaciones",
+] as const;
+
+const TEMPLATE_ENCUESTAS_COLUMNS = ["Incident Number", "Fecha"] as const;
+
+/** Metric names written on the `Hic` sheet. */
+const HIC_RESUELTAS = "Resueltas";
+const HIC_ASIGNADAS = "Asignadas";
+const HIC_ASIGNACIONES = "Asignaciones";
+const HIC_INCIDENCIAS = "Incidencias";
+
+/** Metric names written on the `Incidencias` sheet from the dashboard tab. */
+const INCIDENCIA_ASIGNADAS = "Asignadas";
+const INCIDENCIA_RESUELTAS = "Resueltas";
+
+/** What a tab of the template turned out to be. */
+type TemplateTabKind =
+  | "encuestas"
+  | "hicPivot"
+  | "hicSerie"
+  | "workorders"
+  | "citas"
+  | "incidencias"
+  | "comparativa"
+  | "slas";
+
+interface TemplateTab {
+  kind: TemplateTabKind;
+  /** Sheet name as written in the workbook, used as the scope label. */
+  name: string;
+  header: unknown[];
+  rows: unknown[][];
+  /** Index of the header row inside the grid, for the two-header tabs. */
+  headerAt: number;
+  grid: unknown[][];
+}
+
+/** Normalised label with the spaces removed, for headers written both ways. */
+function tight(value: unknown): string {
+  return normalize(value).replace(/ /g, "");
+}
+
+/** `YYYY/MM` when the cell reads like a month label, else null. */
+function monthTextOf(value: unknown): string | null {
+  const match = String(value ?? "").trim().match(/^(\d{4})[/-](\d{1,2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const month = Number(match[2]);
+
+  return month >= 1 && month <= 12 ? `${match[1]}/${String(month).padStart(2, "0")}` : null;
+}
+
+/** `YYYY/MM` shifted by whole months. Negative deltas go back in time. */
+function shiftMonth(month: string, delta: number): string {
+  const [year, index] = month.split("/").map(Number);
+  const shifted = new Date(Date.UTC(year, index - 1 + delta, 1));
+
+  return monthLabelOf(shifted);
+}
+
+/**
+ * Reads a measure cell of the template.
+ *
+ * The pivots write thousands with a separator and keep the cell as text
+ * ("6,456"), the SLA tabs write "127 (98%)" and every tab writes "N/A" for a
+ * component that did not exist that month. Only the leading integer is kept;
+ * "N/A" and anything else without digits reads as no value at all, which drops
+ * the row instead of writing a zero the source never reported.
+ */
+function templateNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const text = String(value ?? "").trim();
+  const match = text.match(/^-?[\d.,\s]*\d/);
+
+  if (!match) {
+    return null;
+  }
+
+  const digits = match[0].replace(/[^\d-]/g, "");
+  const parsed = Number(digits);
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Rows of a sheet as a grid, blank rows dropped. */
+function gridOf(workbook: XLSX.WorkBook, name: string): unknown[][] {
+  const sheet = workbook.Sheets[name];
+
+  if (!sheet) {
+    return [];
+  }
+
+  return XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: null,
+    blankrows: false,
+  });
+}
+
+/** Which raw table a grid holds, or null when it is none of them. */
+function classifyTemplateTab(name: string, grid: unknown[][]): TemplateTab | null {
+  const build = (kind: TemplateTabKind, headerAt: number): TemplateTab => ({
+    kind,
+    name: name.trim(),
+    header: (grid[headerAt] ?? []) as unknown[],
+    rows: grid.slice(headerAt + 1),
+    headerAt,
+    grid,
+  });
+
+  const first = (grid[0] ?? []) as unknown[];
+  const columns = indexHeader(first);
+
+  if (
+    hasAll(columns, TEMPLATE_ENCUESTAS_COLUMNS) &&
+    first.some((cell) => normalize(cell).includes("NIVEL DE SATIS"))
+  ) {
+    return build("encuestas", 0);
+  }
+
+  if (hasAll(columns, RAW_WORKORDERS_COLUMNS)) {
+    return build("workorders", 0);
+  }
+
+  if (hasAll(columns, RAW_CITAS_COLUMNS)) {
+    return build("citas", 0);
+  }
+
+  if (hasAll(columns, TEMPLATE_INCIDENCIAS_COLUMNS)) {
+    return build("incidencias", 0);
+  }
+
+  if (hasAll(columns, TEMPLATE_HIC_SERIE_COLUMNS)) {
+    return build("hicSerie", 0);
+  }
+
+  const tightFirst = first.map(tight);
+
+  if (
+    tightFirst.includes("MESACTUAL") &&
+    tightFirst.some((cell) => cell.startsWith("MESANTERIOR"))
+  ) {
+    return build("comparativa", 0);
+  }
+
+  // The pivot repeats its header on the second row, where the dimension is
+  // finally named; the months are on both.
+  if (first.filter((cell) => monthTextOf(cell) !== null).length >= 2) {
+    const second = (grid[1] ?? []) as unknown[];
+    const repeated = second.filter((cell) => monthTextOf(cell) !== null).length >= 2;
+
+    return build("hicPivot", repeated ? 1 : 0);
+  }
+
+  // The SLA tabs open with a spacer row and name their dimension on the second.
+  const slaAt = grid.findIndex((row) => tight((row ?? [])[0]) === "SVTTITLE");
+
+  if (slaAt !== -1) {
+    return build("slas", slaAt);
+  }
+
+  return null;
+}
+
+/** Every recognised tab of a workbook, in workbook order. */
+function templateTabsOf(workbook: XLSX.WorkBook): TemplateTab[] {
+  const tabs: TemplateTab[] = [];
+
+  for (const name of workbook.SheetNames) {
+    const tab = classifyTemplateTab(name, gridOf(workbook, name));
+
+    if (tab) {
+      tabs.push(tab);
+    }
+  }
+
+  return tabs;
+}
+
+/**
+ * Whether a workbook is the weekly template.
+ *
+ * Three distinct raw tables is the threshold. One table on its own is one of
+ * the standalone exports, which have their own converters; the flat book
+ * matches none of these headers.
+ */
+export function isInformaticaTemplateWorkbook(workbook: XLSX.WorkBook): boolean {
+  if (!workbook || !Array.isArray(workbook.SheetNames)) {
+    return false;
+  }
+
+  return new Set(templateTabsOf(workbook).map((tab) => tab.kind)).size >= 3;
+}
+
+/**
+ * The month the template reports on: its most recent month.
+ *
+ * The comparison tabs label their columns "Mes Actual", "Mes Anterior" and
+ * "Hace dos meses" and never say which months those are, so the window has to
+ * be anchored somewhere. The anchor is the last month of the monthly pivot,
+ * which is the only tab that spells its months out; the monthly series are the
+ * fallback, and the survey tab the last resort.
+ */
+function referenceMonthOf(tabs: TemplateTab[]): string | null {
+  const months: string[] = [];
+
+  for (const tab of tabs) {
+    if (tab.kind === "hicPivot") {
+      for (const cell of tab.header) {
+        const month = monthTextOf(cell);
+
+        if (month) {
+          months.push(month);
+        }
+      }
+    }
+
+    if (tab.kind === "hicSerie" || tab.kind === "encuestas") {
+      const columns = indexHeader(tab.header);
+      const at = columns.get(normalize("Fecha"));
+
+      if (at === undefined) {
+        continue;
+      }
+
+      for (const row of tab.rows) {
+        const month = monthTextOf(row[at]);
+
+        if (month) {
+          months.push(month);
+        }
+      }
+    }
+  }
+
+  return months.length === 0 ? null : months.sort().at(-1)!;
+}
+
+/**
+ * Survey answers, aggregated to a count per month and score.
+ *
+ * `Usuario`, `Ticket`, `Incident Number` and the two free-text columns are
+ * never read: the flat sheet only ever carries "how many answers scored N in
+ * month M". This is the module's privacy rule and the reason the conversion
+ * happens on the server before anything is stored.
+ */
+function encuestasRowsOf(tab: TemplateTab): (string | number)[][] {
+  const columns = indexHeader(tab.header);
+  const mesAt = columns.get(normalize("Fecha"))!;
+  const scoreAt = tab.header.findIndex((cell) => normalize(cell).includes("NIVEL DE SATIS"));
+  const resolvedAt = columns.get(normalize("Last Resolved Date"));
+
+  const encuestas = new Counter();
+
+  for (const row of tab.rows) {
+    const resolved = resolvedAt === undefined ? null : parseWorkbookDate(row[resolvedAt]);
+    const mes = monthTextOf(row[mesAt]) ?? (resolved ? monthLabelOf(resolved) : null);
+    const score = templateNumber(row[scoreAt]);
+
+    if (!mes || score === null) {
+      continue;
+    }
+
+    // `Fecha` is a month, not a day: the flat sheet's `Fecha` stays empty and
+    // `Mes` carries the period, which the parser accepts.
+    encuestas.add(["", mes, String(score)]);
+  }
+
+  return encuestas.toRows();
+}
+
+/**
+ * The onsite dashboard, converted to the `Incidencias` sheet.
+ *
+ * One raw row is one incident and produces up to two flat rows, because the
+ * flat sheet reports movements and an incident moves twice: it is assigned when
+ * it opens and resolved when it closes. So the `Asignadas` row is dated by
+ * `Abierta` and the `Resueltas` row by `Resuelta`, and an incident still open
+ * only produces the first. Counting both from one date instead would put every
+ * resolution in the week the incident was raised.
+ *
+ * `Categoria` is `Categorization Tier 1` and `Subcategoria` is
+ * `Categorization Tier 2`, which is the level the report groups by. `Tier 3` has
+ * no column in the flat contract and is not lost: the three-month top-ten of the
+ * deck reads it from the `Comparativas` sheet, which is where the source itself
+ * publishes it.
+ *
+ * `Breve_Descripcion`, `Asignado_a`, `Puesto` and `Numero_incidencia` are never
+ * read.
+ */
+function incidenciasRowsOf(tab: TemplateTab): (string | number)[][] {
+  const columns = indexHeader(tab.header);
+  const abiertaAt = columns.get(normalize("Abierta"))!;
+  const resueltaAt = columns.get(normalize("Resuelta"))!;
+  const tier1At = columns.get(normalize("Categorization Tier 1"))!;
+  const tier2At = columns.get(normalize("Categorization Tier 2"))!;
+  const edificioAt = columns.get(normalize("Edificio"));
+  const siteAt = columns.get(normalize("Site"));
+
+  const incidencias = new Counter();
+
+  for (const row of tab.rows) {
+    const categoria = textOf(row[tier1At]) || "Sin categoria";
+    const subcategoria = textOf(row[tier2At]) || "Sin subcategoria";
+    const edificio =
+      (edificioAt === undefined ? "" : textOf(row[edificioAt])) ||
+      (siteAt === undefined ? "" : textOf(row[siteAt])) ||
+      "Sin edificio";
+
+    const abierta = parseWorkbookDate(row[abiertaAt]);
+    const resuelta = parseWorkbookDate(row[resueltaAt]);
+
+    if (abierta) {
+      incidencias.add([
+        ...periodCells(abierta),
+        categoria,
+        subcategoria,
+        INCIDENCIA_ASIGNADAS,
+        edificio,
+      ]);
+    }
+
+    if (resuelta) {
+      incidencias.add([
+        ...periodCells(resuelta),
+        categoria,
+        subcategoria,
+        INCIDENCIA_RESUELTAS,
+        edificio,
+      ]);
+    }
+  }
+
+  return incidencias.toRows();
+}
+
+/** One monthly series tab: three metrics per month, nulls skipped. */
+function hicSerieRowsOf(tab: TemplateTab): (string | number)[][] {
+  const columns = indexHeader(tab.header);
+  const mesAt = columns.get(normalize("Fecha"))!;
+  const metrics: [string, number][] = [
+    [HIC_RESUELTAS, columns.get(normalize("Incidencias resueltas"))!],
+    [HIC_ASIGNADAS, columns.get(normalize("Asignadas"))!],
+    [HIC_ASIGNACIONES, columns.get(normalize("Asignaciones"))!],
+  ];
+
+  const rows: (string | number)[][] = [];
+
+  for (const row of tab.rows) {
+    const mes = monthTextOf(row[mesAt]);
+
+    if (!mes) {
+      continue;
+    }
+
+    for (const [metrica, at] of metrics) {
+      const total = templateNumber(row[at]);
+
+      if (total !== null) {
+        rows.push([tab.name, mes, "", metrica, total]);
+      }
+    }
+  }
+
+  return rows;
+}
+
+/** The monthly pivot by category: one row per category and month. */
+function hicPivotRowsOf(tab: TemplateTab): (string | number)[][] {
+  const months: [number, string][] = [];
+
+  tab.header.forEach((cell, index) => {
+    const month = monthTextOf(cell);
+
+    if (month) {
+      months.push([index, month]);
+    }
+  });
+
+  const rows: (string | number)[][] = [];
+
+  for (const row of tab.rows) {
+    const categoria = textOf(row[0]);
+
+    // The pivot closes with its own total row, which would double every figure.
+    if (categoria === "" || tight(categoria) === "TOTAL") {
+      continue;
+    }
+
+    for (const [at, mes] of months) {
+      const total = templateNumber(row[at]);
+
+      if (total !== null) {
+        rows.push([tab.name, mes, categoria, HIC_INCIDENCIAS, total]);
+      }
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * A three-month comparison tab, despivoted onto real months.
+ *
+ * "Mes Actual" is the reference month of the workbook, which is the month in
+ * progress and therefore partial; "Mes Anterior" is the month the report is
+ * about. `N/A` cells are dropped rather than written as zero.
+ */
+function comparativasRowsOf(tab: TemplateTab, reference: string): (string | number)[][] {
+  const tightHeader = tab.header.map(tight);
+  const offsets: [number, string][] = [];
+
+  tightHeader.forEach((cell, index) => {
+    if (cell === "MESACTUAL") {
+      offsets.push([index, reference]);
+    } else if (cell.startsWith("MESANTERIOR")) {
+      offsets.push([index, shiftMonth(reference, -1)]);
+    } else if (cell.startsWith("HACEDOS")) {
+      offsets.push([index, shiftMonth(reference, -2)]);
+    }
+  });
+
+  const rows: (string | number)[][] = [];
+
+  for (const row of tab.rows) {
+    const elemento = textOf(row[0]);
+
+    if (elemento === "" || tight(elemento) === "TOTAL") {
+      continue;
+    }
+
+    for (const [at, mes] of offsets) {
+      const total = templateNumber(row[at]);
+
+      if (total !== null) {
+        rows.push([tab.name, elemento, mes, total]);
+      }
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * An SLA tab, dated by the month its title refers to.
+ *
+ * The workbook ships two of them, "finalizados mes en curso" and "finalizados
+ * mes anterior", and neither states a month. They are told apart by name here —
+ * the only place in this module where a name is read — because the tables are
+ * structurally identical and nothing inside them distinguishes the periods.
+ * Anything that is not recognisably the previous month is treated as the
+ * current one, in the order the tabs appear.
+ */
+function slaMonthOf(tab: TemplateTab, reference: string): string {
+  return normalize(tab.name).includes("MES AN") ? shiftMonth(reference, -1) : reference;
+}
+
+function slasRowsOf(tab: TemplateTab, reference: string): (string | number)[][] {
+  const columns = indexHeader(tab.header);
+  const cumplidoAt = columns.get(normalize("Cumplido"));
+  const incumplidoAt = columns.get(normalize("Incumplido"));
+  const totalAt = columns.get(normalize("Total"));
+
+  if (cumplidoAt === undefined || incumplidoAt === undefined) {
+    return [];
+  }
+
+  const mes = slaMonthOf(tab, reference);
+  const rows: (string | number)[][] = [];
+
+  for (const row of tab.rows) {
+    const svt = textOf(row[0]);
+
+    if (svt === "" || tight(svt) === "TOTAL" || tight(svt) === "SVTTITLE") {
+      continue;
+    }
+
+    const cumplido = templateNumber(row[cumplidoAt]);
+    const incumplido = templateNumber(row[incumplidoAt]);
+
+    if (cumplido === null || incumplido === null) {
+      continue;
+    }
+
+    const total = totalAt === undefined ? null : templateNumber(row[totalAt]);
+
+    rows.push([mes, svt, cumplido, incumplido, total ?? cumplido + incumplido]);
+  }
+
+  return rows;
+}
+
+/**
+ * Converts the whole weekly template into a flat workbook.
+ *
+ * Every tab it manages to read becomes a flat sheet; a tab it does not
+ * recognise is ignored rather than failing the upload, because the department
+ * adds and reorders tabs between weeks. A sheet with no rows is not written at
+ * all, which leaves its page on "Próximamente".
+ */
+export function convertInformaticaTemplateWorkbook(workbook: XLSX.WorkBook): XLSX.WorkBook {
+  const tabs = templateTabsOf(workbook);
+
+  if (tabs.length === 0) {
+    throw new Error("el libro no trae ninguna pestaña reconocible del template semanal");
+  }
+
+  const reference = referenceMonthOf(tabs);
+
+  const encuestas: (string | number)[][] = [];
+  const incidencias: (string | number)[][] = [];
+  const workOrders: (string | number)[][] = [];
+  const citas: (string | number)[][] = [];
+  const hic: (string | number)[][] = [];
+  const comparativas: (string | number)[][] = [];
+  const slas: (string | number)[][] = [];
+
+  for (const tab of tabs) {
+    switch (tab.kind) {
+      case "encuestas":
+        encuestas.push(...encuestasRowsOf(tab));
+        break;
+      case "incidencias":
+        incidencias.push(...incidenciasRowsOf(tab));
+        break;
+      case "workorders":
+        workOrders.push(...workOrdersRowsOf(tab.header, tab.rows));
+        break;
+      case "citas":
+        citas.push(...citasRowsOf(tab.header, tab.rows));
+        break;
+      case "hicSerie":
+        hic.push(...hicSerieRowsOf(tab));
+        break;
+      case "hicPivot":
+        hic.push(...hicPivotRowsOf(tab));
+        break;
+      case "comparativa":
+        if (reference) {
+          comparativas.push(...comparativasRowsOf(tab, reference));
+        }
+        break;
+      case "slas":
+        if (reference) {
+          slas.push(...slasRowsOf(tab, reference));
+        }
+        break;
+    }
+  }
+
+  const sheets: { name: string; header: readonly string[]; rows: (string | number)[][] }[] = [];
+  const add = (
+    contract: { sheet: string; columns: readonly string[] },
+    rows: (string | number)[][]
+  ) => {
+    if (rows.length > 0) {
+      sheets.push({ name: contract.sheet, header: contract.columns, rows });
+    }
+  };
+
+  add(INFORMATICA_SHEETS.encuestas, encuestas);
+  add(INFORMATICA_SHEETS.incidencias, incidencias);
+  add(INFORMATICA_SHEETS.workOrders, workOrders);
+  add(INFORMATICA_SHEETS.citas, citas);
+  add(INFORMATICA_SHEETS.hic, hic);
+  add(INFORMATICA_SHEETS.comparativas, comparativas);
+  add(INFORMATICA_SHEETS.slas, slas);
+
+  if (sheets.length === 0) {
+    throw new Error("el template semanal no trae ninguna fila legible");
+  }
+
+  return buildWorkbook(sheets);
 }
 
 /* -------------------------------------------------------------------------- */

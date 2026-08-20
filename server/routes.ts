@@ -29,8 +29,10 @@ import type {
 import {
   createDefaultInformaticaDeck,
   emptyInformaticaDataset,
+  mergeInformaticaDeckTemplate,
 } from "../shared/modules/informatica/deck.ts";
 import {
+  convertInformaticaTemplateWorkbook,
   convertRawInformaticaCsv,
   convertRawPeticionesWorkbook,
   decodeInformaticaCsv,
@@ -69,6 +71,7 @@ import {
   type OficinasImportReport,
 } from "./parseOficinasPlano.js";
 import {
+  mergeInformaticaDataset,
   mergeInformaticaWorkbooks,
   parseInformaticaPlanoWorkbook,
   type InformaticaImportReport,
@@ -559,10 +562,13 @@ async function readStoredInformaticaDeck(): Promise<InformaticaDeckState | null>
       return null;
     }
 
-    return {
+    // The stored deck is reconciled with the specs on every read, never on
+    // write: a page added to `INFORMATICA_PAGE_SPECS` after the user saved the
+    // deck would otherwise stay invisible until a manual reset.
+    return mergeInformaticaDeckTemplate({
       pages: deck.pages,
       updatedAt: deck.updatedAt ?? ((result.rows[0].updated_at as string) ?? null),
-    };
+    });
   } catch {
     // Ignore malformed deck rows instead of breaking the API.
     return null;
@@ -697,13 +703,22 @@ function readInformaticaUpload(buffer: Buffer): XLSX.WorkBook {
       throw new Error("no contiene ninguna hoja");
     }
 
-    if (detectRawInformaticaFormat(workbook) === "peticiones") {
+    const format = detectRawInformaticaFormat(workbook);
+
+    if (format === "peticiones") {
       return convertRawPeticionesWorkbook(workbook);
+    }
+
+    // The weekly template is checked before the flat schema on purpose: it is
+    // raw data in thirteen tabs and none of its names is a flat sheet, so a
+    // flat book can never be mistaken for it.
+    if (format === "template") {
+      return convertInformaticaTemplateWorkbook(workbook);
     }
 
     if (!hasFlatInformaticaSheet(workbook)) {
       throw new Error(
-        "es un libro de Excel pero no trae ninguna hoja del esquema plano ni la cabecera del export de peticiones"
+        "es un libro de Excel pero no trae ninguna hoja del esquema plano, la cabecera del export de peticiones ni las pestañas del template semanal"
       );
     }
 
@@ -765,12 +780,16 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
       mergeInformaticaWorkbooks(workbooks)
     );
 
-    // The whole upload replaces the stored dataset: a sheet removed from the
-    // files is a sheet the user wants back on "Próximamente".
-    const stored: InformaticaDataset = {
-      ...dataset,
-      source: { sourceFile: describeSourceFiles(files), uploadedAt: new Date().toISOString() },
-    };
+    // The upload is folded into what is already stored instead of replacing it.
+    // The real weekly flow sends the template plus the three request exports,
+    // and each of those files only covers a couple of sections and the last few
+    // months; replacing the dataset sent every other page back to
+    // "Próximamente" every week. See `mergeInformaticaDataset` for the rule.
+    const stored: InformaticaDataset = mergeInformaticaDataset(
+      await readStoredInformaticaDataset(),
+      dataset,
+      { sourceFile: describeSourceFiles(files), uploadedAt: new Date().toISOString() }
+    );
 
     await client.execute({
       sql: `INSERT INTO informatica_dataset (id, data, source_file, uploaded_at)

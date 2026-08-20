@@ -31,6 +31,12 @@ import { useInformaticaDeck } from "@/modules/informatica/useInformaticaDeck";
 import CitasAnualPage from "@/modules/informatica/pages/CitasAnualPage";
 import CitasMensualPage from "@/modules/informatica/pages/CitasMensualPage";
 import CitasSemanalPage from "@/modules/informatica/pages/CitasSemanalPage";
+import EncuestasPage from "@/modules/informatica/pages/EncuestasPage";
+import HicCategoriasPage from "@/modules/informatica/pages/HicCategoriasPage";
+import HicPage from "@/modules/informatica/pages/HicPage";
+import SlasPage from "@/modules/informatica/pages/SlasPage";
+import Top5IncidenciasPage from "@/modules/informatica/pages/Top5IncidenciasPage";
+import TopTenIncidenciasPage from "@/modules/informatica/pages/TopTenIncidenciasPage";
 import PeticionesAnualPage from "@/modules/informatica/pages/PeticionesAnualPage";
 import PeticionesPage from "@/modules/informatica/pages/PeticionesPage";
 import WorkOrdersAnualPage from "@/modules/informatica/pages/WorkOrdersAnualPage";
@@ -51,7 +57,13 @@ const DATA_PAGES: Record<
     props: InformaticaPageProps & { dataset: InformaticaDataset }
   ) => ReactElement
 > = {
+  "volumetria-incidencias-wo": HicPage,
+  "volumetria-incidencias": HicCategoriasPage,
+  "top5-incidencias": Top5IncidenciasPage,
+  "top-ten-incidencias": TopTenIncidenciasPage,
+  "encuestas-incidencias": EncuestasPage,
   workorders: WorkOrdersPage,
+  slas: SlasPage,
   "workorders-anual": WorkOrdersAnualPage,
   peticiones: PeticionesPage,
   "peticiones-anual": PeticionesAnualPage,

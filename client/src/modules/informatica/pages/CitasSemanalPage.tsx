@@ -1,7 +1,14 @@
 import KpiRow from "@/components/deck/KpiRow";
 import MatrixTable from "@/components/deck/MatrixTable";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import { latestOf, orderColumns, pivot, uniqueSorted } from "../aggregate";
+import {
+  coverageEnd,
+  inWeek,
+  lastClosedWeek,
+  orderColumns,
+  pivot,
+  uniqueSorted,
+} from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface CitasSemanalPageProps extends InformaticaPageProps {
@@ -14,6 +21,12 @@ const TYPES = ["Con Cita", "Sin Cita"];
 /**
  * `2.3.1 Volumetría de Citas SmartTech Semanal`: booked versus walk-up
  * attention per SmartTech point during the reported week.
+ *
+ * The week is resolved by date, not by picking the highest `Semana`. The sheet
+ * spans more than a year, so every week number occurs twice and the highest is
+ * week 52 — the previous Christmas. Appointments are also booked ahead, past
+ * the day the extract was cut, which is why the window stops at the coverage
+ * end instead of at the last row.
  */
 export default function CitasSemanalPage({
   page,
@@ -22,8 +35,9 @@ export default function CitasSemanalPage({
   dataset,
 }: CitasSemanalPageProps) {
   const rows = dataset.citas ?? [];
-  const week = latestOf(rows, (row) => row.semana);
-  const current = rows.filter((row) => row.semana === week);
+  const window = lastClosedWeek(rows, (row) => row.fecha, coverageEnd(dataset));
+  const current = rows.filter((row) => inWeek(row.fecha, window));
+  const week = current[0]?.semana ?? null;
 
   const columns = orderColumns(uniqueSorted(current.map((row) => row.tipo)), TYPES);
   const matrix = pivot(

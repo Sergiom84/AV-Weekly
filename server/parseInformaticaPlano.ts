@@ -5,7 +5,9 @@ import {
   type InformaticaCitaRow,
   type InformaticaDataset,
   type InformaticaEdificioRow,
+  type InformaticaComparativaRow,
   type InformaticaEncuestaRow,
+  type InformaticaHicRow,
   type InformaticaImacRow,
   type InformaticaIncidenciaRow,
   type InformaticaPeticionAnualRow,
@@ -13,6 +15,7 @@ import {
   type InformaticaPeticionRow,
   type InformaticaRenoveRow,
   type InformaticaSectionKey,
+  type InformaticaSlaRow,
   type InformaticaWaspRow,
   type InformaticaWorkOrderRow,
 } from "../shared/modules/informatica/types.ts";
@@ -807,6 +810,103 @@ const renove: SectionSpec<InformaticaRenoveRow> = {
   },
 };
 
+/**
+ * `Hic`: monthly volumetry. Month only, no `Fecha` and no week.
+ *
+ * `Categoria` is optional: the total series report no category and the pivot
+ * reports one per `Categorization Tier 1`. Both live in the same sheet and are
+ * told apart by `Metrica`, so a consumer that wants the totals filters
+ * `categoria === ""` instead of reading a second sheet.
+ */
+const hic: SectionSpec<InformaticaHicRow> = {
+  key: "hic",
+  parse: (row) => {
+    const mes = parseMonthCell(row.raw("Mes"));
+    const total = row.count("Total");
+    const ambito = row.text("Ambito");
+    const metrica = row.text("Metrica");
+    const categoria = row.text("Categoria");
+
+    if (!mes || total === null || metrica === "") {
+      return null;
+    }
+
+    return {
+      key: `${mes}|${dim(ambito)}|${dim(categoria)}|${dim(metrica)}`,
+      value: { ambito, mes, categoria, metrica, total },
+    };
+  },
+  accumulate: (target, incoming) => {
+    target.total += incoming.total;
+  },
+  sort: (a, b) =>
+    a.mes.localeCompare(b.mes) ||
+    compareText(a.ambito, b.ambito) ||
+    compareText(a.metrica, b.metrica) ||
+    compareText(a.categoria, b.categoria),
+};
+
+/** `Comparativas`: incidents by component and month, one row per month. */
+const comparativas: SectionSpec<InformaticaComparativaRow> = {
+  key: "comparativas",
+  parse: (row) => {
+    const mes = parseMonthCell(row.raw("Mes"));
+    const total = row.count("Total");
+    const vista = row.text("Vista");
+    const elemento = row.text("Elemento");
+
+    if (!mes || total === null || elemento === "") {
+      return null;
+    }
+
+    return {
+      key: `${mes}|${dim(vista)}|${dim(elemento)}`,
+      value: { vista, elemento, mes, total },
+    };
+  },
+  accumulate: (target, incoming) => {
+    target.total += incoming.total;
+  },
+  sort: (a, b) =>
+    a.mes.localeCompare(b.mes) ||
+    compareText(a.vista, b.vista) ||
+    b.total - a.total ||
+    compareText(a.elemento, b.elemento),
+};
+
+/**
+ * `Slas`: compliance per service level and month.
+ *
+ * Unlike every other sheet the measure is not a count of rows, so repeated rows
+ * do not accumulate: the last row for a service level in a month wins. Adding
+ * two "127 of 130" together would report 254 of 260, which is not a thing.
+ */
+const slas: SectionSpec<InformaticaSlaRow> = {
+  key: "slas",
+  parse: (row) => {
+    const mes = parseMonthCell(row.raw("Mes"));
+    const svt = row.text("SVT");
+    const cumplido = row.count("Cumplido");
+    const incumplido = row.count("Incumplido");
+    const total = row.count("Total");
+
+    if (!mes || svt === "" || cumplido === null || incumplido === null) {
+      return null;
+    }
+
+    return {
+      key: `${mes}|${dim(svt)}`,
+      value: { mes, svt, cumplido, incumplido, total: total ?? cumplido + incumplido },
+    };
+  },
+  accumulate: (target, incoming) => {
+    target.cumplido = incoming.cumplido;
+    target.incumplido = incoming.incumplido;
+    target.total = incoming.total;
+  },
+  sort: (a, b) => a.mes.localeCompare(b.mes) || compareText(a.svt, b.svt),
+};
+
 /* -------------------------------------------------------------------------- */
 /* Workbook merging                                                            */
 /* -------------------------------------------------------------------------- */
@@ -969,6 +1069,9 @@ export function parseInformaticaPlanoWorkbook(
     imacs: parseSection(workbook, imacs),
     wasp: parseSection(workbook, wasp),
     renove: parseSection(workbook, renove),
+    hic: parseSection(workbook, hic),
+    comparativas: parseSection(workbook, comparativas),
+    slas: parseSection(workbook, slas),
   } as const;
 
   const byNormalizedName = new Map<string, InformaticaSectionKey>(
@@ -1004,6 +1107,9 @@ export function parseInformaticaPlanoWorkbook(
     imacs: sections.imacs.rows,
     wasp: sections.wasp.rows,
     renove: sections.renove.rows,
+    hic: sections.hic.rows,
+    comparativas: sections.comparativas.rows,
+    slas: sections.slas.rows,
     source: { sourceFile: null, uploadedAt: null },
     sheetsFound,
   };
@@ -1016,4 +1122,108 @@ export function parseInformaticaPlanoWorkbook(
       unknownSheets,
     },
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dataset merging                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How the temporal key of a section is read, or `null` when it has none.
+ *
+ * `edificios` is a dimension table, not a series: it has no period, so an
+ * upload that carries it replaces it whole.
+ */
+const SECTION_MONTH: Record<InformaticaSectionKey, ((row: never) => string) | null> = {
+  edificios: null,
+  incidencias: (row: InformaticaIncidenciaRow) => row.mes,
+  encuestas: (row: InformaticaEncuestaRow) => row.mes,
+  workOrders: (row: InformaticaWorkOrderRow) => row.mes,
+  peticiones: (row: InformaticaPeticionRow) => row.mes,
+  peticionesProducto: (row: InformaticaPeticionProductoRow) => row.mes,
+  peticionesAnual: (row: InformaticaPeticionAnualRow) => row.mes,
+  citas: (row: InformaticaCitaRow) => row.mes,
+  citasAnual: (row: InformaticaCitaAnualRow) => row.mes,
+  imacs: (row: InformaticaImacRow) => row.mes,
+  wasp: (row: InformaticaWaspRow) => row.mes,
+  renove: (row: InformaticaRenoveRow) => row.mes,
+  hic: (row: InformaticaHicRow) => row.mes,
+  comparativas: (row: InformaticaComparativaRow) => row.mes,
+  slas: (row: InformaticaSlaRow) => row.mes,
+} as Record<InformaticaSectionKey, ((row: never) => string) | null>;
+
+/**
+ * Folds one section of an upload into the section already stored.
+ *
+ * The rule is "the months the upload talks about are the months it owns": every
+ * month present in `incoming` is rebuilt from `incoming`, and every month it
+ * does not mention survives untouched. One rule covers both behaviours the
+ * weekly flow needs. The raw sheets of the template arrive complete each week,
+ * so re-sending them rewrites the months they carry and adds the new one, which
+ * makes a repeated upload idempotent instead of doubling every count. The
+ * three-month windows (`comparativas`, `slas`, `hic`) overwrite the months they
+ * overlap and leave the older history in place.
+ */
+function mergeSectionRows<T>(
+  existing: T[] | undefined,
+  incoming: T[] | undefined,
+  monthOf: ((row: T) => string) | null
+): T[] | undefined {
+  if (!incoming || incoming.length === 0) {
+    return existing;
+  }
+
+  if (!monthOf || !existing || existing.length === 0) {
+    return incoming;
+  }
+
+  const owned = new Set(incoming.map(monthOf));
+  const kept = existing.filter((row) => !owned.has(monthOf(row)));
+
+  return [...kept, ...incoming].sort((a, b) => monthOf(a).localeCompare(monthOf(b)));
+}
+
+/**
+ * The stored dataset with an upload folded in, section by section.
+ *
+ * **This changes the semantics of the Informatica upload.** It used to replace
+ * the stored dataset outright, so a week that only sent the request exports
+ * erased the appointments of the week before and every page but two went back
+ * to "Próximamente". It now accumulates like the AGA and Oficinas modules: a
+ * section nobody re-sent is preserved as it is, and a section that is re-sent
+ * only rewrites its own months. The consequence to know is that a sheet can no
+ * longer be emptied by omitting it from an upload; clearing history is a
+ * separate, explicit operation.
+ */
+export function mergeInformaticaDataset(
+  existing: InformaticaDataset | null,
+  incoming: InformaticaDataset,
+  source: InformaticaDataset["source"]
+): InformaticaDataset {
+  const merged: InformaticaDataset = { ...(existing ?? {}), ...{ source } };
+
+  for (const key of SECTION_KEYS) {
+    const monthOf = SECTION_MONTH[key] as ((row: unknown) => string) | null;
+    const rows = mergeSectionRows(
+      existing?.[key] as unknown[] | undefined,
+      incoming[key] as unknown[] | undefined,
+      monthOf
+    );
+
+    if (rows && rows.length > 0) {
+      (merged as unknown as Record<string, unknown>)[key] = rows;
+    } else {
+      delete (merged as unknown as Record<string, unknown>)[key];
+    }
+  }
+
+  // `sheetsFound` describes the dataset, not the last file: after a merge it is
+  // every section that ends up carrying rows, or the deck would send a page
+  // back to "Próximamente" for data it still holds.
+  merged.sheetsFound = SECTION_KEYS.filter((key) => {
+    const rows = merged[key];
+    return Array.isArray(rows) && rows.length > 0;
+  });
+
+  return merged;
 }

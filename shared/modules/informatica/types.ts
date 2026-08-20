@@ -98,6 +98,36 @@ export const INFORMATICA_SHEETS = {
     sheet: "Renove",
     columns: ["Fecha", "Semana", "Mes", "Ambito", "Estado", "Equipos"],
   },
+  /**
+   * Monthly incident volumetry ("HIC") behind pages 2.1.1.
+   *
+   * Long format on purpose, like every other sheet: one row per scope, month,
+   * category and metric. It absorbs both shapes the weekly template carries —
+   * the two total series (`Resueltas`/`Asignadas`/`Asignaciones`, no category)
+   * and the pivot by `Categorization Tier 1` (metric `Incidencias`) — without
+   * either of them needing a sheet of its own.
+   */
+  hic: {
+    sheet: "Hic",
+    columns: ["Ambito", "Mes", "Categoria", "Metrica", "Total"],
+  },
+  /**
+   * Three-month comparison of incident components, feeding the top-ten page.
+   *
+   * The source is a set of pivots with the columns "Mes Actual", "Mes Anterior"
+   * and "Hace dos meses": relative labels with no month inside. They are
+   * resolved to real `YYYY/MM` months at conversion time and stored despivoted,
+   * so the sheet never carries a period that depends on when it was read.
+   */
+  comparativas: {
+    sheet: "Comparativas",
+    columns: ["Vista", "Elemento", "Mes", "Total"],
+  },
+  /** Monthly SLA compliance, one row per service level. */
+  slas: {
+    sheet: "Slas",
+    columns: ["Mes", "SVT", "Cumplido", "Incumplido", "Total"],
+  },
 } as const;
 
 /** Key of a section inside the workbook, e.g. "peticionesProducto". */
@@ -242,6 +272,47 @@ export interface InformaticaRenoveRow extends InformaticaPeriod {
   equipos: number;
 }
 
+/**
+ * `Hic`: monthly incident volumetry, one metric per row.
+ *
+ * `ambito` is the scope the figure was reported under. It is the source sheet
+ * name verbatim: the weekly template ships two series sheets whose titles are
+ * truncated to the 31 characters Excel allows, so the distinction between them
+ * cannot be recovered from the file and inventing a nicer label here would be a
+ * guess. `categoria` is empty on the total series and carries the
+ * `Categorization Tier 1` value on the pivot.
+ */
+export interface InformaticaHicRow {
+  ambito: string;
+  mes: InformaticaMonth;
+  categoria: string;
+  metrica: string;
+  total: number;
+}
+
+/**
+ * `Comparativas`: incidents by component and month, already despivoted.
+ *
+ * `vista` is the source sheet name, for the same truncation reason as
+ * `InformaticaHicRow.ambito`. `mes` is a real `YYYY/MM`: the relative column
+ * labels of the source are resolved before the row is written.
+ */
+export interface InformaticaComparativaRow {
+  vista: string;
+  elemento: string;
+  mes: InformaticaMonth;
+  total: number;
+}
+
+/** `Slas`: compliance of one service level in one month. */
+export interface InformaticaSlaRow {
+  mes: InformaticaMonth;
+  svt: string;
+  cumplido: number;
+  incumplido: number;
+  total: number;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Dataset                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -263,6 +334,9 @@ export interface InformaticaDataset {
   imacs?: InformaticaImacRow[];
   wasp?: InformaticaWaspRow[];
   renove?: InformaticaRenoveRow[];
+  hic?: InformaticaHicRow[];
+  comparativas?: InformaticaComparativaRow[];
+  slas?: InformaticaSlaRow[];
   source: DatasetSource;
   /** Sheets found in the uploaded workbook, in workbook order. */
   sheetsFound?: InformaticaSectionKey[];
@@ -288,7 +362,10 @@ export type InformaticaPageKind =
   | "itCitasAnual"
   | "itImacs"
   | "itWasp"
-  | "itRenove";
+  | "itRenove"
+  | "itHic"
+  | "itComparativas"
+  | "itSlas";
 
 /** Series a page can report on. Informatica pages are not typed by series. */
 export type InformaticaSeries = string;

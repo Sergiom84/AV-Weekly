@@ -1,5 +1,9 @@
 import { MONTH_LABELS } from "@shared/deck/core";
 import type { MatrixRow } from "@/components/deck/MatrixTable";
+import type {
+  InformaticaDataset,
+  InformaticaDateCell,
+} from "@shared/modules/informatica/types";
 
 /**
  * Aggregation helpers for the Informatica dataset.
@@ -24,6 +28,240 @@ export function monthLabel(month: string): string {
   const index = monthIndexOf(month);
   const name = MONTH_LABELS[index - 1] ?? month;
   return `${name} ${month.slice(2, 4)}`;
+}
+
+/** `4.857` renders as `4,86`, the decimal comma of the report. */
+export function decimal(value: number | null, digits = 2): string {
+  if (value === null || !Number.isFinite(value)) {
+    return "";
+  }
+
+  return value.toLocaleString("es-ES", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+/** Share as the report writes it: `0.925` becomes `92,5 %`. */
+export function percent(value: number, digits = 1): string {
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+
+  return `${(value * 100).toLocaleString("es-ES", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })} %`;
+}
+
+/** Last calendar day of a `YYYY/MM` month, as `YYYY-MM-DD`. */
+function lastDayOf(month: string): string {
+  const year = yearOf(month);
+  const index = monthIndexOf(month);
+
+  if (!Number.isFinite(year) || !Number.isFinite(index)) {
+    return "";
+  }
+
+  // Day 0 of the next month is the last day of this one, leap years included.
+  const date = new Date(Date.UTC(year, index, 0));
+
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * `Fecha` cell as `YYYY-MM-DD`. The template writes an Excel serial but a
+ * hand-edited workbook carries ISO text, so both are accepted — the same
+ * contract `InformaticaDateCell` declares.
+ */
+function isoDay(cell: InformaticaDateCell): string | null {
+  if (typeof cell === "number" && Number.isFinite(cell)) {
+    // Excel's epoch is 1899-12-30: day 1 is 1900-01-01 and the 1900 leap bug
+    // is already absorbed by the two-day offset.
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(cell) * 86_400_000);
+
+    return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+  }
+
+  if (typeof cell === "string" && /^\d{4}-\d{2}-\d{2}/.test(cell)) {
+    return cell.slice(0, 10);
+  }
+
+  return null;
+}
+
+/**
+ * Last day the workbook has data for, across the sheets that record what
+ * happened.
+ *
+ * The flat book is an extract cut on the day it was taken, so knowing where it
+ * stops is what tells a full month apart from an in-flight one.
+ *
+ * `Citas` is deliberately not one of the sheets consulted: appointments are
+ * booked ahead, so that sheet runs past the cut — to 2026-08-26 in a book whose
+ * incidents stop on the 14th. Reading the cut off future bookings would call a
+ * month closed before it has been worked.
+ */
+export function coverageEnd(dataset: InformaticaDataset): string | null {
+  const cells: InformaticaDateCell[] = [
+    ...(dataset.incidencias ?? []).map((row) => row.fecha),
+    ...(dataset.workOrders ?? []).map((row) => row.fecha),
+    ...(dataset.peticiones ?? []).map((row) => row.fecha),
+  ];
+
+  let end: string | null = null;
+
+  for (const cell of cells) {
+    const day = isoDay(cell);
+
+    if (day !== null && (end === null || day > end)) {
+      end = day;
+    }
+  }
+
+  return end;
+}
+
+/** Monday of the ISO week a day belongs to, as `YYYY-MM-DD`. */
+function mondayOf(day: string): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  // getUTCDay is 0 on Sunday, which is the last day of an ISO week, not the first.
+  const offset = (date.getUTCDay() + 6) % 7;
+
+  date.setUTCDate(date.getUTCDate() - offset);
+
+  return date.toISOString().slice(0, 10);
+}
+
+/** `YYYY-MM-DD` a given number of days after another. */
+function addDays(day: string, count: number): string {
+  const date = new Date(`${day}T00:00:00Z`);
+
+  date.setUTCDate(date.getUTCDate() + count);
+
+  return date.toISOString().slice(0, 10);
+}
+
+export interface WeekWindow {
+  /** Monday of the week, inclusive. */
+  start: string;
+  /** Sunday of the week, inclusive. */
+  end: string;
+}
+
+/**
+ * Monday-to-Sunday window of the last full working week a section reports on.
+ *
+ * A window rather than a week number, because the number alone cannot pick a
+ * week: the sheets carry more than a year, so weeks 1 to 52 each occur twice,
+ * and taking the highest one lands on the previous December. Filtering by date
+ * has no such ambiguity.
+ *
+ * "Full" means the section has data through the Friday. A book cut on a Monday
+ * carries one day of that week, and reporting it as the week would show a fifth
+ * of the normal volume as a collapse. Rows after `cutoff` are ignored so a
+ * forward-looking sheet — appointments booked for next week — cannot pull the
+ * window into the future.
+ */
+export function lastClosedWeek<T>(
+  rows: T[],
+  dateOf: (row: T) => InformaticaDateCell,
+  cutoff: string | null
+): WeekWindow | null {
+  let last: string | null = null;
+
+  for (const row of rows) {
+    const day = isoDay(dateOf(row));
+
+    if (day === null || (cutoff !== null && day > cutoff)) {
+      continue;
+    }
+
+    if (last === null || day > last) {
+      last = day;
+    }
+  }
+
+  if (last === null) {
+    return null;
+  }
+
+  const monday = mondayOf(last);
+  // Friday is the last working day the report counts on.
+  const start = last >= addDays(monday, 4) ? monday : addDays(monday, -7);
+
+  return { start, end: addDays(start, 6) };
+}
+
+/** True when a dated row falls inside the window. */
+export function inWeek(cell: InformaticaDateCell, window: WeekWindow | null): boolean {
+  if (window === null) {
+    return false;
+  }
+
+  const day = isoDay(cell);
+
+  return day !== null && day >= window.start && day <= window.end;
+}
+
+/**
+ * Latest month the workbook covers all the way to its last calendar day.
+ *
+ * The reported month of a monthly report has to be a whole month. The extract
+ * is cut on the day it is taken, so its final month is normally a fortnight
+ * long — 2026/08 stops on the 14th in the current book — and printing "the
+ * month" on it would put half a month next to full ones and read as a collapse
+ * in volume.
+ *
+ * Falls back to the latest month when no dated sheet says where the data
+ * stops: showing the most recent month is a better failure than showing none.
+ */
+export function lastClosedMonth(
+  months: string[],
+  end: string | null
+): string | null {
+  const ordered = Array.from(new Set(months)).sort();
+
+  if (ordered.length === 0) {
+    return null;
+  }
+
+  if (end !== null) {
+    for (let index = ordered.length - 1; index >= 0; index -= 1) {
+      const month = ordered[index];
+      const closes = lastDayOf(month);
+
+      if (closes !== "" && end >= closes) {
+        return month;
+      }
+    }
+  }
+
+  return ordered[ordered.length - 1];
+}
+
+/** `lastClosedMonth` over the months a section reports on. */
+export function reportMonth<T>(
+  dataset: InformaticaDataset,
+  rows: T[],
+  monthOf: (row: T) => string
+): string | null {
+  return lastClosedMonth(
+    rows.map(monthOf).filter((month) => month !== ""),
+    coverageEnd(dataset)
+  );
+}
+
+/** The `count` highest entries of a total map, ties broken by label. */
+export function topEntries(
+  totals: Map<string, number>,
+  count: number
+): { label: string; value: number }[] {
+  return Array.from(totals.entries())
+    .map(([label, value]) => ({ label, value }))
+    .filter((entry) => entry.value > 0)
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, "es"))
+    .slice(0, count);
 }
 
 export function uniqueSorted(values: string[]): string[] {
