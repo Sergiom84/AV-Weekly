@@ -1236,7 +1236,12 @@ async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
     const page = await browser.newPage();
     const credentials = configuredCredentials();
     if (credentials) {
-      await page.authenticate(credentials);
+      const authorization = Buffer.from(
+        `${credentials.username}:${credentials.password}`
+      ).toString("base64");
+      await page.setExtraHTTPHeaders({
+        authorization: `Basic ${authorization}`,
+      });
     }
     await page.setViewport({ width: 1600, height: 900 });
     await page.goto(`${origin}${path}`, {
