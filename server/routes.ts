@@ -1,10 +1,7 @@
 import { randomUUID } from "crypto";
 import { Router } from "express";
-import fs from "fs";
 import multer from "multer";
-import path from "path";
 import puppeteer from "puppeteer";
-import { fileURLToPath } from "url";
 import * as XLSX from "xlsx";
 import type {
   DeckState,
@@ -83,6 +80,7 @@ import {
   mergeWeeklyHistory,
   parseTendenciaWorkbook,
 } from "./parseTendenciaMensual.js";
+import { configuredCredentials } from "./auth.js";
 
 type WeeklyHistory = Record<SupportType, WeeklyComparison[]>;
 /** Resolution detail accumulated per support type and ISO week. */
@@ -115,36 +113,45 @@ function emptyWeeklyHistory(): WeeklyHistory {
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-/**
- * User assets are runtime data, not build output: a new build must never
- * remove note images. Keep them beside the local SQLite database instead.
- */
-export const UPLOADS_DIR = path.resolve(
-  process.env.APP_DATA_DIR ?? path.join(process.cwd(), "data"),
-  "uploads",
-);
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+const SUPPORTED_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+const MAX_IMAGE_SIZE_BYTES = 4 * 1024 * 1024;
 
-const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
-  "image/gif": ".gif",
-  "image/webp": ".webp",
-};
+function hasSupportedImageSignature(buffer: Buffer, mimeType: string): boolean {
+  if (mimeType === "image/png") {
+    return buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  }
+
+  if (mimeType === "image/jpeg") {
+    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+
+  if (mimeType === "image/gif") {
+    const signature = buffer.subarray(0, 6).toString("ascii");
+    return signature === "GIF87a" || signature === "GIF89a";
+  }
+
+  if (mimeType === "image/webp") {
+    return (
+      buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buffer.subarray(8, 12).toString("ascii") === "WEBP"
+    );
+  }
+
+  return false;
+}
 
 const imageUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-    filename: (_req, file, cb) => {
-      // The stored name never reuses the client's filename: that keeps path
-      // traversal and extension-spoofing out of the uploads folder.
-      const ext = IMAGE_EXTENSION_BY_MIME[file.mimetype] ?? "";
-      cb(null, `${randomUUID()}${ext}`);
-    },
-  }),
-  limits: { fileSize: 8 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+  // Remote libSQL transports BLOB arguments as base64. Four megabytes keeps
+  // the encoded statement comfortably below common HTTP request limits.
+  limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
-    if (!IMAGE_EXTENSION_BY_MIME[file.mimetype]) {
+    if (!SUPPORTED_IMAGE_TYPES.has(file.mimetype)) {
       cb(new Error("Formato de imagen no soportado. Usa PNG, JPG, GIF o WEBP."));
       return;
     }
@@ -1186,10 +1193,14 @@ router.post("/api/oficinas/reset-deck", async (_req, res) => {
 /**
  * The client and the server can run on different origins (Vite dev proxy: the
  * browser only ever talks to the Vite port, which forwards `/api` to this
- * server). Puppeteer needs the real, browser-facing origin to render the
- * actual app, so it is read from the request rather than assumed.
+ * server). Production always renders through the loopback server so request
+ * headers can never redirect authentication credentials to another origin.
  */
 function resolveClientOrigin(req: import("express").Request): string {
+  if (process.env.NODE_ENV === "production") {
+    return `http://127.0.0.1:${process.env.PORT ?? 3000}`;
+  }
+
   for (const header of [req.get("referer"), req.get("origin")]) {
     if (!header) {
       continue;
@@ -1211,6 +1222,10 @@ async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
 
   try {
     const page = await browser.newPage();
+    const credentials = configuredCredentials();
+    if (credentials) {
+      await page.authenticate(credentials);
+    }
     await page.setViewport({ width: 1600, height: 900 });
     await page.goto(`${origin}${path}`, { waitUntil: "networkidle0", timeout: 30_000 });
     await page.emulateMediaType("print");
@@ -1271,6 +1286,36 @@ router.get("/api/oficinas/pdf", (req, res) => {
   sendDeckPdf(req, res, "/oficinas", "informe-oficinas");
 });
 
+router.get("/api/uploads/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+      res.status(404).end();
+      return;
+    }
+
+    const result = await client.execute({
+      sql: "SELECT mime_type, data FROM uploaded_asset WHERE id = ?",
+      args: [id],
+    });
+    const asset = result.rows[0];
+
+    if (!asset) {
+      res.status(404).end();
+      return;
+    }
+
+    res.setHeader("Content-Type", asset.mime_type as string);
+    res.setHeader("Content-Length", String((asset.data as Uint8Array).byteLength));
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.send(Buffer.from(asset.data as Uint8Array));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "No se pudo cargar la imagen";
+    res.status(500).json({ error: message });
+  }
+});
+
 router.post("/api/uploads/image", (req, res) => {
   imageUpload.single("file")(req, res, (err) => {
     if (err) {
@@ -1284,7 +1329,23 @@ router.post("/api/uploads/image", (req, res) => {
       return;
     }
 
-    res.json({ url: `/api/uploads/${req.file.filename}` });
+    if (!hasSupportedImageSignature(req.file.buffer, req.file.mimetype)) {
+      res.status(400).json({ error: "El contenido del archivo no coincide con una imagen válida." });
+      return;
+    }
+
+    const id = randomUUID();
+
+    client.execute({
+      sql: `INSERT INTO uploaded_asset (id, mime_type, data, size_bytes)
+            VALUES (?, ?, ?, ?)`,
+      args: [id, req.file.mimetype, req.file.buffer, req.file.size],
+    })
+      .then(() => res.status(201).json({ url: `/api/uploads/${id}` }))
+      .catch((dbErr) => {
+        const message = dbErr instanceof Error ? dbErr.message : "No se pudo guardar la imagen";
+        res.status(500).json({ error: message });
+      });
   });
 });
 

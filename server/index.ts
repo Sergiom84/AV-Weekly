@@ -3,8 +3,9 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createAccessMiddleware } from "./auth.js";
 import { initDb } from "./db.js";
-import routes, { UPLOADS_DIR } from "./routes.js";
+import routes from "./routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,10 +16,8 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  app.use(createAccessMiddleware());
   app.use(express.json());
-
-  // Under /api so the Vite dev proxy (which only forwards /api) reaches it too.
-  app.use("/api/uploads", express.static(UPLOADS_DIR));
 
   // API routes
   app.use(routes);

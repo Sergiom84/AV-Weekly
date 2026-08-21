@@ -100,5 +100,15 @@ export async function initDb() {
       source_file TEXT,
       uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Images attached to notes pages. Keeping the bytes in libSQL makes them
+    -- survive Render restarts and avoids a second storage provider.
+    CREATE TABLE IF NOT EXISTS uploaded_asset (
+      id TEXT PRIMARY KEY,
+      mime_type TEXT NOT NULL,
+      data BLOB NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }
