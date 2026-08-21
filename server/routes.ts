@@ -115,8 +115,14 @@ function emptyWeeklyHistory(): WeeklyHistory {
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-/** Where uploaded images live on disk: `server/uploads` in dev, `dist/uploads` once built. */
-export const UPLOADS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "uploads");
+/**
+ * User assets are runtime data, not build output: a new build must never
+ * remove note images. Keep them beside the local SQLite database instead.
+ */
+export const UPLOADS_DIR = path.resolve(
+  process.env.APP_DATA_DIR ?? path.join(process.cwd(), "data"),
+  "uploads",
+);
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {

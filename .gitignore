@@ -6,6 +6,7 @@
 dist/
 build/
 *.dist
+release/
 
 # User-uploaded images (notes pages)
 server/uploads/
