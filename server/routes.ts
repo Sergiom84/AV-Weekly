@@ -1251,6 +1251,7 @@ async function renderDeckPdf(
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
+      "--no-zygote",
     ],
   });
   let closePromise: Promise<void> | null = null;
