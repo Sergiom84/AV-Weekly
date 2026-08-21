@@ -63,6 +63,15 @@ import {
   type AgaImportReport,
 } from "./parseAgaPlano.js";
 import {
+  mergeAgaOfficeSection,
+  parseAgaOfficeWorkbook,
+} from "./parseAgaOffice.js";
+import {
+  mergeAgaManagedSection,
+  parseAgaGestionadoWorkbook,
+} from "./parseAgaGestionado.js";
+import { AGA_BUILDING_LOCATIONS } from "./agaLocationMap.js";
+import {
   mergeOficinasDataset,
   parseOficinasWorkbook,
   type OficinasImportReport,
@@ -1014,6 +1023,160 @@ router.post("/api/aga/upload/plano", upload.single("file"), async (req, res) => 
     } satisfies AgaResponse & { report: AgaImportReport });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al procesar el excel GPS de AGA";
+    res.status(400).json({ error: message });
+  }
+});
+
+router.post("/api/aga/upload/office", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Debes adjuntar el export de licencias Office." });
+    }
+
+    if (!looksLikeWorkbook(req.file.buffer)) {
+      return res.status(400).json({
+        error: `No se pudo leer "${req.file.originalname}": no es un libro de Excel.`,
+      });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const parsed = parseAgaOfficeWorkbook(workbook);
+
+    if (parsed.report.unknownProducts.length > 0 || parsed.report.unknownDates.length > 0) {
+      const products = parsed.report.unknownProducts.map((entry) => entry.value).join(", ");
+      const dates = parsed.report.unknownDates.map((entry) => entry.value).join(", ");
+      const details = [
+        products ? `productos sin clasificar: ${products}` : "",
+        dates ? `fechas no reconocidas: ${dates}` : "",
+      ]
+        .filter(Boolean)
+        .join("; ");
+
+      return res.status(400).json({
+        error: `El export Office contiene ${details}. No se ha guardado para evitar perder posiciones.`,
+        report: parsed.report,
+      });
+    }
+
+    const existing = (await readStoredAgaDataset()) ?? emptyAgaDataset();
+    const stamp = {
+      sourceFile: req.file.originalname,
+      uploadedAt: new Date().toISOString(),
+    };
+    const stored: AgaDataset = {
+      ...existing,
+      office: mergeAgaOfficeSection(existing.office, { ...parsed.office, source: stamp }),
+    };
+
+    await client.execute({
+      sql: `INSERT INTO aga_dataset (id, data, source_file, uploaded_at)
+            VALUES (1, ?, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE
+            SET data = excluded.data,
+                source_file = excluded.source_file,
+                uploaded_at = excluded.uploaded_at`,
+      args: [JSON.stringify(stored), stored.source.sourceFile],
+    });
+
+    res.json({
+      ...(await buildAgaPayload()),
+      report: { ...parsed.report, file: req.file.originalname },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error al procesar el export Office";
+    res.status(400).json({ error: message });
+  }
+});
+
+function agaManagedLabel(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+const AGA_MANAGED_DEPARTMENTS = new Set(
+  [
+    "Administración de Red Local",
+    "GSAM",
+    "GAM",
+    "Almacén",
+    "Portatiles Plataforma",
+    "BBVA_SPAIN_SD_JAMF",
+  ].map(agaManagedLabel)
+);
+
+router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Debes adjuntar el export Gestionado de ZPT025." });
+    }
+
+    if (!looksLikeWorkbook(req.file.buffer)) {
+      return res.status(400).json({
+        error: `No se pudo leer "${req.file.originalname}": no es un libro de Excel.`,
+      });
+    }
+
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const parsed = parseAgaGestionadoWorkbook(workbook, AGA_BUILDING_LOCATIONS);
+
+    if (parsed.managed.weeklyTotals.length === 0) {
+      return res.status(400).json({
+        error: "El export Gestionado no contiene posiciones con una fecha reconocible.",
+        report: parsed.report,
+      });
+    }
+
+    const existing = (await readStoredAgaDataset()) ?? emptyAgaDataset();
+    const priorProducts = new Set(
+      (existing.managed?.byProduct ?? []).map((row) => agaManagedLabel(row.label))
+    );
+    const selected = {
+      ...parsed.managed,
+      // These are the six departments selected by the published deck. The raw
+      // export also carries technical-support departments that section 2.2 has
+      // never charted.
+      byDepartment: parsed.managed.byDepartment.filter((row) =>
+        AGA_MANAGED_DEPARTMENTS.has(agaManagedLabel(row.label))
+      ),
+      // Miguel still has to confirm the visual product filter. Until then,
+      // preserve the sixteen established series; a fresh database uses the
+      // deterministic top sixteen instead of drawing all sixty-one products.
+      byProduct:
+        priorProducts.size > 0
+          ? parsed.managed.byProduct.filter((row) =>
+              priorProducts.has(agaManagedLabel(row.label))
+            )
+          : parsed.managed.byProduct.slice(0, 16),
+    };
+    const stamp = {
+      sourceFile: req.file.originalname,
+      uploadedAt: new Date().toISOString(),
+    };
+    const stored: AgaDataset = {
+      ...existing,
+      managed: mergeAgaManagedSection(existing.managed, { ...selected, source: stamp }),
+    };
+
+    await client.execute({
+      sql: `INSERT INTO aga_dataset (id, data, source_file, uploaded_at)
+            VALUES (1, ?, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE
+            SET data = excluded.data,
+                source_file = excluded.source_file,
+                uploaded_at = excluded.uploaded_at`,
+      args: [JSON.stringify(stored), stored.source.sourceFile],
+    });
+
+    res.json({
+      ...(await buildAgaPayload()),
+      report: { ...parsed.report, file: req.file.originalname },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Error al procesar Gestionado ZPT025";
     res.status(400).json({ error: message });
   }
 });

@@ -103,15 +103,12 @@ export function managedWeeklyDelta(
 /**
  * Share of the busiest location in the last reported week.
  *
- * The denominator is the sum of the reported locations, not the week total of
- * slide 2.1: the two disagree by design, since a position with no building is
- * counted in the total and in no bar.
- *
- * For week 33 of 2026 this yields 58,9% (175 of 297) against the 58,5% the
- * presented slide states. The gap is the chart's own truncation: the
- * responsible's pivot totals 299 locations, and the two rows with a single
- * position each (Valencia, Oviedo) do not make it into the fifteen bars the
- * slide draws. Seeded from the chart, the module can only see 297.
+ * A complete source supplies `locationTotals`, which is the denominator. The
+ * first flat ZPT025 export proves week 33 has 300 located positions: the old
+ * manual pivot omitted Asturias and reported 299. Therefore Sede is 175/300 =
+ * 58.3%. Legacy datasets without that total fall back to their visible rows
+ * and the UI labels the result as a subtotal rather than presenting it as the
+ * full week.
  */
 export function topLocationShare(
   section: AgaManagedSection | undefined

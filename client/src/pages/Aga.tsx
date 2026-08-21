@@ -118,16 +118,25 @@ export default function Aga() {
 
   const uploads = useMemo<SidebarUpload[]>(
     () =>
-      (MODULE.deck?.uploads ?? []).map(slot => ({
-        id: `aga-upload-${slot.id}`,
-        label: slot.label,
-        sourceFile: dataset.source?.sourceFile ?? null,
-        uploadedAt: dataset.source?.uploadedAt ?? null,
-        multiple: slot.multiple ?? false,
-        accept: slot.accept,
-        onUpload: (files: File[]) => uploadTo(slot.id, files),
-      })),
-    [dataset.source, uploadTo]
+      (MODULE.deck?.uploads ?? []).map(slot => {
+        const source =
+          slot.id === "gestionado"
+            ? dataset.managed?.source
+            : slot.id === "office"
+              ? dataset.office?.source
+              : dataset.source;
+
+        return {
+          id: `aga-upload-${slot.id}`,
+          label: slot.label,
+          sourceFile: source?.sourceFile ?? null,
+          uploadedAt: source?.uploadedAt ?? null,
+          multiple: slot.multiple ?? false,
+          accept: slot.accept,
+          onUpload: (files: File[]) => uploadTo(slot.id, files),
+        };
+      }),
+    [dataset.managed?.source, dataset.office?.source, dataset.source, uploadTo]
   );
 
   const artwork = MODULE.deck?.artwork;

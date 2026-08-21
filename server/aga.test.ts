@@ -123,16 +123,16 @@ describe("métricas AGA", () => {
 
   it("usa el total completo de ubicación y declara el fallback como subtotal", () => {
     const complete = managed();
-    complete.locationTotals = [{ week: "2026-08-17", total: 299 }];
+    complete.locationTotals = [{ week: "2026-08-17", total: 300 }];
 
     expect(topLocationShare(complete)).toMatchObject({
       label: "Sede",
       count: 175,
       drawnTotal: 297,
-      total: 299,
+      total: 300,
       complete: true,
     });
-    expect(topLocationShare(complete)?.share).toBeCloseTo(175 / 299, 8);
+    expect(topLocationShare(complete)?.share).toBeCloseTo(175 / 300, 8);
 
     const fallback = topLocationShare(managed());
     expect(fallback).toMatchObject({ total: 297, drawnTotal: 297, complete: false });

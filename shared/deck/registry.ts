@@ -171,6 +171,22 @@ export const DECK_MODULES: DeckModule[] = [
           multiple: false,
           accept: ".xlsx,.xls",
         },
+        {
+          id: "gestionado",
+          label: "Gestionado ZPT025",
+          path: "/api/aga/upload/gestionado",
+          error: "No se pudo cargar el export Gestionado de ZPT025",
+          multiple: false,
+          accept: ".xlsx,.xls",
+        },
+        {
+          id: "office",
+          label: "Licencias Office",
+          path: "/api/aga/upload/office",
+          error: "No se pudo cargar el export de licencias Office",
+          multiple: false,
+          accept: ".xlsx,.xls",
+        },
       ],
       // No AGA artwork has been produced yet, so it reuses the corporate
       // covers the other decks already ship.
