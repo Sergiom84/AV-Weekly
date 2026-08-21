@@ -1268,6 +1268,7 @@ async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
       width: "1600px",
       height: "900px",
       printBackground: true,
+      timeout: renderTimeoutMs,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
     });
 
