@@ -16,6 +16,9 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Render needs an unauthenticated liveness probe. It exposes no application
+  // data and must stay before the access middleware.
+  app.get("/healthz", (_req, res) => res.status(200).json({ status: "ok" }));
   app.use(createAccessMiddleware());
   app.use(express.json());
 
