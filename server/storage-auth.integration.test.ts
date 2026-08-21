@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Server } from "node:http";
 import express from "express";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { MAX_WORKBOOK_SIZE_BYTES } from "./upload-limits.js";
 
 const PNG_BYTES = Uint8Array.from([
   137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
@@ -128,5 +129,26 @@ describe("access control and database-backed images", () => {
     });
 
     expect(response.status).toBe(400);
+  });
+
+  it("rejects an oversized workbook with a JSON 413 response", async () => {
+    const form = new FormData();
+    form.append(
+      "file",
+      new Blob([new Uint8Array(MAX_WORKBOOK_SIZE_BYTES + 1)]),
+      "demasiado-grande.xlsx"
+    );
+
+    const response = await fetch(`${origin}/api/aga/upload/plano`, {
+      method: "POST",
+      headers: { authorization },
+      body: form,
+    });
+
+    expect(response.status).toBe(413);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("tamaño máximo"),
+    });
   });
 });

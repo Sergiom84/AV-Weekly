@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { Router } from "express";
+import { Router, type ErrorRequestHandler } from "express";
 import multer from "multer";
 import puppeteer from "puppeteer";
 import * as XLSX from "xlsx";
@@ -81,6 +81,12 @@ import {
   parseTendenciaWorkbook,
 } from "./parseTendenciaMensual.js";
 import { configuredCredentials } from "./auth.js";
+import { createDeckPdfSender } from "./pdf-export.js";
+import {
+  MAX_INFORMATICA_FILE_SIZE_BYTES,
+  MAX_WORKBOOK_SIZE_BYTES,
+  exceedsInformaticaUploadLimit,
+} from "./upload-limits.js";
 
 type WeeklyHistory = Record<SupportType, WeeklyComparison[]>;
 /** Resolution detail accumulated per support type and ISO week. */
@@ -111,7 +117,14 @@ function emptyWeeklyHistory(): WeeklyHistory {
 }
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_WORKBOOK_SIZE_BYTES },
+});
+const informaticaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_INFORMATICA_FILE_SIZE_BYTES },
+});
 
 const SUPPORTED_IMAGE_TYPES = new Set([
   "image/png",
@@ -670,7 +683,7 @@ const MAX_INFORMATICA_PLANO_FILES = 10;
  * legacy single-file field, accepted so an older client keeps working while a
  * deployment is half rolled out.
  */
-const uploadInformaticaPlano = upload.fields([
+const uploadInformaticaPlano = informaticaUpload.fields([
   { name: "files", maxCount: MAX_INFORMATICA_PLANO_FILES },
   { name: "file", maxCount: MAX_INFORMATICA_PLANO_FILES },
 ]);
@@ -762,6 +775,12 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
       return res
         .status(400)
         .json({ error: "Debes adjuntar al menos un libro plano de Informática." });
+    }
+
+    if (exceedsInformaticaUploadLimit(uploaded)) {
+      return res.status(413).json({
+        error: "La carga conjunta de Informática supera el límite de 40 MB.",
+      });
     }
 
     const workbooks: XLSX.WorkBook[] = [];
@@ -1217,7 +1236,11 @@ function resolveClientOrigin(req: import("express").Request): string {
 }
 
 /** Renders `path` as a PDF, one slide per page, via a headless render of the real app. */
-async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
+async function renderDeckPdf(
+  origin: string,
+  path: string,
+  signal: AbortSignal
+): Promise<Buffer> {
   const renderTimeoutMs = 120_000;
   const browser = await puppeteer.launch({
     // Chrome Headless Shell has a materially smaller footprint than full
@@ -1230,8 +1253,17 @@ async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
       "--disable-gpu",
     ],
   });
+  let closePromise: Promise<void> | null = null;
+  const closeBrowser = () => (closePromise ??= browser.close());
+  const abortRender = () => {
+    void closeBrowser().catch(() => undefined);
+  };
+  signal.addEventListener("abort", abortRender, { once: true });
 
   try {
+    if (signal.aborted) {
+      throw new Error("La generación del PDF fue cancelada.");
+    }
     const page = await browser.newPage();
     const credentials = configuredCredentials();
     if (credentials) {
@@ -1273,9 +1305,12 @@ async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
 
     return Buffer.from(pdf);
   } finally {
-    await browser.close();
+    signal.removeEventListener("abort", abortRender);
+    await closeBrowser();
   }
 }
+
+const sendCoordinatedDeckPdf = createDeckPdfSender(renderDeckPdf);
 
 function sendDeckPdf(
   req: import("express").Request,
@@ -1284,21 +1319,11 @@ function sendDeckPdf(
   filenamePrefix: string
 ) {
   const origin = resolveClientOrigin(req);
-  const date = new Date().toISOString().slice(0, 10);
-
-  renderDeckPdf(origin, routePath)
-    .then((pdf) => {
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="${filenamePrefix}-${date}.pdf"`
-      );
-      res.send(pdf);
-    })
-    .catch((err) => {
-      const message = err instanceof Error ? err.message : "No se pudo generar el PDF";
-      res.status(500).json({ error: message });
-    });
+  void sendCoordinatedDeckPdf(req, res, {
+    origin,
+    path: routePath,
+    filenamePrefix,
+  });
 }
 
 router.get("/api/informe/pdf", (req, res) => {
@@ -1379,5 +1404,21 @@ router.post("/api/uploads/image", (req, res) => {
       });
   });
 });
+
+const handleUploadError: ErrorRequestHandler = (err, _req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({ error: "El archivo supera el tamaño máximo permitido." });
+      return;
+    }
+
+    res.status(400).json({ error: err.message });
+    return;
+  }
+
+  next(err);
+};
+
+router.use(handleUploadError);
 
 export default router;

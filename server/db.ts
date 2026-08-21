@@ -1,13 +1,14 @@
 import { createClient } from '@libsql/client';
 import fs from "node:fs";
 import path from "node:path";
+import { resolveDatabaseUrl } from "./db-config.js";
 
 // Keep all local state next to the application. APP_DATA_DIR is useful when
 // the app is launched from a shortcut or a shared installation folder.
 const localDataDir = path.resolve(process.env.APP_DATA_DIR ?? path.join(process.cwd(), "data"));
 fs.mkdirSync(localDataDir, { recursive: true });
 
-const url = process.env.URL_TURSO ?? `file:${path.join(localDataDir, "av-weekly.db")}`;
+const url = resolveDatabaseUrl(process.env, localDataDir);
 
 export const client = createClient(
   url.startsWith('file:') ? { url } : { url, authToken: process.env.TOKEN_TURSO }
