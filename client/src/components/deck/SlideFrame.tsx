@@ -25,6 +25,7 @@ export default function SlideFrame({
 }: SlideFrameProps) {
   return (
     <div
+      data-deck-frame
       className={cn(
         "relative w-full overflow-hidden rounded-lg border border-border bg-background shadow-sm",
         muted && "opacity-50",

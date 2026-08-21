@@ -26,13 +26,15 @@ import type {
 
 /** The years present in a series, ascending. */
 export function seriesYears(values: OficinasWeekValue[] | undefined): number[] {
-  return Array.from(new Set((values ?? []).map((entry) => entry.year))).sort(
+  return Array.from(new Set((values ?? []).map(entry => entry.year))).sort(
     (a, b) => a - b
   );
 }
 
 /** The most recent year of a series, or `null` when it is empty. */
-export function latestYear(values: OficinasWeekValue[] | undefined): number | null {
+export function latestYear(
+  values: OficinasWeekValue[] | undefined
+): number | null {
   const years = seriesYears(values);
 
   return years.length === 0 ? null : years[years.length - 1];
@@ -45,7 +47,9 @@ export function seriesWeeks(
 ): number[] {
   return Array.from(
     new Set(
-      (values ?? []).filter((entry) => entry.year === year).map((entry) => entry.week)
+      (values ?? [])
+        .filter(entry => entry.year === year)
+        .map(entry => entry.week)
     )
   ).sort((a, b) => a - b);
 }
@@ -57,7 +61,8 @@ export function valueAt(
   week: number
 ): number {
   return (
-    (values ?? []).find((entry) => entry.year === year && entry.week === week)?.value ?? 0
+    (values ?? []).find(entry => entry.year === year && entry.week === week)
+      ?.value ?? 0
   );
 }
 
@@ -81,7 +86,9 @@ export function lastWeeks(
     }
   }
 
-  return Array.from(weeks).sort((a, b) => a - b).slice(-size);
+  return Array.from(weeks)
+    .sort((a, b) => a - b)
+    .slice(-size);
 }
 
 /** The values of a row over the given weeks, zero-filled, in week order. */
@@ -90,7 +97,7 @@ export function rowOverWeeks(
   year: number,
   weeks: number[]
 ): number[] {
-  return weeks.map((week) => valueAt(row?.values, year, week));
+  return weeks.map(week => valueAt(row?.values, year, week));
 }
 
 /** Column totals of a set of rows over the given weeks. */
@@ -99,7 +106,7 @@ export function columnTotals(
   year: number,
   weeks: number[]
 ): number[] {
-  return weeks.map((week) =>
+  return weeks.map(week =>
     rows.reduce((sum, row) => sum + valueAt(row.values, year, week), 0)
   );
 }
@@ -107,11 +114,76 @@ export function columnTotals(
 /** Sum of a row across one year, i.e. the "Total" column of the pivot. */
 export function rowTotal(
   row: { values: OficinasWeekValue[] } | undefined,
-  year: number
+  year: number,
+  throughWeek?: number
 ): number {
   return (row?.values ?? [])
-    .filter((entry) => entry.year === year)
+    .filter(
+      entry =>
+        entry.year === year &&
+        (throughWeek === undefined || entry.week <= throughWeek)
+    )
     .reduce((sum, entry) => sum + entry.value, 0);
+}
+
+/**
+ * Latest week reported by every available current-year section.
+ *
+ * The weekly file is prepared during the following week: assigned, resolved
+ * and recyclers already contain a partial next column while requests still end
+ * at the closed week. Their latest common week is therefore the report period,
+ * and also prevents a previous-year comparison extending the current deck to
+ * week 52 with zeroes.
+ */
+export function reportWeek(
+  dataset: OficinasDataset | null,
+  year: number
+): number | null {
+  if (!dataset) {
+    return null;
+  }
+
+  const series: OficinasWeekValue[][] = [
+    dataset.asignadas?.totalsByWeek ?? [],
+    dataset.resueltas?.totalsByWeek ?? [],
+    dataset.peticiones?.totalsByWeek ?? [],
+    (dataset.recicladores?.byDT ?? []).flatMap(row => row.values),
+  ]
+    .map(values => values.filter(entry => entry.year === year))
+    .filter(values => values.length > 0);
+
+  if (series.length === 0) {
+    return null;
+  }
+
+  const common = new Set(series[0].map(entry => entry.week));
+
+  for (const values of series.slice(1)) {
+    const weeks = new Set(values.map(entry => entry.week));
+
+    for (const week of Array.from(common)) {
+      if (!weeks.has(week)) {
+        common.delete(week);
+      }
+    }
+  }
+
+  const weeks = Array.from(common).sort((a, b) => a - b);
+
+  return weeks[weeks.length - 1] ?? null;
+}
+
+/** Cover label for an ISO report week, e.g. `Agosto 2026 - Semana 33`. */
+export function reportPeriod(year: number, week: number): string {
+  const januaryFourth = new Date(Date.UTC(year, 0, 4));
+  const weekday = (januaryFourth.getUTCDay() + 6) % 7;
+  const monday = new Date(Date.UTC(year, 0, 4 - weekday + (week - 1) * 7));
+  const month = new Intl.DateTimeFormat("es-ES", {
+    month: "long",
+    timeZone: "UTC",
+  }).format(monday);
+
+  return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${year} - Semana ${week}`;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -123,7 +195,7 @@ export function dtMatrix(
   section: OficinasIncidencias | undefined,
   variant: OficinasValidadoras
 ): OficinasRow[] {
-  return section?.byDT.find((matrix) => matrix.variant === variant)?.rows ?? [];
+  return section?.byDT.find(matrix => matrix.variant === variant)?.rows ?? [];
 }
 
 /** The element rows of a component, in source order. */
@@ -131,18 +203,24 @@ export function elementsOf(
   rows: OficinasElementRow[] | undefined,
   componente: string
 ): OficinasElementRow[] {
-  return (rows ?? []).filter((row) => row.componente === componente);
+  return (rows ?? []).filter(row => row.componente === componente);
 }
 
 /** The components of an element matrix, in first-appearance order. */
 export function componentsOf(rows: OficinasElementRow[] | undefined): string[] {
-  return Array.from(new Set((rows ?? []).map((row) => row.componente)));
+  return Array.from(new Set((rows ?? []).map(row => row.componente)));
 }
 
 /** Rows sorted by their year total, descending. Ties fall back to the label. */
-export function rankedRows<T extends OficinasRow>(rows: T[], year: number): T[] {
+export function rankedRows<T extends OficinasRow>(
+  rows: T[],
+  year: number,
+  throughWeek?: number
+): T[] {
   return [...rows].sort(
-    (a, b) => rowTotal(b, year) - rowTotal(a, year) || a.label.localeCompare(b.label, "es")
+    (a, b) =>
+      rowTotal(b, year, throughWeek) - rowTotal(a, year, throughWeek) ||
+      a.label.localeCompare(b.label, "es")
   );
 }
 
@@ -158,13 +236,13 @@ export function weekShares(
   year: number,
   week: number
 ): { label: string; value: number; share: number }[] {
-  const entries = rows.map((row) => ({
+  const entries = rows.map(row => ({
     label: row.label,
     value: valueAt(row.values, year, week),
   }));
   const total = entries.reduce((sum, entry) => sum + entry.value, 0);
 
-  return entries.map((entry) => ({
+  return entries.map(entry => ({
     ...entry,
     share: total === 0 ? 0 : entry.value / total,
   }));
@@ -175,13 +253,19 @@ export function weekShares(
 /* -------------------------------------------------------------------------- */
 
 /** Offices of a directorate, or 0 when the master has not been seeded. */
-export function officesOf(masters: OficinasMasters | undefined, dt: string): number {
-  return masters?.dtOffices.find((entry) => entry.dt === dt)?.offices ?? 0;
+export function officesOf(
+  masters: OficinasMasters | undefined,
+  dt: string
+): number {
+  return masters?.dtOffices.find(entry => entry.dt === dt)?.offices ?? 0;
 }
 
 /** Total offices across every directorate of the master. */
 export function totalOffices(masters: OficinasMasters | undefined): number {
-  return (masters?.dtOffices ?? []).reduce((sum, entry) => sum + entry.offices, 0);
+  return (masters?.dtOffices ?? []).reduce(
+    (sum, entry) => sum + entry.offices,
+    0
+  );
 }
 
 /**
@@ -214,8 +298,11 @@ export function dtStats(
   /** Weeks to count. Defaults to every completed week the rows report. */
   weeks: number[] = completedWeeks(rows, year)
 ): OficinasDTStats[] {
-  return rows.map((row) => {
-    const total = weeks.reduce((sum, week) => sum + valueAt(row.values, year, week), 0);
+  return rows.map(row => {
+    const total = weeks.reduce(
+      (sum, week) => sum + valueAt(row.values, year, week),
+      0
+    );
     const offices = officesOf(masters, row.label);
 
     return {
@@ -276,13 +363,19 @@ export function yearOnYear(
   year: number,
   week: number
 ): OficinasYearOnYear {
-  const currentTotal = current.reduce((sum, row) => sum + valueAt(row.values, year, week), 0);
+  const currentTotal = current.reduce(
+    (sum, row) => sum + valueAt(row.values, year, week),
+    0
+  );
   const previousYear = year - 1;
-  const reported = previous.some((row) =>
-    row.values.some((entry) => entry.year === previousYear && entry.week === week)
+  const reported = previous.some(row =>
+    row.values.some(entry => entry.year === previousYear && entry.week === week)
   );
   const previousTotal = reported
-    ? previous.reduce((sum, row) => sum + valueAt(row.values, previousYear, week), 0)
+    ? previous.reduce(
+        (sum, row) => sum + valueAt(row.values, previousYear, week),
+        0
+      )
     : null;
 
   return {
@@ -313,7 +406,7 @@ export function surveyAverage(
   field: "global" | "apertura" | "resolucion"
 ): number | null {
   const months = (dataset?.encuestas?.porMes ?? []).filter(
-    (month) => month[field] !== null && month.encuestas > 0
+    month => month[field] !== null && month.encuestas > 0
   );
 
   if (months.length === 0) {
@@ -327,8 +420,10 @@ export function surveyAverage(
   }
 
   return (
-    months.reduce((sum, month) => sum + (month[field] as number) * month.encuestas, 0) /
-    responses
+    months.reduce(
+      (sum, month) => sum + (month[field] as number) * month.encuestas,
+      0
+    ) / responses
   );
 }
 

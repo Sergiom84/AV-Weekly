@@ -62,9 +62,9 @@ export function variationLabel(
 
 /**
  * The three DT matrices the template ships, in the order the selector lists
- * them. The default is `con`: the ratio and the weekly average the published
- * deck prints beside each directorate are reproduced by that matrix and by no
- * other one.
+ * them. The published client deck explicitly reports the figures without
+ * validators, so `sin` is the default; the selector keeps the other two source
+ * views available.
  */
 export const VALIDADORAS_VARIANTS: {
   value: OficinasValidadoras;
@@ -75,7 +75,7 @@ export const VALIDADORAS_VARIANTS: {
   { value: "solo", label: "Solo validadoras" },
 ];
 
-export const DEFAULT_VARIANT: OficinasValidadoras = "con";
+export const DEFAULT_VARIANT: OficinasValidadoras = "sin";
 
 /** The variant a page has stored, or the default when it has none or an unknown one. */
 export function readVariant(stored: string | null): OficinasValidadoras {
@@ -86,7 +86,8 @@ export function readVariant(stored: string | null): OficinasValidadoras {
 
 export function variantLabel(variant: OficinasValidadoras): string {
   return (
-    VALIDADORAS_VARIANTS.find(entry => entry.value === variant)?.label ?? variant
+    VALIDADORAS_VARIANTS.find(entry => entry.value === variant)?.label ??
+    variant
   );
 }
 
@@ -112,7 +113,10 @@ export function disambiguate(
   // Same shape as `normalizeDT` in the shared contract: decompose, drop
   // everything that is not a letter or a digit, compare in upper case.
   const key = (label: string) =>
-    label.normalize("NFD").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    label
+      .normalize("NFD")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
 
   const seen = new Map<string, number>();
 

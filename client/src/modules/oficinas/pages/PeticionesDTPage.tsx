@@ -1,4 +1,4 @@
-import { latestYear } from "@shared/modules/oficinas/derived";
+import { latestYear, reportWeek } from "@shared/modules/oficinas/derived";
 import DTPage from "./DTPage";
 import type { OficinasDataPageProps } from "./PageShell";
 
@@ -30,6 +30,7 @@ export default function PeticionesDTPage({
       year={year}
       masters={dataset.masters}
       totals={dataset.peticiones?.totalsByWeek}
+      throughWeek={reportWeek(dataset, year)}
     />
   );
 }

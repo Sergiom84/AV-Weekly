@@ -1,6 +1,6 @@
 import {
-  completedWeeks,
   latestYear,
+  reportWeek,
   weekShares,
 } from "@shared/modules/oficinas/derived";
 import CategorySharePage from "./CategorySharePage";
@@ -27,8 +27,7 @@ export default function PeticionesTipoPage({
     latestYear(rows.flatMap(row => row.values)) ??
     new Date().getFullYear();
 
-  const completed = completedWeeks(rows, year);
-  const week = completed[completed.length - 1] ?? null;
+  const week = reportWeek(dataset, year);
 
   const shares = week === null ? [] : weekShares(rows, year, week);
   const entries = shares.map(entry => ({

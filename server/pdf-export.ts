@@ -9,7 +9,29 @@ export type DeckPdfRenderer = (
 export interface DeckPdfRequest {
   origin: string;
   path: string;
-  filenamePrefix: string;
+  department: string;
+}
+
+/** Download name shared by every department, dated in the user's business timezone. */
+export function reportPdfFilename(
+  department: string,
+  date: Date = new Date()
+): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Madrid",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find(part => part.type === type)?.value ?? "";
+  const safeDepartment = department
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return `Informe_${safeDepartment}_${value("day")}_${value("month")}_${value("year")}.pdf`;
 }
 
 /**
@@ -28,7 +50,8 @@ export function createDeckPdfSender(renderer: DeckPdfRenderer) {
       res.setHeader("Retry-After", "120");
       res.status(429).json({
         code: "PDF_GENERATION_IN_PROGRESS",
-        error: "Ya se está generando un PDF. Inténtalo de nuevo cuando termine.",
+        error:
+          "Ya se está generando un PDF. Inténtalo de nuevo cuando termine.",
       });
       return;
     }
@@ -43,17 +66,20 @@ export function createDeckPdfSender(renderer: DeckPdfRenderer) {
     res.once("close", abortOnDisconnect);
 
     try {
-      const pdf = await renderer(options.origin, options.path, controller.signal);
+      const pdf = await renderer(
+        options.origin,
+        options.path,
+        controller.signal
+      );
 
       if (controller.signal.aborted || res.destroyed) {
         return;
       }
 
-      const date = new Date().toISOString().slice(0, 10);
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${options.filenamePrefix}-${date}.pdf"`
+        `attachment; filename="${reportPdfFilename(options.department)}"`
       );
       res.send(pdf);
     } catch (err) {
@@ -61,7 +87,8 @@ export function createDeckPdfSender(renderer: DeckPdfRenderer) {
         return;
       }
 
-      const message = err instanceof Error ? err.message : "No se pudo generar el PDF";
+      const message =
+        err instanceof Error ? err.message : "No se pudo generar el PDF";
       res.status(500).json({ error: message });
     } finally {
       res.off("close", abortOnDisconnect);

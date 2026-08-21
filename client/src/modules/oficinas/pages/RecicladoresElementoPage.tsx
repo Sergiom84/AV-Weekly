@@ -1,6 +1,7 @@
 import {
   latestYear,
   rankedRows,
+  reportWeek,
   rowTotal,
 } from "@shared/modules/oficinas/derived";
 import CategorySharePage from "./CategorySharePage";
@@ -24,10 +25,11 @@ export default function RecicladoresElementoPage({
     latestYear(rows.flatMap(row => row.values)) ??
     new Date().getFullYear();
 
-  const ranked = rankedRows(rows, year);
+  const throughWeek = reportWeek(dataset, year) ?? undefined;
+  const ranked = rankedRows(rows, year, throughWeek);
   const entries = ranked.map(row => ({
     label: row.label,
-    imported: rowTotal(row, year),
+    imported: rowTotal(row, year, throughWeek),
   }));
   const total = entries.reduce((sum, entry) => sum + (entry.imported ?? 0), 0);
 

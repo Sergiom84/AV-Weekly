@@ -7,7 +7,6 @@ import KpiRow from "@/components/deck/KpiRow";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
 import {
   columnTotals,
-  completedWeeks,
   dtStats,
   seriesWeeks,
   valueAt,
@@ -50,6 +49,8 @@ interface DTPageProps extends OficinasPageProps {
    * one and the column totals of the matrix otherwise.
    */
   totals?: OficinasWeekValue[];
+  /** Last closed week of the report; later source columns are still in progress. */
+  throughWeek?: number | null;
   /** Extra controls above the chart, e.g. the validator-variant selector. */
   controls?: ReactNode;
   /**
@@ -87,19 +88,25 @@ export default function DTPage({
   year,
   masters,
   totals,
+  throughWeek,
   controls,
   caption,
 }: DTPageProps) {
   const previousYear = year - 1;
 
+  const currentWeeks = totals
+    ? seriesWeeks(totals, year)
+    : Array.from(new Set(rows.flatMap(row => seriesWeeks(row.values, year))));
+  const lastCurrentWeek = currentWeeks[currentWeeks.length - 1] ?? null;
+  const weekLimit = throughWeek ?? lastCurrentWeek;
   const chartWeeks = Array.from(
     new Set([
-      ...(totals
-        ? seriesWeeks(totals, year)
-        : rows.flatMap(row => seriesWeeks(row.values, year))),
+      ...currentWeeks,
       ...previousRows.flatMap(row => seriesWeeks(row.values, previousYear)),
     ])
-  ).sort((a, b) => a - b);
+  )
+    .filter(week => weekLimit === null || week <= weekLimit)
+    .sort((a, b) => a - b);
 
   const currentAt = (week: number) =>
     totals
@@ -175,12 +182,14 @@ export default function DTPage({
     return point;
   });
 
-  const completed = completedWeeks(rows, year);
-  const window = completed.slice(-WINDOW);
-  const stats = dtStats(rows, year, masters, completed);
+  const reported = currentWeeks.filter(
+    week => weekLimit === null || week <= weekLimit
+  );
+  const window = reported.slice(-WINDOW);
+  const stats = dtStats(rows, year, masters, reported);
   const totalsOverWindow = columnTotals(rows, year, window);
 
-  const lastWeek = chartWeeks[chartWeeks.length - 1] ?? null;
+  const lastWeek = reported[reported.length - 1] ?? null;
   const headline =
     lastWeek === null ? null : yearOnYear(rows, previousRows, year, lastWeek);
 
@@ -223,7 +232,13 @@ export default function DTPage({
       )}
 
       <div className="min-h-0 flex-[2]">
-        <DTTable stats={stats} weeks={window} rows={rows} year={year} totals={totalsOverWindow} />
+        <DTTable
+          stats={stats}
+          weeks={window}
+          rows={rows}
+          year={year}
+          totals={totalsOverWindow}
+        />
       </div>
 
       {editing && (
@@ -278,13 +293,22 @@ function DTTable({ stats, weeks, rows, year, totals }: DTTableProps) {
             >
               Territorial
             </th>
-            <th scope="col" className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal">
+            <th
+              scope="col"
+              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+            >
               OF
             </th>
-            <th scope="col" className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal">
+            <th
+              scope="col"
+              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+            >
               Ratio
             </th>
-            <th scope="col" className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal">
+            <th
+              scope="col"
+              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+            >
               Media
             </th>
             {weeks.map(week => (
@@ -329,7 +353,10 @@ function DTTable({ stats, weeks, rows, year, totals }: DTTableProps) {
           ))}
 
           <tr className="border-t border-border font-medium">
-            <th scope="row" className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left">
+            <th
+              scope="row"
+              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left"
+            >
               Total
             </th>
             <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">

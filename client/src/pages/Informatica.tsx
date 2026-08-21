@@ -289,7 +289,7 @@ export default function Informatica() {
     <div className="min-h-screen bg-background">
       <MainNav rightSlot={<HomeLink />} />
 
-      <main className="container py-8">
+      <main className="container py-8" data-deck-root>
         <div className="flex flex-col gap-8 lg:flex-row">
           <div className="w-full flex-shrink-0 lg:w-80 print:hidden">
             {/* Own scroll track: the sidebar reaches its last page without moving the deck. */}
@@ -313,7 +313,7 @@ export default function Informatica() {
             </div>
           </div>
 
-          <div className="min-w-0 flex-1 space-y-12">
+          <div className="min-w-0 flex-1 space-y-12" data-deck-list>
             {error && (
               <Card className="border-destructive/40">
                 <CardHeader>
@@ -344,6 +344,7 @@ export default function Informatica() {
               <section
                 key={page.id}
                 id={`slide-${page.id}`}
+                data-deck-slide
                 className="scroll-mt-24"
               >
                 <div className="mb-2 flex items-center justify-between gap-2 print:hidden">

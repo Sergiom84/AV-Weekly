@@ -1,4 +1,4 @@
-import { latestYear } from "@shared/modules/oficinas/derived";
+import { latestYear, reportWeek } from "@shared/modules/oficinas/derived";
 import DTPage from "./DTPage";
 import type { OficinasDataPageProps } from "./PageShell";
 
@@ -31,6 +31,7 @@ export default function RecicladoresDTPage({
       previousRows={dataset.recicladores?.byDTPrevious ?? []}
       year={year}
       masters={dataset.masters}
+      throughWeek={reportWeek(dataset, year)}
     />
   );
 }

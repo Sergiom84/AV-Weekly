@@ -1,4 +1,9 @@
-import { latestYear, rankedRows, rowTotal } from "@shared/modules/oficinas/derived";
+import {
+  latestYear,
+  rankedRows,
+  reportWeek,
+  rowTotal,
+} from "@shared/modules/oficinas/derived";
 import type { OficinasIncidencias } from "@shared/modules/oficinas/types";
 import { disambiguate } from "../aggregate";
 import CategorySharePage from "./CategorySharePage";
@@ -43,16 +48,20 @@ export default function ElementoPage({
     latestYear(rows.flatMap(row => row.values)) ??
     new Date().getFullYear();
 
-  const ranked = rankedRows(rows, year);
+  const throughWeek = reportWeek(dataset, year) ?? undefined;
+  const ranked = rankedRows(rows, year, throughWeek);
   const shown = ranked.slice(0, CHART_ROWS);
   const labels = disambiguate(shown);
 
   const entries = shown.map((row, index) => ({
     label: labels[index],
-    imported: rowTotal(row, year),
+    imported: rowTotal(row, year, throughWeek),
   }));
 
-  const total = ranked.reduce((sum, row) => sum + rowTotal(row, year), 0);
+  const total = ranked.reduce(
+    (sum, row) => sum + rowTotal(row, year, throughWeek),
+    0
+  );
 
   return (
     <CategorySharePage

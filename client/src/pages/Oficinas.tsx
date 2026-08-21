@@ -13,6 +13,7 @@ import {
   createDefaultOficinasDeck,
   hasSectionData,
 } from "@shared/modules/oficinas/deck";
+import { reportPeriod, reportWeek } from "@shared/modules/oficinas/derived";
 import type { OficinasDeckPage } from "@shared/modules/oficinas/types";
 import MainNav from "@/components/MainNav";
 import HomeLink from "@/components/HomeLink";
@@ -125,6 +126,8 @@ export default function Oficinas() {
   const artwork = MODULE.deck?.artwork;
   const pages = deck?.pages ?? [];
   const hasSource = Boolean(dataset.source?.sourceFile);
+  const reportYear = dataset.year ?? new Date().getFullYear();
+  const closedWeek = reportWeek(dataset, reportYear);
 
   let visibleNumber = 0;
   const rendered = pages
@@ -162,9 +165,20 @@ export default function Oficinas() {
 
     switch (page.kind) {
       case "cover":
+        const coverPage =
+          page.text.period?.trim() || closedWeek === null
+            ? page
+            : {
+                ...page,
+                text: {
+                  ...page.text,
+                  period: reportPeriod(reportYear, closedWeek),
+                },
+              };
+
         return (
           <CoverPage
-            page={page}
+            page={coverPage}
             editing={isEditing}
             onChange={onChange}
             number={number}
@@ -280,7 +294,7 @@ export default function Oficinas() {
     <div className="min-h-screen bg-background">
       <MainNav rightSlot={<HomeLink />} />
 
-      <main className="container py-8">
+      <main className="container py-8" data-deck-root>
         <div className="flex flex-col gap-8 lg:flex-row">
           <div className="w-full flex-shrink-0 lg:w-80 print:hidden">
             {/* Own scroll track: the sidebar reaches its last page without moving the deck. */}
@@ -304,7 +318,7 @@ export default function Oficinas() {
             </div>
           </div>
 
-          <div className="min-w-0 flex-1 space-y-12">
+          <div className="min-w-0 flex-1 space-y-12" data-deck-list>
             {error && (
               <Card className="border-destructive/40">
                 <CardHeader>
@@ -335,6 +349,7 @@ export default function Oficinas() {
               <section
                 key={page.id}
                 id={`slide-${page.id}`}
+                data-deck-slide
                 className="scroll-mt-24"
               >
                 <div className="mb-2 flex items-center justify-between gap-2 print:hidden">
@@ -392,7 +407,9 @@ export default function Oficinas() {
                 <button
                   type="button"
                   onClick={() =>
-                    addPage(createNotesPage(nanoid(), "notes", OFICINAS_SERVICE))
+                    addPage(
+                      createNotesPage(nanoid(), "notes", OFICINAS_SERVICE)
+                    )
                   }
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border py-10 font-mono text-sm text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
                 >

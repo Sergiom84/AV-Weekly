@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Printer } from "lucide-react";
+import { Download, Play } from "lucide-react";
 import { isPageVisible } from "@shared/deck/core";
 import type { DeckPage } from "@shared/deck/core";
 import type { DeckActionResult, DeckStateOf } from "@/hooks/useDeckData";
@@ -48,7 +48,7 @@ interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
   onUpdatePage: (pageId: string, patch: Partial<TPage>) => void;
   onResetDeck: () => Promise<DeckActionResult>;
   onSelectPage: (pageId: string) => void;
-  /** Retained for API compatibility; free deployments export in the browser. */
+  /** Server endpoint that renders the editable deck as a direct PDF download. */
   pdfHref: string;
   /** Opens the fullscreen, one-slide-at-a-time viewer. */
   onPresent: () => void;
@@ -80,7 +80,12 @@ interface SidebarSectionProps {
 }
 
 /** Sidebar card that the user can fold away to shorten the column. */
-function SidebarSection({ id, storagePrefix, title, children }: SidebarSectionProps) {
+function SidebarSection({
+  id,
+  storagePrefix,
+  title,
+  children,
+}: SidebarSectionProps) {
   const storageKey = `${storagePrefix}${id}`;
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") {
@@ -94,7 +99,7 @@ function SidebarSection({ id, storagePrefix, title, children }: SidebarSectionPr
     window.localStorage.setItem(storageKey, collapsed ? "1" : "0");
   }, [collapsed, storageKey]);
 
-  const toggle = useCallback(() => setCollapsed((previous) => !previous), []);
+  const toggle = useCallback(() => setCollapsed(previous => !previous), []);
   const contentId = `sidebar-section-${id}`;
 
   return (
@@ -137,7 +142,10 @@ function readMergedCount(payload: unknown): number | null {
     return null;
   }
 
-  const { files, fileCount } = report as { files?: unknown; fileCount?: unknown };
+  const { files, fileCount } = report as {
+    files?: unknown;
+    fileCount?: unknown;
+  };
 
   if (Array.isArray(files)) {
     return files.length;
@@ -207,7 +215,10 @@ function UploadZone({
   return (
     <div className="rounded-lg border border-border bg-background p-3">
       <div className="flex items-center justify-between gap-3">
-        <Label htmlFor={id} className="font-mono text-sm font-semibold text-foreground">
+        <Label
+          htmlFor={id}
+          className="font-mono text-sm font-semibold text-foreground"
+        >
           {label}
         </Label>
         <Button
@@ -264,15 +275,20 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   onUpdatePage,
   onResetDeck,
   onSelectPage,
+  pdfHref,
   onPresent,
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <SidebarSection id="fuentes" storagePrefix={storagePrefix} title="Fuentes">
+      <SidebarSection
+        id="fuentes"
+        storagePrefix={storagePrefix}
+        title="Fuentes"
+      >
         <CardContent className="space-y-3">
-          {uploads.map((slot) => (
+          {uploads.map(slot => (
             <UploadZone
               key={slot.id}
               id={slot.id}
@@ -294,21 +310,28 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
         </CardContent>
       </SidebarSection>
 
-      <SidebarSection id="edicion" storagePrefix={storagePrefix} title="Edición">
+      <SidebarSection
+        id="edicion"
+        storagePrefix={storagePrefix}
+        title="Edición"
+      >
         <CardContent className="space-y-3">
           <ToggleGroup
             type="single"
             variant="outline"
             size="sm"
             value={editing ? "edit" : "locked"}
-            onValueChange={(value) => {
+            onValueChange={value => {
               if (value) {
                 onEditingChange(value === "edit");
               }
             }}
             className="w-full"
           >
-            <ToggleGroupItem value="locked" className="flex-1 font-mono text-xs">
+            <ToggleGroupItem
+              value="locked"
+              className="flex-1 font-mono text-xs"
+            >
               Bloqueado
             </ToggleGroupItem>
             <ToggleGroupItem value="edit" className="flex-1 font-mono text-xs">
@@ -316,13 +339,21 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
             </ToggleGroupItem>
           </ToggleGroup>
 
-          <p className="font-mono text-xs text-muted-foreground" aria-live="polite">
+          <p
+            className="font-mono text-xs text-muted-foreground"
+            aria-live="polite"
+          >
             {saving ? "Guardando" : "Guardado"}
           </p>
 
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="w-full">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full"
+              >
                 Restablecer deck
               </Button>
             </AlertDialogTrigger>
@@ -344,7 +375,11 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
         </CardContent>
       </SidebarSection>
 
-      <SidebarSection id="exportar" storagePrefix={storagePrefix} title="Exportar">
+      <SidebarSection
+        id="exportar"
+        storagePrefix={storagePrefix}
+        title="Exportar"
+      >
         <CardContent className="space-y-2">
           <Button
             type="button"
@@ -362,25 +397,34 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
             variant="outline"
             size="sm"
             className="w-full justify-start gap-2"
-            onClick={() => window.print()}
+            asChild
           >
-            <Printer className="h-4 w-4" />
-            Guardar PDF
+            <a href={pdfHref} download>
+              <Download className="h-4 w-4" />
+              Descargar PDF
+            </a>
           </Button>
         </CardContent>
       </SidebarSection>
 
-      <SidebarSection id="paginas" storagePrefix={storagePrefix} title="Páginas">
+      <SidebarSection
+        id="paginas"
+        storagePrefix={storagePrefix}
+        title="Páginas"
+      >
         <CardContent className="space-y-2">
           {pages.length === 0 && (
-            <p className="font-mono text-xs text-muted-foreground">Sin páginas</p>
+            <p className="font-mono text-xs text-muted-foreground">
+              Sin páginas
+            </p>
           )}
 
           {pages.map((page, index) => {
             const pageVisible = isPageVisible(page);
             // Match the canvas: only visible pages are numbered, correlatively.
             const slideNumber = pageVisible
-              ? pages.slice(0, index + 1).filter((other) => isPageVisible(other)).length
+              ? pages.slice(0, index + 1).filter(other => isPageVisible(other))
+                  .length
               : null;
 
             return (
@@ -405,8 +449,10 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
 
                   <Switch
                     checked={pageVisible}
-                    onCheckedChange={(checked) =>
-                      onUpdatePage(page.id, { visible: checked } as Partial<TPage>)
+                    onCheckedChange={checked =>
+                      onUpdatePage(page.id, {
+                        visible: checked,
+                      } as Partial<TPage>)
                     }
                     aria-label={`Mostrar ${page.text.title || page.id}`}
                   />

@@ -1,6 +1,10 @@
-import { dtMatrix, latestYear } from "@shared/modules/oficinas/derived";
+import {
+  dtMatrix,
+  latestYear,
+  reportWeek,
+} from "@shared/modules/oficinas/derived";
 import type { OficinasIncidencias } from "@shared/modules/oficinas/types";
-import { DEFAULT_VARIANT, readVariant, variantLabel } from "../aggregate";
+import { readVariant, variantLabel } from "../aggregate";
 import DTPage from "./DTPage";
 import { type OficinasDataPageProps } from "./PageShell";
 import VariantSelector from "./VariantSelector";
@@ -44,7 +48,8 @@ export default function IncidenciasDTPage({
       rows={rows}
       year={year}
       masters={dataset.masters}
-      totals={variant === DEFAULT_VARIANT ? section?.totalsByWeek : undefined}
+      totals={variant === "con" ? section?.totalsByWeek : undefined}
+      throughWeek={reportWeek(dataset, year)}
       caption={variantLabel(variant)}
       controls={
         <VariantSelector

@@ -1414,7 +1414,6 @@ async function renderDeckPdf(
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
-      "--no-zygote",
     ],
   });
   let closePromise: Promise<void> | null = null;
@@ -1460,8 +1459,7 @@ async function renderDeckPdf(
     await new Promise((resolve) => setTimeout(resolve, 600));
 
     const pdf = await page.pdf({
-      width: "1600px",
-      height: "900px",
+      preferCSSPageSize: true,
       printBackground: true,
       timeout: renderTimeoutMs,
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
@@ -1480,30 +1478,30 @@ function sendDeckPdf(
   req: import("express").Request,
   res: import("express").Response,
   routePath: string,
-  filenamePrefix: string
+  department: string
 ) {
   const origin = resolveClientOrigin(req);
   void sendCoordinatedDeckPdf(req, res, {
     origin,
     path: routePath,
-    filenamePrefix,
+    department,
   });
 }
 
 router.get("/api/informe/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/av", "informe-av");
+  sendDeckPdf(req, res, "/av", "AV");
 });
 
 router.get("/api/informatica/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/informatica", "informe-informatica");
+  sendDeckPdf(req, res, "/informatica", "Informatica");
 });
 
 router.get("/api/aga/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/aga", "informe-aga");
+  sendDeckPdf(req, res, "/aga", "AGA");
 });
 
 router.get("/api/oficinas/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/oficinas", "informe-oficinas");
+  sendDeckPdf(req, res, "/oficinas", "Oficinas");
 });
 
 router.get("/api/uploads/:id", async (req, res) => {
