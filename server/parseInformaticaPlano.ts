@@ -922,6 +922,60 @@ interface MergedSheet {
   rows: unknown[][];
 }
 
+/** Provenance needed to resolve overlapping sources inside one upload batch. */
+export type InformaticaWorkbookOrigin =
+  | "template"
+  | "citas"
+  | "workorders"
+  | "other";
+
+export interface InformaticaUploadWorkbook {
+  workbook: XLSX.WorkBook;
+  origin: InformaticaWorkbookOrigin;
+}
+
+/** Whether a converted workbook carries one sheet of the flat contract. */
+function hasFlatSection(workbook: XLSX.WorkBook, section: InformaticaSectionKey): boolean {
+  const expected = normalize(INFORMATICA_SHEETS[section].sheet);
+  return workbook.SheetNames.some((name) => normalize(name) === expected);
+}
+
+/**
+ * Removes standalone CSV data already supplied by the weekly template.
+ *
+ * The weekly template embeds the same raw Citas and Work Orders tables that
+ * are also delivered as standalone CSV exports. Both converters produce the
+ * same flat sections, so appending both workbooks would double every count.
+ * The template owns a section only when its converted workbook actually
+ * carries that sheet; a partial template can therefore still be complemented
+ * by the corresponding CSV.
+ */
+export function selectInformaticaWorkbooksForMerge(
+  uploads: InformaticaUploadWorkbook[]
+): XLSX.WorkBook[] {
+  const templates = uploads.filter((upload) => upload.origin === "template");
+  const templateHasCitas = templates.some(({ workbook }) =>
+    hasFlatSection(workbook, "citas")
+  );
+  const templateHasWorkOrders = templates.some(({ workbook }) =>
+    hasFlatSection(workbook, "workOrders")
+  );
+
+  return uploads
+    .filter(({ origin }) => {
+      if (origin === "citas" && templateHasCitas) {
+        return false;
+      }
+
+      if (origin === "workorders" && templateHasWorkOrders) {
+        return false;
+      }
+
+      return true;
+    })
+    .map(({ workbook }) => workbook);
+}
+
 /** Excel forbids these characters in a sheet name, and caps it at 31 chars. */
 function safeSheetName(name: string): string {
   const cleaned = name.replace(/[\\/?*[\]:]/g, " ").replace(/\s+/g, " ").trim();

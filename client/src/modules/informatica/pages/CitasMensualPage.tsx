@@ -1,6 +1,6 @@
 import MatrixTable from "@/components/deck/MatrixTable";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import { monthLabel, pivot, uniqueSorted } from "../aggregate";
+import { monthLabel, pivot, reportMonths } from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface CitasMensualPageProps extends InformaticaPageProps {
@@ -18,13 +18,13 @@ export default function CitasMensualPage({
   dataset,
 }: CitasMensualPageProps) {
   const rows = dataset.citas ?? [];
-  const months = uniqueSorted(rows.map((row) => row.mes));
+  const months = reportMonths(dataset, rows, row => row.mes);
 
   const matrix = pivot(
     rows,
-    (row) => row.edificio,
-    (row) => row.mes,
-    (row) => row.citas,
+    row => row.edificio,
+    row => row.mes,
+    row => row.citas,
     { columns: months }
   );
 

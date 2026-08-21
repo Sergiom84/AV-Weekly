@@ -78,9 +78,13 @@ function isoDay(cell: InformaticaDateCell): string | null {
   if (typeof cell === "number" && Number.isFinite(cell)) {
     // Excel's epoch is 1899-12-30: day 1 is 1900-01-01 and the 1900 leap bug
     // is already absorbed by the two-day offset.
-    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(cell) * 86_400_000);
+    const date = new Date(
+      Date.UTC(1899, 11, 30) + Math.floor(cell) * 86_400_000
+    );
 
-    return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+    return Number.isNaN(date.getTime())
+      ? null
+      : date.toISOString().slice(0, 10);
   }
 
   if (typeof cell === "string" && /^\d{4}-\d{2}-\d{2}/.test(cell)) {
@@ -104,9 +108,9 @@ function isoDay(cell: InformaticaDateCell): string | null {
  */
 export function coverageEnd(dataset: InformaticaDataset): string | null {
   const cells: InformaticaDateCell[] = [
-    ...(dataset.incidencias ?? []).map((row) => row.fecha),
-    ...(dataset.workOrders ?? []).map((row) => row.fecha),
-    ...(dataset.peticiones ?? []).map((row) => row.fecha),
+    ...(dataset.incidencias ?? []).map(row => row.fecha),
+    ...(dataset.workOrders ?? []).map(row => row.fecha),
+    ...(dataset.peticiones ?? []).map(row => row.fecha),
   ];
 
   let end: string | null = null;
@@ -194,7 +198,10 @@ export function lastClosedWeek<T>(
 }
 
 /** True when a dated row falls inside the window. */
-export function inWeek(cell: InformaticaDateCell, window: WeekWindow | null): boolean {
+export function inWeek(
+  cell: InformaticaDateCell,
+  window: WeekWindow | null
+): boolean {
   if (window === null) {
     return false;
   }
@@ -235,6 +242,11 @@ export function lastClosedMonth(
         return month;
       }
     }
+
+    // A known cut that does not reach the end of any reported month means
+    // there is no complete month to show. Returning the newest one here would
+    // silently present a partial period as closed.
+    return null;
   }
 
   return ordered[ordered.length - 1];
@@ -247,9 +259,27 @@ export function reportMonth<T>(
   monthOf: (row: T) => string
 ): string | null {
   return lastClosedMonth(
-    rows.map(monthOf).filter((month) => month !== ""),
+    rows.map(monthOf).filter(month => month !== ""),
     coverageEnd(dataset)
   );
+}
+
+/**
+ * Ordered months a complete-month visual may show.
+ *
+ * The final month is the same one `reportMonth` uses for KPIs, so chart axes,
+ * rankings and headline figures cannot disagree about whether an extract's
+ * in-flight month belongs in the report.
+ */
+export function reportMonths<T>(
+  dataset: InformaticaDataset,
+  rows: T[],
+  monthOf: (row: T) => string
+): string[] {
+  const months = uniqueSorted(rows.map(monthOf));
+  const closed = reportMonth(dataset, rows, monthOf);
+
+  return closed === null ? [] : months.filter(month => month <= closed);
 }
 
 /** The `count` highest entries of a total map, ties broken by label. */
@@ -259,14 +289,14 @@ export function topEntries(
 ): { label: string; value: number }[] {
   return Array.from(totals.entries())
     .map(([label, value]) => ({ label, value }))
-    .filter((entry) => entry.value > 0)
+    .filter(entry => entry.value > 0)
     .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label, "es"))
     .slice(0, count);
 }
 
 export function uniqueSorted(values: string[]): string[] {
-  return Array.from(new Set(values.filter((value) => value !== ""))).sort((a, b) =>
-    a.localeCompare(b, "es")
+  return Array.from(new Set(values.filter(value => value !== ""))).sort(
+    (a, b) => a.localeCompare(b, "es")
   );
 }
 
@@ -305,7 +335,7 @@ export function pivot<T>(
   options?: { columns?: string[]; rowOrder?: string[] }
 ): Pivot {
   const columns =
-    options?.columns ?? uniqueSorted(source.map((row) => columnOf(row)));
+    options?.columns ?? uniqueSorted(source.map(row => columnOf(row)));
   const columnIndex = new Map(columns.map((column, index) => [column, index]));
 
   const byRow = new Map<string, number[]>();
@@ -329,11 +359,12 @@ export function pivot<T>(
   }
 
   const order =
-    options?.rowOrder ?? Array.from(byRow.keys()).sort((a, b) => a.localeCompare(b, "es"));
+    options?.rowOrder ??
+    Array.from(byRow.keys()).sort((a, b) => a.localeCompare(b, "es"));
 
   const rows: MatrixRow[] = order
-    .filter((label) => byRow.has(label))
-    .map((label) => ({ label, values: byRow.get(label) ?? [] }));
+    .filter(label => byRow.has(label))
+    .map(label => ({ label, values: byRow.get(label) ?? [] }));
 
   return { columns, rows };
 }
@@ -344,8 +375,8 @@ export function pivot<T>(
  */
 export function orderColumns(found: string[], preferred: string[]): string[] {
   return [
-    ...preferred.filter((column) => found.includes(column)),
-    ...found.filter((column) => !preferred.includes(column)),
+    ...preferred.filter(column => found.includes(column)),
+    ...found.filter(column => !preferred.includes(column)),
   ];
 }
 
@@ -389,14 +420,15 @@ export function seriesColor(index: number): string {
 export function yearlyComparison<T>(
   source: T[],
   monthOf: (row: T) => string,
-  valueOf: (row: T) => number
+  valueOf: (row: T) => number,
+  options?: { throughMonth?: number }
 ): {
   years: number[];
   data: Record<string, number | string>[];
   totals: Map<number, number>;
 } {
-  const years = Array.from(new Set(source.map((row) => yearOf(monthOf(row)))))
-    .filter((year) => Number.isFinite(year))
+  const years = Array.from(new Set(source.map(row => yearOf(monthOf(row)))))
+    .filter(year => Number.isFinite(year))
     .sort((a, b) => a - b);
 
   const totals = new Map<number, number>();
@@ -407,7 +439,11 @@ export function yearlyComparison<T>(
     const year = yearOf(month);
     const index = monthIndexOf(month);
 
-    if (!Number.isFinite(year) || !Number.isFinite(index)) {
+    if (
+      !Number.isFinite(year) ||
+      !Number.isFinite(index) ||
+      (options?.throughMonth !== undefined && index > options.throughMonth)
+    ) {
       continue;
     }
 
@@ -416,7 +452,11 @@ export function yearlyComparison<T>(
     totals.set(year, (totals.get(year) ?? 0) + valueOf(row));
   }
 
-  const data = MONTH_LABELS.map((label, position) => {
+  const labels =
+    options?.throughMonth === undefined
+      ? MONTH_LABELS
+      : MONTH_LABELS.slice(0, options.throughMonth);
+  const data = labels.map((label, position) => {
     const entry: Record<string, number | string> = { mes: label };
 
     for (const year of years) {

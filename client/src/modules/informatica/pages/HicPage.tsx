@@ -3,7 +3,12 @@ import SeriesLineChart, {
   type LineSeries,
 } from "@/components/deck/SeriesLineChart";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import { monthLabel, reportMonth, seriesColor, uniqueSorted } from "../aggregate";
+import {
+  monthLabel,
+  reportMonth,
+  reportMonths,
+  seriesColor,
+} from "../aggregate";
 import {
   HIC_ASSIGNED,
   HIC_RESOLVED,
@@ -40,9 +45,9 @@ export default function HicPage({
 }: HicPageProps) {
   const rows = dataset.hic ?? [];
   const scopes = hicScopes(rows);
-  const totals = rows.filter((row) => row.categoria === "");
-  const months = uniqueSorted(totals.map((row) => row.mes));
-  const month = reportMonth(dataset, totals, (row) => row.mes);
+  const totals = rows.filter(row => row.categoria === "");
+  const months = reportMonths(dataset, totals, row => row.mes);
+  const month = reportMonth(dataset, totals, row => row.mes);
 
   const drawn = [scopes.main, scopes.secondary].filter(
     (scope): scope is string => scope !== null
@@ -59,7 +64,7 @@ export default function HicPage({
   const valueOf = (scope: string, metric: string, target: string) =>
     totals
       .filter(
-        (row) =>
+        row =>
           row.ambito === scope && row.metrica === metric && row.mes === target
       )
       .reduce((sum, row) => sum + row.total, 0);
@@ -67,9 +72,9 @@ export default function HicPage({
   // A month a scope was not reported on stays null: `SeriesLineChart` draws it
   // as a gap, which is what "not measured" looks like. Zero would read as
   // "none", a different claim.
-  const reported = new Set(totals.map((row) => `${row.ambito}|${row.mes}`));
+  const reported = new Set(totals.map(row => `${row.ambito}|${row.mes}`));
 
-  const data = months.map((target) => {
+  const data = months.map(target => {
     const entry: Record<string, number | string | null> = {
       mes: monthLabel(target),
     };
@@ -89,12 +94,10 @@ export default function HicPage({
 
   const suffix = month ? ` ${monthLabel(month)}` : "";
 
-  const kpis = drawn.flatMap((scope) =>
-    METRICS.map((metric) => ({
+  const kpis = drawn.flatMap(scope =>
+    METRICS.map(metric => ({
       label: `${hicScopeLabel(scope, scopes)} ${metric.toLowerCase()}${suffix}`,
-      value: month
-        ? valueOf(scope, metric, month).toLocaleString("es-ES")
-        : "",
+      value: month ? valueOf(scope, metric, month).toLocaleString("es-ES") : "",
     }))
   );
 

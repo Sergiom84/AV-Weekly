@@ -81,7 +81,9 @@ import {
   mergeInformaticaDataset,
   mergeInformaticaWorkbooks,
   parseInformaticaPlanoWorkbook,
+  selectInformaticaWorkbooksForMerge,
   type InformaticaImportReport,
+  type InformaticaUploadWorkbook,
 } from "./parseInformaticaPlano.js";
 import { parseInformeWeeklyWorkbook } from "./parseInformeWeekly.js";
 import { parseInformePlanoWorkbook } from "./parseInformePlano.js";
@@ -731,7 +733,7 @@ function looksLikeWorkbook(buffer: Buffer): boolean {
  * Throws with a short reason when the file is neither a flat book nor a known
  * raw export; the caller turns that into a 400 naming the file.
  */
-function readInformaticaUpload(buffer: Buffer): XLSX.WorkBook {
+function readInformaticaUpload(buffer: Buffer): InformaticaUploadWorkbook {
   if (looksLikeWorkbook(buffer)) {
     const workbook = XLSX.read(buffer, { type: "buffer" });
 
@@ -742,18 +744,18 @@ function readInformaticaUpload(buffer: Buffer): XLSX.WorkBook {
     const format = detectRawInformaticaFormat(workbook);
 
     if (format === "peticiones") {
-      return convertRawPeticionesWorkbook(workbook);
+      return { workbook: convertRawPeticionesWorkbook(workbook), origin: "other" };
     }
 
     if (format === "imacs") {
-      return convertRawImacsWorkbook(workbook);
+      return { workbook: convertRawImacsWorkbook(workbook), origin: "other" };
     }
 
     // The weekly template is checked before the flat schema on purpose: it is
     // raw data in thirteen tabs and none of its names is a flat sheet, so a
     // flat book can never be mistaken for it.
     if (format === "template") {
-      return convertInformaticaTemplateWorkbook(workbook);
+      return { workbook: convertInformaticaTemplateWorkbook(workbook), origin: "template" };
     }
 
     if (!hasFlatInformaticaSheet(workbook)) {
@@ -762,14 +764,14 @@ function readInformaticaUpload(buffer: Buffer): XLSX.WorkBook {
       );
     }
 
-    return workbook;
+    return { workbook, origin: "other" };
   }
 
   const text = decodeInformaticaCsv(buffer);
   const format = detectRawInformaticaFormat(text);
 
   if (format === "citas" || format === "workorders") {
-    return convertRawInformaticaCsv(text, format);
+    return { workbook: convertRawInformaticaCsv(text, format), origin: format };
   }
 
   throw new Error("no es un libro de Excel ni un CSV con la cabecera de un export conocido");
@@ -797,7 +799,7 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
       });
     }
 
-    const workbooks: XLSX.WorkBook[] = [];
+    const workbooks: InformaticaUploadWorkbook[] = [];
 
     // Every file is validated before anything is stored, and the answer names
     // the offending file instead of failing the whole upload anonymously.
@@ -823,7 +825,7 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
     // Several files are folded into one workbook before parsing, so rows of the
     // same sheet coming from different files add up instead of overwriting.
     const { dataset, report } = parseInformaticaPlanoWorkbook(
-      mergeInformaticaWorkbooks(workbooks)
+      mergeInformaticaWorkbooks(selectInformaticaWorkbooksForMerge(workbooks))
     );
 
     // The upload is folded into what is already stored instead of replacing it.

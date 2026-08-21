@@ -7,10 +7,10 @@ import {
   monthLabel,
   percent,
   reportMonth,
+  reportMonths,
   seriesColor,
   sumBy,
   topEntries,
-  uniqueSorted,
 } from "../aggregate";
 import {
   HIC_ASSIGNED,
@@ -54,10 +54,10 @@ export default function HicCategoriasPage({
   const scopes = hicScopes(rows);
 
   const totals = rows.filter(
-    (row) => row.categoria === "" && row.ambito === scopes.main
+    row => row.categoria === "" && row.ambito === scopes.main
   );
-  const months = uniqueSorted(totals.map((row) => row.mes)).slice(-WINDOW);
-  const month = reportMonth(dataset, totals, (row) => row.mes);
+  const months = reportMonths(dataset, totals, row => row.mes).slice(-WINDOW);
+  const month = reportMonth(dataset, totals, row => row.mes);
 
   const monthlySeries: CategorySeries[] = [HIC_RESOLVED, HIC_ASSIGNED].map(
     (metric, index) => ({
@@ -67,12 +67,12 @@ export default function HicCategoriasPage({
     })
   );
 
-  const monthlyData = months.map((target) => {
+  const monthlyData = months.map(target => {
     const entry: Record<string, number | string> = { mes: monthLabel(target) };
 
     for (const metric of [HIC_RESOLVED, HIC_ASSIGNED]) {
       entry[metric] = totals
-        .filter((row) => row.mes === target && row.metrica === metric)
+        .filter(row => row.mes === target && row.metrica === metric)
         .reduce((sum, row) => sum + row.total, 0);
     }
 
@@ -80,19 +80,20 @@ export default function HicCategoriasPage({
   });
 
   const pivotRows = rows.filter(
-    (row) => row.categoria !== "" && row.ambito === scopes.pivot && row.mes === month
+    row =>
+      row.categoria !== "" && row.ambito === scopes.pivot && row.mes === month
   );
   const byCategory = sumBy(
     pivotRows,
-    (row) => row.categoria,
-    (row) => row.total
+    row => row.categoria,
+    row => row.total
   );
   const categories = topEntries(byCategory, CATEGORY_LIMIT);
 
   const categorySeries: CategorySeries[] = [
     { key: "total", label: "Incidencias", color: seriesColor(0) },
   ];
-  const categoryData = categories.map((entry) => ({
+  const categoryData = categories.map(entry => ({
     categoria: entry.label,
     total: entry.value,
   }));
@@ -119,7 +120,9 @@ export default function HicCategoriasPage({
           {
             label: "Peso de la principal",
             value:
-              leader && monthTotal > 0 ? percent(leader.value / monthTotal) : "",
+              leader && monthTotal > 0
+                ? percent(leader.value / monthTotal)
+                : "",
           },
         ]}
       />

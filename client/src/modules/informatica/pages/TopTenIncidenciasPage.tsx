@@ -4,9 +4,9 @@ import {
   monthLabel,
   pivot,
   reportMonth,
+  reportMonths,
   sumBy,
   topEntries,
-  uniqueSorted,
 } from "../aggregate";
 import { comparativaViews } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
@@ -41,25 +41,27 @@ export default function TopTenIncidenciasPage({
   const views = comparativaViews(rows);
 
   // Every view shares the same three-month window, resolved by the parser.
-  const months = uniqueSorted(rows.map((row) => row.mes));
+  const months = reportMonths(dataset, rows, row => row.mes);
   const columns = months.map(monthLabel);
 
   // Ranked on the last whole month, not on the newest one: the extract is cut
   // mid-month, so its final column is a fortnight and would rank a component
   // that simply has not happened yet below one that is already over.
-  const ranked = reportMonth(dataset, rows, (row) => row.mes);
+  const ranked = reportMonth(dataset, rows, row => row.mes);
 
   const tables = views.map(({ view, label }) => {
-    const viewRows = rows.filter((row) => row.vista === view);
+    const viewRows = rows.filter(
+      row => row.vista === view && months.includes(row.mes)
+    );
 
     const ranking = topEntries(
       sumBy(
-        viewRows.filter((row) => row.mes === ranked),
-        (row) => row.elemento,
-        (row) => row.total
+        viewRows.filter(row => row.mes === ranked),
+        row => row.elemento,
+        row => row.total
       ),
       TOP
-    ).map((entry) => entry.label);
+    ).map(entry => entry.label);
 
     // A component that fell to zero that month but was reported before still
     // belongs on the table, so the order falls back to the window total.
@@ -69,17 +71,17 @@ export default function TopTenIncidenciasPage({
         : topEntries(
             sumBy(
               viewRows,
-              (row) => row.elemento,
-              (row) => row.total
+              row => row.elemento,
+              row => row.total
             ),
             TOP
-          ).map((entry) => entry.label);
+          ).map(entry => entry.label);
 
     const matrix = pivot(
       viewRows,
-      (row) => row.elemento,
-      (row) => row.mes,
-      (row) => row.total,
+      row => row.elemento,
+      row => row.mes,
+      row => row.total,
       { columns: months, rowOrder: order }
     );
 
@@ -89,7 +91,7 @@ export default function TopTenIncidenciasPage({
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
       <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-x-[1.5cqi] gap-y-[1cqi]">
-        {tables.map((table) => (
+        {tables.map(table => (
           <div key={table.view} className="flex min-h-0 flex-col">
             <p className="shrink-0 pb-[0.4cqi] font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
               {table.label}
