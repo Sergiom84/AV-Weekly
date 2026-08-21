@@ -32,7 +32,12 @@ import { INFORMATICA_SHEETS } from "../shared/modules/informatica/types.ts";
 /* Raw formats                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export type RawInformaticaFormat = "peticiones" | "citas" | "workorders" | "template";
+export type RawInformaticaFormat =
+  | "peticiones"
+  | "citas"
+  | "workorders"
+  | "imacs"
+  | "template";
 
 /**
  * Columns that identify a request export beyond doubt.
@@ -81,6 +86,14 @@ const RAW_WORKORDERS_COLUMNS = [
   "Chg Location Address",
   "Ubicacion_asociada",
   "Detailed Description",
+] as const;
+
+/** Header of Miguel's yearly IMAC export. */
+const RAW_IMACS_COLUMNS = [
+  "Fecha limite",
+  "Edificio",
+  "nº trabajos",
+  "Solicitudes",
 ] as const;
 
 /**
@@ -364,6 +377,30 @@ function findRawPeticionesSheet(workbook: XLSX.WorkBook): string | null {
   return null;
 }
 
+/** Sheet of the IMAC workbook that carries the yearly raw table, if any. */
+function findRawImacsSheet(workbook: XLSX.WorkBook): string | null {
+  for (const name of workbook.SheetNames) {
+    const sheet = workbook.Sheets[name];
+
+    if (!sheet) {
+      continue;
+    }
+
+    const header = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: null,
+      blankrows: false,
+      range: 0,
+    })[0];
+
+    if (header && hasAll(indexHeader(header), RAW_IMACS_COLUMNS)) {
+      return name;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Which raw format an uploaded file is, or `null` when it is none of them.
  *
@@ -395,6 +432,10 @@ export function detectRawInformaticaFormat(
     return "peticiones";
   }
 
+  if (findRawImacsSheet(input) !== null) {
+    return "imacs";
+  }
+
   return isInformaticaTemplateWorkbook(input) ? "template" : null;
 }
 
@@ -420,31 +461,29 @@ export function hasFlatInformaticaSheet(workbook: XLSX.WorkBook): boolean {
 /* Aggregation                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** One flat row under construction: its dimensions plus the count. */
+/** One flat row under construction: its dimensions plus the aggregate. */
 interface Bucket {
   cells: (string | number)[];
   total: number;
 }
 
 /**
- * Accumulates counts by dimension tuple and emits them as a sheet.
- *
- * Every converter here counts rows, so the measure is always "how many raw
- * rows fell in this bucket". The dimension tuple is the row minus that measure.
+ * Accumulates a measure by dimension tuple and emits it as a sheet. Most raw
+ * converters add one per row; IMAC adds the numeric requests/interventions.
  */
 class Counter {
   private readonly buckets = new Map<string, Bucket>();
 
-  add(cells: (string | number)[]): void {
+  add(cells: (string | number)[], amount = 1): void {
     const key = cells.map((cell) => normalize(cell)).join("|");
     const existing = this.buckets.get(key);
 
     if (existing) {
-      existing.total += 1;
+      existing.total += amount;
       return;
     }
 
-    this.buckets.set(key, { cells, total: 1 });
+    this.buckets.set(key, { cells, total: amount });
   }
 
   get size(): number {
@@ -564,6 +603,95 @@ export function convertRawPeticionesWorkbook(workbook: XLSX.WorkBook): XLSX.Work
       name: INFORMATICA_SHEETS.peticionesProducto.sheet,
       header: INFORMATICA_SHEETS.peticionesProducto.columns,
       rows: productos.toRows(),
+    },
+  ]);
+}
+
+/* -------------------------------------------------------------------------- */
+/* IMACs (yearly xlsx)                                                         */
+/* -------------------------------------------------------------------------- */
+
+const IMACS_REQUESTS = "Solicitudes";
+const IMACS_INTERVENTIONS = "Intervenciones";
+
+/**
+ * Buildings included in the client's IMAC chart, with its display labels.
+ * Other sites can exist in the raw export but are outside this report scope.
+ */
+const IMACS_BUILDINGS = new Map<string, string>([
+  [normalize("Alicante Rambla Mendez Nuñez"), "Alicante"],
+  [normalize("Baleares Plaza del Olivar"), "Baleares"],
+  [normalize("Barcelona Antoni Maura"), "Barcelona Maura"],
+  [normalize("Barcelona Tarrasa"), "Barcelona Tarrasa"],
+  [normalize("Bilbao Gran Vía"), "Bilbao"],
+  [normalize("Coruña Cantón Pequeño"), "Coruña"],
+  [normalize("Las Palmas Albareda 6"), "Las Palmas"],
+  [normalize("Madrid Moraleja"), "Madrid Moraleja"],
+  [normalize("Madrid Recoletos"), "Madrid Recoletos"],
+  [normalize("Madrid SEDE"), "Madrid SEDE"],
+  [normalize("Madrid Tablas I"), "Madrid Tablas I"],
+  [normalize("Madrid Tres Cantos"), "Madrid Tres Cantos"],
+  [normalize("Oviedo Mendizábal"), "Oviedo"],
+  [normalize("Sevilla Avenida de la Palmera"), "Sevilla"],
+  [normalize("Tenerife La Marina"), "Tenerife"],
+  [normalize("Valencia Pintor Sorolla"), "Valencia Sorolla"],
+  [normalize("Valencia Poeta Querol"), "Valencia Querol"],
+  [normalize("Valladolid Duque de la Victoria"), "Valladolid"],
+  [normalize("Zaragoza Plaza Salamero"), "Zaragoza"],
+]);
+
+/** First day of the month, used as the stable date of a monthly aggregate. */
+function monthStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+/**
+ * Converts the raw yearly IMAC table into monthly totals by building.
+ *
+ * Miguel's manual workbook copies these four columns into formulas and a
+ * chart. Reading the raw table directly avoids the stale hard-coded cells in
+ * that intermediate block. `Solicitudes` and `nº trabajos` are summed, not
+ * counted: a single request can contain several interventions.
+ */
+export function convertRawImacsWorkbook(workbook: XLSX.WorkBook): XLSX.WorkBook {
+  const sheetName = findRawImacsSheet(workbook);
+
+  if (sheetName === null) {
+    throw new Error("el libro no tiene la cabecera del export anual de IMACs");
+  }
+
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], {
+    defval: null,
+  });
+  const imacs = new Counter();
+
+  for (const row of rows) {
+    const date = parseWorkbookDate(row["Fecha limite"]);
+    const city = IMACS_BUILDINGS.get(normalize(row["Edificio"]));
+
+    if (!date || !city) {
+      continue;
+    }
+
+    const first = monthStart(date);
+    const period = [serialOf(first), monthLabelOf(first)];
+    const requests = row["Solicitudes"] === null ? NaN : Number(row["Solicitudes"]);
+    const interventions = row["nº trabajos"] === null ? NaN : Number(row["nº trabajos"]);
+
+    if (Number.isFinite(requests) && requests >= 0) {
+      imacs.add([...period, city, IMACS_REQUESTS], requests);
+    }
+
+    if (Number.isFinite(interventions) && interventions >= 0) {
+      imacs.add([...period, city, IMACS_INTERVENTIONS], interventions);
+    }
+  }
+
+  return buildWorkbook([
+    {
+      name: INFORMATICA_SHEETS.imacs.sheet,
+      header: INFORMATICA_SHEETS.imacs.columns,
+      rows: imacs.toRows(),
     },
   ]);
 }

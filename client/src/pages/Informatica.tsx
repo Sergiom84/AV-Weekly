@@ -34,6 +34,8 @@ import CitasSemanalPage from "@/modules/informatica/pages/CitasSemanalPage";
 import EncuestasPage from "@/modules/informatica/pages/EncuestasPage";
 import HicCategoriasPage from "@/modules/informatica/pages/HicCategoriasPage";
 import HicPage from "@/modules/informatica/pages/HicPage";
+import ImacsChartPage from "@/modules/informatica/pages/ImacsChartPage";
+import ImacsTablePage from "@/modules/informatica/pages/ImacsTablePage";
 import SlasPage from "@/modules/informatica/pages/SlasPage";
 import Top5IncidenciasPage from "@/modules/informatica/pages/Top5IncidenciasPage";
 import TopTenIncidenciasPage from "@/modules/informatica/pages/TopTenIncidenciasPage";
@@ -70,6 +72,8 @@ const DATA_PAGES: Record<
   "citas-semanal": CitasSemanalPage,
   "citas-mensual": CitasMensualPage,
   "citas-anual": CitasAnualPage,
+  "imacs-tablas": ImacsTablePage,
+  "imacs-grafico": ImacsChartPage,
 };
 
 function scrollToPage(pageId: string) {

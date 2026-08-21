@@ -30,6 +30,7 @@ import {
 } from "../shared/modules/informatica/deck.ts";
 import {
   convertInformaticaTemplateWorkbook,
+  convertRawImacsWorkbook,
   convertRawInformaticaCsv,
   convertRawPeticionesWorkbook,
   decodeInformaticaCsv,
@@ -744,6 +745,10 @@ function readInformaticaUpload(buffer: Buffer): XLSX.WorkBook {
       return convertRawPeticionesWorkbook(workbook);
     }
 
+    if (format === "imacs") {
+      return convertRawImacsWorkbook(workbook);
+    }
+
     // The weekly template is checked before the flat schema on purpose: it is
     // raw data in thirteen tabs and none of its names is a flat sheet, so a
     // flat book can never be mistaken for it.
@@ -753,7 +758,7 @@ function readInformaticaUpload(buffer: Buffer): XLSX.WorkBook {
 
     if (!hasFlatInformaticaSheet(workbook)) {
       throw new Error(
-        "es un libro de Excel pero no trae ninguna hoja del esquema plano, la cabecera del export de peticiones ni las pestañas del template semanal"
+        "es un libro de Excel pero no trae ninguna hoja del esquema plano ni la cabecera de un export conocido"
       );
     }
 
