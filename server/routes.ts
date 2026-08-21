@@ -1218,7 +1218,19 @@ function resolveClientOrigin(req: import("express").Request): string {
 
 /** Renders `path` as a PDF, one slide per page, via a headless render of the real app. */
 async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({
+    // Chrome Headless Shell has a materially smaller footprint than full
+    // Chrome, which keeps PDF export inside Render's 512 MB free instance.
+    headless: "shell",
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--no-zygote",
+      "--single-process",
+    ],
+  });
 
   try {
     const page = await browser.newPage();
