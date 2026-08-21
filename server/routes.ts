@@ -1239,7 +1239,26 @@ async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
       await page.authenticate(credentials);
     }
     await page.setViewport({ width: 1600, height: 900 });
-    await page.goto(`${origin}${path}`, { waitUntil: "networkidle0", timeout: 30_000 });
+    await page.goto(`${origin}${path}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+    await page.waitForSelector('main section[id^="slide-"]', {
+      timeout: 30_000,
+    });
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      await Promise.all(
+        Array.from(document.images, (image) =>
+          image.complete
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => {
+                image.addEventListener("load", () => resolve(), { once: true });
+                image.addEventListener("error", () => resolve(), { once: true });
+              })
+        )
+      );
+    });
     await page.emulateMediaType("print");
     // Charts (recharts ResizeObserver) and the table auto-fit hook settle a
     // frame or two after the DOM is ready; give them a beat before capturing.
