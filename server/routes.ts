@@ -1218,6 +1218,7 @@ function resolveClientOrigin(req: import("express").Request): string {
 
 /** Renders `path` as a PDF, one slide per page, via a headless render of the real app. */
 async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
+  const renderTimeoutMs = 120_000;
   const browser = await puppeteer.launch({
     // Chrome Headless Shell has a materially smaller footprint than full
     // Chrome, which keeps PDF export inside Render's 512 MB free instance.
@@ -1240,10 +1241,10 @@ async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
     await page.setViewport({ width: 1600, height: 900 });
     await page.goto(`${origin}${path}`, {
       waitUntil: "domcontentloaded",
-      timeout: 30_000,
+      timeout: renderTimeoutMs,
     });
     await page.waitForSelector('main section[id^="slide-"]', {
-      timeout: 30_000,
+      timeout: renderTimeoutMs,
     });
     await page.evaluate(async () => {
       await document.fonts.ready;
