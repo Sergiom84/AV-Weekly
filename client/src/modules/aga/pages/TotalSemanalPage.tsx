@@ -29,7 +29,7 @@ export default function TotalSemanalPage({
   const { previous, current } = comparedWeeks(dataset);
 
   const data = weeks.map((week) => ({
-    semana: weekLabel(week.week),
+    semana: weekLabel(week.week, week.reportWeek),
     total: week.total,
   }));
 
@@ -37,7 +37,7 @@ export default function TotalSemanalPage({
     ...(previous
       ? [
           {
-            label: weekLabel(previous.week),
+            label: weekLabel(previous.week, previous.reportWeek),
             value: previous.total.toLocaleString("es-ES"),
           },
         ]
@@ -45,7 +45,7 @@ export default function TotalSemanalPage({
     ...(current
       ? [
           {
-            label: weekLabel(current.week),
+            label: weekLabel(current.week, current.reportWeek),
             value: current.total.toLocaleString("es-ES"),
           },
         ]

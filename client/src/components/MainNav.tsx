@@ -9,7 +9,7 @@ export default function MainNav({ rightSlot }: MainNavProps) {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="border-b border-border bg-card shadow-sm sticky top-0 z-50 print:static print:shadow-none">
+    <header className="border-b border-border bg-card shadow-sm sticky top-0 z-50 print:hidden">
       <div className="container py-3">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold text-foreground">AV Weekly</h1>

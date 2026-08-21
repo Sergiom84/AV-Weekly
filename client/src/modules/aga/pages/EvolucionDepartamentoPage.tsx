@@ -42,7 +42,7 @@ export default function EvolucionDepartamentoPage({
   const data = weeks.map((week, position) => {
     const counts = countsByLabel(breakdowns[position]);
     const entry: Record<string, number | string> = {
-      semana: weekLabel(week.week),
+      semana: weekLabel(week.week, week.reportWeek),
     };
 
     labels.forEach((label, index) => {

@@ -84,6 +84,8 @@ export interface AgaCount {
 export interface AgaWeekAggregate {
   /** Reported week, `YYYY-MM-DD` of the `semana` column. Identity of the week. */
   week: string;
+  /** AGA reporting week. Optional so datasets stored before this field remain valid. */
+  reportWeek?: number;
   /** Rows of the sheet, i.e. positions pending across every department. */
   total: number;
   /** Departments after presentation grouping, descending by count. */
@@ -145,6 +147,8 @@ export interface AgaManagedSection {
   byDepartment: AgaBreakdownRow[];
   byProduct: AgaBreakdownRow[];
   byLocation: AgaBreakdownRow[];
+  /** Full located-position total when the source exposes it, independently of chart truncation. */
+  locationTotals?: { week: string; total: number }[];
   /** Product detail of the departments the deck breaks out, in deck order. */
   byDepartmentProduct: AgaDepartmentBreakdown[];
   source?: DatasetSource;

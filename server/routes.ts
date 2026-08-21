@@ -1228,7 +1228,6 @@ async function renderDeckPdf(origin: string, path: string): Promise<Buffer> {
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
-      "--no-zygote",
     ],
   });
 

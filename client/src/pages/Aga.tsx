@@ -14,6 +14,7 @@ import {
   hasSectionData,
 } from "@shared/modules/aga/deck";
 import type { AgaDataset, AgaDeckPage } from "@shared/modules/aga/types";
+import { agaPeriodLabel } from "@shared/modules/aga/calendar";
 import MainNav from "@/components/MainNav";
 import HomeLink from "@/components/HomeLink";
 import ClosingPage from "@/components/deck/ClosingPage";
@@ -132,6 +133,10 @@ export default function Aga() {
   const artwork = MODULE.deck?.artwork;
   const pages = deck?.pages ?? [];
   const hasSource = Boolean(dataset.source?.sourceFile);
+  const latestWeek = dataset.weeks?.[dataset.weeks.length - 1];
+  const derivedPeriod = latestWeek
+    ? agaPeriodLabel(latestWeek.week, latestWeek.reportWeek)
+    : "";
 
   let visibleNumber = 0;
   const rendered = pages
@@ -169,9 +174,16 @@ export default function Aga() {
 
     switch (page.kind) {
       case "cover":
+        const coverPage = derivedPeriod
+          ? {
+              ...page,
+              text: { ...page.text, period: derivedPeriod },
+            }
+          : page;
+
         return (
           <CoverPage
-            page={page}
+            page={coverPage}
             editing={isEditing}
             onChange={onChange}
             number={number}

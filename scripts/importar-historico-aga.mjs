@@ -23,6 +23,8 @@
  */
 
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx");
@@ -31,6 +33,7 @@ const { createClient } = require("@libsql/client");
 const DEFAULT_SOURCE =
   "C:/Users/sergi/Desktop/AGA/33 semana datos ( prueba Sergio).xlsx";
 const SHEET = "Evolución Semanal";
+const LOCATION_SHEET = "G. Ubicacion total";
 
 /**
  * Anchor of the week numbering. The responsible's "Semana 33" is the week the
@@ -105,6 +108,66 @@ function toNumber(value) {
   const parsed = Number(raw.replace(/\./g, "").replace(",", "."));
 
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Reads the complete location pivot when the workbook exposes it.
+ *
+ * The PPTX chart drops low-volume rows, but the pivot keeps both those rows and
+ * its own Total general. Locating the two header labels means Valencia/Oviedo
+ * and future one-position locations are imported without naming them in code.
+ */
+function readLocationSnapshot(workbook) {
+  const sheetName = workbook.SheetNames.find(
+    (name) => normalize(name) === normalize(LOCATION_SHEET)
+  );
+  const sheet = sheetName ? workbook.Sheets[sheetName] : null;
+
+  if (!sheet) return null;
+
+  const grid = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: null,
+    blankrows: false,
+    raw: true,
+  });
+
+  let labelAt = -1;
+  let countAt = -1;
+  let headerAt = -1;
+
+  grid.some((row, index) => {
+    labelAt = (row ?? []).findIndex((cell) => normalize(cell) === "ETIQUETAS DE FILA");
+    countAt = (row ?? []).findIndex((cell) => normalize(cell) === "CUENTA DE EDIFICIO2");
+    headerAt = index;
+    return labelAt !== -1 && countAt !== -1;
+  });
+
+  if (headerAt === -1 || labelAt === -1 || countAt === -1) return null;
+
+  const rows = [];
+  let total = null;
+
+  for (const row of grid.slice(headerAt + 1)) {
+    const label = String((row ?? [])[labelAt] ?? "").replace(/\s+/g, " ").trim();
+    const count = toNumber((row ?? [])[countAt]);
+
+    if (normalize(label) === "TOTAL GENERAL") {
+      total = count;
+      break;
+    }
+
+    if (label !== "" && count !== null && count > 0) {
+      rows.push({ label, count });
+    }
+  }
+
+  if (rows.length === 0) return null;
+
+  return {
+    rows,
+    total: total ?? rows.reduce((sum, row) => sum + row.count, 0),
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -208,7 +271,12 @@ function readSheet(path) {
     throw new Error(`La pestaña "${SHEET}" no trae la fila "Totales".`);
   }
 
-  return { weeks: [...matrixHeader.columns.keys()].sort((a, b) => a - b), departments, totals };
+  return {
+    weeks: [...matrixHeader.columns.keys()].sort((a, b) => a - b),
+    departments,
+    totals,
+    locationSnapshot: readLocationSnapshot(workbook),
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -239,6 +307,7 @@ function buildWeeks({ weeks, departments, totals }) {
         // byProject is empty on purpose: the manual matrix has no project detail.
         aggregate: {
           week: weekDate(week),
+          reportWeek: week,
           total: declared,
           byDepartment,
           byDepartmentRaw,
@@ -267,6 +336,66 @@ function mergeWeeks(base, winner) {
   return [...byWeek.values()].sort((a, b) => a.week.localeCompare(b.week));
 }
 
+function mergeLocationRows(base, snapshot, week) {
+  const byLabel = new Map();
+
+  for (const row of base ?? []) {
+    if (!row || typeof row.label !== "string") continue;
+
+    byLabel.set(normalize(row.label), {
+      ...row,
+      counts: (row.counts ?? []).filter((entry) => entry.week !== week),
+    });
+  }
+
+  for (const row of snapshot.rows) {
+    const key = normalize(row.label);
+    const existing = byLabel.get(key);
+
+    byLabel.set(key, {
+      ...(existing ?? {}),
+      label: row.label,
+      counts: [...(existing?.counts ?? []), { week, count: row.count }].sort((a, b) =>
+        a.week.localeCompare(b.week)
+      ),
+    });
+  }
+
+  return [...byLabel.values()]
+    .filter((row) => row.counts.length > 0)
+    .sort((a, b) => {
+      const count = (row) => row.counts.find((entry) => entry.week === week)?.count ?? 0;
+      return count(b) - count(a) || a.label.localeCompare(b.label, "es");
+    });
+}
+
+/** Pure fold kept exported so preservation is covered by a regression test. */
+export function mergeHistoricDataset(existing, historic, source, locationSnapshot = null) {
+  const weeks = mergeWeeks(historic, existing?.weeks ?? []);
+  const latestHistoric = historic[historic.length - 1]?.week;
+  let managed = existing?.managed;
+
+  if (managed && locationSnapshot && latestHistoric) {
+    const locationTotals = [
+      ...(managed.locationTotals ?? []).filter((entry) => entry.week !== latestHistoric),
+      { week: latestHistoric, total: locationSnapshot.total },
+    ].sort((a, b) => a.week.localeCompare(b.week));
+
+    managed = {
+      ...managed,
+      byLocation: mergeLocationRows(managed.byLocation, locationSnapshot, latestHistoric),
+      locationTotals,
+    };
+  }
+
+  return {
+    ...(existing ?? {}),
+    weeks,
+    ...(managed ? { managed } : {}),
+    source,
+  };
+}
+
 async function main() {
   const path = process.argv[2] ?? DEFAULT_SOURCE;
   const sheet = readSheet(path);
@@ -289,14 +418,15 @@ async function main() {
     existingWeeks
   );
 
-  const dataset = {
-    weeks: merged,
-    source: {
+  const dataset = mergeHistoricDataset(
+    existing,
+    historic.map((entry) => entry.aggregate),
+    {
       sourceFile: existing?.source?.sourceFile ?? (result.rows[0]?.source_file ?? null),
       uploadedAt: existing?.source?.uploadedAt ?? new Date().toISOString(),
     },
-    ...(existing?.sheetsFound ? { sheetsFound: existing.sheetsFound } : {}),
-  };
+    sheet.locationSnapshot
+  );
 
   await client.execute({
     sql: `INSERT INTO aga_dataset (id, data, source_file, uploaded_at)
@@ -335,7 +465,9 @@ async function main() {
   console.log(`Totales: [${merged.map((week) => week.total).join(", ")}]`);
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

@@ -50,7 +50,7 @@ export default function TwoWeekCompare({
       ? [
           {
             key: "previa",
-            label: weekLabel(previous.week),
+            label: weekLabel(previous.week, previous.reportWeek),
             color: COMPARE_COLORS[0],
           },
         ]
@@ -59,7 +59,7 @@ export default function TwoWeekCompare({
       ? [
           {
             key: "actual",
-            label: weekLabel(current.week),
+            label: weekLabel(current.week, current.reportWeek),
             color: COMPARE_COLORS[1],
           },
         ]
@@ -82,7 +82,7 @@ export default function TwoWeekCompare({
     ...(previous
       ? [
           {
-            label: weekLabel(previous.week),
+            label: weekLabel(previous.week, previous.reportWeek),
             value: (previousTotal ?? 0).toLocaleString("es-ES"),
           },
         ]
@@ -90,7 +90,7 @@ export default function TwoWeekCompare({
     ...(current
       ? [
           {
-            label: weekLabel(current.week),
+            label: weekLabel(current.week, current.reportWeek),
             value: (currentTotal ?? 0).toLocaleString("es-ES"),
           },
         ]

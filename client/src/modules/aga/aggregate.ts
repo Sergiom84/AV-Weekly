@@ -1,4 +1,5 @@
 import type { AgaCount, AgaDataset, AgaWeekAggregate } from "@shared/modules/aga/types";
+import { agaWeekLabel } from "@shared/modules/aga/calendar";
 
 /**
  * Aggregation helpers for the AGA dataset.
@@ -18,34 +19,17 @@ import type { AgaCount, AgaDataset, AgaWeekAggregate } from "@shared/modules/aga
  */
 export const EXCLUDED_DEPARTMENT = "Soporte Técnico";
 
-/** ISO week number of a `YYYY-MM-DD` date. */
-export function isoWeek(date: string): number | null {
-  const parsed = new Date(`${date}T00:00:00Z`);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  // Thursday of the same ISO week decides the year the week belongs to.
-  const thursday = new Date(parsed);
-  thursday.setUTCDate(thursday.getUTCDate() + 4 - (thursday.getUTCDay() || 7));
-
-  const firstDay = Date.UTC(thursday.getUTCFullYear(), 0, 1);
-
-  return Math.ceil(((thursday.getTime() - firstDay) / 86400000 + 1) / 7);
-}
-
 /**
- * Axis label of a week: `2026-08-10` renders as `S33`.
+ * Axis label under the AGA convention: the extraction Monday names the
+ * completed week immediately before it. An optional stored number wins, while
+ * legacy datasets fall back to the calendar rule.
  *
- * The report names its weeks by ISO number, as the source workbook does
- * ("33 semana GPS"), and the short form is what fits a ten-column axis. A date
- * that cannot be parsed falls back to itself rather than disappearing.
+ * The report uses AGA's completed-week number ("33 semana GPS"), and the short
+ * form is what fits a ten-column axis. A date that cannot be parsed falls back
+ * to itself rather than disappearing.
  */
-export function weekLabel(date: string): string {
-  const week = isoWeek(date);
-
-  return week === null ? date : `S${week}`;
+export function weekLabel(date: string, reportWeek?: number | null): string {
+  return agaWeekLabel(date, reportWeek);
 }
 
 /** The last `count` weeks of the history, still ascending by date. */

@@ -115,7 +115,14 @@ export function managedWeeklyDelta(
  */
 export function topLocationShare(
   section: AgaManagedSection | undefined
-): { label: string; count: number; total: number; share: number } | null {
+): {
+  label: string;
+  count: number;
+  total: number;
+  drawnTotal: number;
+  complete: boolean;
+  share: number;
+} | null {
   const week = managedWeeks(section).slice(-1)[0];
 
   if (!week) {
@@ -127,7 +134,13 @@ export function topLocationShare(
     count: countAt(row.counts, week),
   }));
 
-  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  const drawnTotal = rows.reduce((sum, row) => sum + row.count, 0);
+  const declaredTotal = section?.locationTotals?.find((entry) => entry.week === week)?.total;
+  const complete =
+    typeof declaredTotal === "number" &&
+    Number.isFinite(declaredTotal) &&
+    declaredTotal >= drawnTotal;
+  const total = complete ? declaredTotal : drawnTotal;
   const top = rows.reduce(
     (best, row) => (best === null || row.count > best.count ? row : best),
     null as { label: string; count: number } | null
@@ -137,7 +150,7 @@ export function topLocationShare(
     return null;
   }
 
-  return { ...top, total, share: top.count / total };
+  return { ...top, total, drawnTotal, complete, share: top.count / total };
 }
 
 /** Product rows of one of the departments broken out by slides 2.5 to 2.7. */

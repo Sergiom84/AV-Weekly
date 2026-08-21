@@ -259,14 +259,14 @@
   }
 
   /* One deck slide = one PDF page. */
-  section {
+  main section[id^="slide-"] {
     break-inside: avoid;
     page-break-inside: avoid;
     break-after: page;
     page-break-after: always;
   }
 
-  section:last-child {
+  main section[id^="slide-"]:last-child {
     break-after: auto;
     page-break-after: auto;
   }

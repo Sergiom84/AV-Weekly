@@ -2,7 +2,11 @@ import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
-import { breakdownForWeeks, lastTwoWeeks } from "@shared/modules/aga/managed";
+import {
+  breakdownForWeeks,
+  lastTwoWeeks,
+  topLocationShare,
+} from "@shared/modules/aga/managed";
 import type { AgaBreakdownRow, AgaDataset } from "@shared/modules/aga/types";
 import { COMPARE_COLORS, agaColor, variationLabel, weekLabel } from "../aggregate";
 import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
@@ -80,10 +84,17 @@ export default function ManagedBreakdown({
   const totalAt = (index: number) =>
     entries.reduce((sum, entry) => sum + (entry.cells[index]?.value ?? 0), 0);
 
-  const items = weeks.map((week, index) => ({
-    label: weekLabel(week),
-    value: totalAt(index).toLocaleString("es-ES"),
-  }));
+  const locationShare = topShare ? topLocationShare(dataset.managed) : null;
+  const items = weeks.map((week, index) => {
+    const isLatestLocation = topShare && index === weeks.length - 1 && locationShare;
+
+    return {
+      label: isLatestLocation && !locationShare.complete
+        ? `Subtotal ${weekLabel(week)}`
+        : weekLabel(week),
+      value: (isLatestLocation ? locationShare.total : totalAt(index)).toLocaleString("es-ES"),
+    };
+  });
 
   if (weeks.length > 1) {
     items.push({
@@ -94,7 +105,7 @@ export default function ManagedBreakdown({
 
   if (topShare && weeks.length > 0) {
     const last = weeks.length - 1;
-    const total = totalAt(last);
+    const total = locationShare?.total ?? totalAt(last);
     const top = entries.reduce(
       (best, entry) =>
         best === null || (entry.cells[last]?.value ?? 0) > best.count
@@ -107,7 +118,9 @@ export default function ManagedBreakdown({
       items.push(
         { label: top.label, value: top.count.toLocaleString("es-ES") },
         {
-          label: `Cuota ${top.label}`,
+          label: locationShare?.complete
+            ? `Cuota ${top.label}`
+            : `Cuota ${top.label} sobre subtotal`,
           value: `${((top.count / total) * 100).toFixed(1).replace(".", ",")}%`,
         }
       );

@@ -6,6 +6,7 @@ import {
   type AgaDataset,
   type AgaWeekAggregate,
 } from "../shared/modules/aga/types.ts";
+import { agaReportingPeriod } from "../shared/modules/aga/calendar.ts";
 
 /**
  * Parser for the weekly GPS export of the AGA module.
@@ -466,6 +467,7 @@ export function parseAgaWorkbook(workbook: XLSX.WorkBook): AgaParseResult {
 
   const weeks: AgaWeekAggregate[] = Array.from(builders, ([week, builder]) => ({
     week,
+    reportWeek: agaReportingPeriod(week)?.week,
     total: builder.total,
     byDepartment: toCounts(builder.departments),
     byDepartmentRaw: toCounts(builder.departmentsRaw),
