@@ -1,4 +1,4 @@
-import { createClient } from '@libsql/client';
+import { createClient } from "@libsql/client";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveDatabaseUrl } from "./db-config.js";
@@ -11,7 +11,7 @@ fs.mkdirSync(localDataDir, { recursive: true });
 const url = resolveDatabaseUrl(process.env, localDataDir);
 
 export const client = createClient(
-  url.startsWith('file:') ? { url } : { url, authToken: process.env.TOKEN_TURSO }
+  url.startsWith("file:") ? { url } : { url, authToken: process.env.TOKEN_TURSO }
 );
 
 export async function initDb() {
@@ -65,6 +65,27 @@ export async function initDb() {
       data TEXT NOT NULL,
       source_file TEXT,
       uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Authoritative Edificio -> Ubicacion master shared by importers. Conflicts
+    -- are preserved as separate rows so the resolver can refuse ambiguity.
+    CREATE TABLE IF NOT EXISTS building_location_master (
+      normalized_building TEXT NOT NULL,
+      source_building TEXT NOT NULL,
+      location TEXT NOT NULL,
+      source_file TEXT,
+      imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (normalized_building, location)
+    );
+
+    -- Aliases are learned only from rows whose address matched the master.
+    -- Multiple locations are preserved and therefore become non-matches.
+    CREATE TABLE IF NOT EXISTS building_location_alias (
+      normalized_alias TEXT NOT NULL,
+      source_alias TEXT NOT NULL,
+      location TEXT NOT NULL,
+      observed_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (normalized_alias, location)
     );
 
     -- AGA module (weekly PetMicro report). Same singleton pattern as the

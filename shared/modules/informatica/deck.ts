@@ -52,12 +52,6 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
   {
     id: "volumetria-incidencias-wo",
     kind: "itHic",
-    title: "2.1.1 Volumetría de Incidencias y Work Orders",
-    sections: ["hic"],
-  },
-  {
-    id: "volumetria-incidencias",
-    kind: "itHic",
     title: "2.1.1 Volumetría de Incidencias",
     sections: ["hic"],
   },
@@ -272,15 +266,38 @@ export function mergeInformaticaDeckTemplate(
   const reference = createDefaultInformaticaDeck().pages;
   const kinds = new Map(reference.map((page) => [page.id, page.kind]));
 
+  // This former fourth slide was folded into the preceding volumetry page.
+  // Removing it here also migrates already persisted decks; matching by the
+  // seeded id leaves user-created pages untouched.
+  const retiredIds = new Set(["volumetria-incidencias"]);
+
   // A page whose spec changed kind — a placeholder promoted to a data page, or
   // an incident page re-pointed at the `hic`/`comparativas` sections — keeps its
   // stored id, so a deck saved before the change carries the old kind and would
   // render the old page forever. Only the kind is realigned; everything the user
   // wrote or moved is theirs, not the template's.
-  const pages = deck.pages.map((page) => {
+  const pages = deck.pages.flatMap((page) => {
+    if (retiredIds.has(page.id)) {
+      return [];
+    }
+
     const kind = kinds.get(page.id);
 
-    return kind && kind !== page.kind ? { ...page, kind } : page;
+    // Adopt the new title only while the stored page still has the old seeded
+    // title. An editor's custom title remains authoritative.
+    const text =
+      page.id === "volumetria-incidencias-wo" &&
+      page.text.title === "2.1.1 Volumetría de Incidencias y Work Orders"
+        ? { ...page.text, title: "2.1.1 Volumetría de Incidencias" }
+        : page.text;
+
+    return [
+      kind && kind !== page.kind
+        ? { ...page, kind, text }
+        : text !== page.text
+          ? { ...page, text }
+          : page,
+    ];
   });
 
   const present = new Set(pages.map((page) => page.id));

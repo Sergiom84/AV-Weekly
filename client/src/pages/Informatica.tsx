@@ -32,7 +32,6 @@ import CitasAnualPage from "@/modules/informatica/pages/CitasAnualPage";
 import CitasMensualPage from "@/modules/informatica/pages/CitasMensualPage";
 import CitasSemanalPage from "@/modules/informatica/pages/CitasSemanalPage";
 import EncuestasPage from "@/modules/informatica/pages/EncuestasPage";
-import HicCategoriasPage from "@/modules/informatica/pages/HicCategoriasPage";
 import HicPage from "@/modules/informatica/pages/HicPage";
 import ImacsChartPage from "@/modules/informatica/pages/ImacsChartPage";
 import ImacsTablePage from "@/modules/informatica/pages/ImacsTablePage";
@@ -60,7 +59,6 @@ const DATA_PAGES: Record<
   ) => ReactElement
 > = {
   "volumetria-incidencias-wo": HicPage,
-  "volumetria-incidencias": HicCategoriasPage,
   "top5-incidencias": Top5IncidenciasPage,
   "top-ten-incidencias": TopTenIncidenciasPage,
   "encuestas-incidencias": EncuestasPage,

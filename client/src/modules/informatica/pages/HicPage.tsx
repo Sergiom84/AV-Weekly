@@ -1,7 +1,7 @@
 import KpiRow from "@/components/deck/KpiRow";
-import SeriesLineChart, {
-  type LineSeries,
-} from "@/components/deck/SeriesLineChart";
+import CategoryBarChart, {
+  type CategorySeries,
+} from "@/components/deck/CategoryBarChart";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
   monthLabel,
@@ -25,13 +25,9 @@ interface HicPageProps extends InformaticaPageProps {
 const METRICS = [HIC_RESOLVED, HIC_ASSIGNED];
 
 /**
- * `2.1.1 Volumetría de Incidencias y Work Orders`: the two monthly incident
+ * `2.1.1 Volumetría de Incidencias`: the two monthly incident
  * series of the `Hic` sheet, resolved against assigned, over every month the
  * workbook carries.
- *
- * Lines, not columns: eighteen months by four series is seventy-two bars, and
- * the point of the slide is the shape of the year, not each month's exact
- * figure — those are on 2.1.1's second page and in the tooltip.
  *
  * The sheet also reports `Asignaciones`, an assignment count rather than an
  * incident count: it double-counts a ticket reassigned between groups, so it is
@@ -53,7 +49,7 @@ export default function HicPage({
     (scope): scope is string => scope !== null
   );
 
-  const series: LineSeries[] = drawn.flatMap((scope, scopeIndex) =>
+  const series: CategorySeries[] = drawn.flatMap((scope, scopeIndex) =>
     METRICS.map((metric, metricIndex) => ({
       key: `${scopeIndex}-${metric}`,
       label: `${hicScopeLabel(scope, scopes)} · ${metric.toLowerCase()}`,
@@ -69,13 +65,12 @@ export default function HicPage({
       )
       .reduce((sum, row) => sum + row.total, 0);
 
-  // A month a scope was not reported on stays null: `SeriesLineChart` draws it
-  // as a gap, which is what "not measured" looks like. Zero would read as
-  // "none", a different claim.
+  // A month a scope was not reported on has no series key: Recharts omits its
+  // column, which is what "not measured" looks like. Zero would claim "none".
   const reported = new Set(totals.map(row => `${row.ambito}|${row.mes}`));
 
   const data = months.map(target => {
-    const entry: Record<string, number | string | null> = {
+    const entry: Record<string, number | string> = {
       mes: monthLabel(target),
     };
 
@@ -83,9 +78,9 @@ export default function HicPage({
       const known = reported.has(`${scope}|${target}`);
 
       for (const metric of METRICS) {
-        entry[`${scopeIndex}-${metric}`] = known
-          ? valueOf(scope, metric, target)
-          : null;
+        if (known) {
+          entry[`${scopeIndex}-${metric}`] = valueOf(scope, metric, target);
+        }
       }
     });
 
@@ -106,7 +101,7 @@ export default function HicPage({
       <KpiRow items={kpis} />
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <SeriesLineChart categoryKey="mes" series={series} data={data} />
+        <CategoryBarChart categoryKey="mes" series={series} data={data} />
       </div>
     </PageShell>
   );

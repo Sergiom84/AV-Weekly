@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import type { BuildingLocationMatcher } from "../shared/building-locations.ts";
 import { INFORMATICA_SHEETS } from "../shared/modules/informatica/types.ts";
 
 /**
@@ -729,7 +730,7 @@ function isExcludedSmartTech(value: string): boolean {
  *
  * `Remitente`, `Asignado_a`, `Descripcion` and `Incidencia` are never read.
  */
-function citasRowsOf(header: readonly unknown[], records: readonly unknown[][]): (string | number)[][] {
+function citasRowsOf(header: readonly unknown[], records: readonly unknown[][], buildings?: BuildingLocationMatcher): (string | number)[][] {
   const columns = indexHeader(header);
 
   if (!hasAll(columns, RAW_CITAS_COLUMNS)) {
@@ -743,7 +744,8 @@ function citasRowsOf(header: readonly unknown[], records: readonly unknown[][]):
   const citas = new Counter();
 
   for (const record of records) {
-    const edificio = textOf(record[smartTechAt]);
+    const sourceBuilding = textOf(record[smartTechAt]);
+    const edificio = buildings?.resolve(sourceBuilding) ?? sourceBuilding;
 
     if (edificio === "" || isExcludedSmartTech(edificio)) {
       continue;
@@ -767,14 +769,14 @@ function citasRowsOf(header: readonly unknown[], records: readonly unknown[][]):
   return citas.toRows();
 }
 
-export function convertRawCitasCsv(text: string): XLSX.WorkBook {
+export function convertRawCitasCsv(text: string, buildings?: BuildingLocationMatcher): XLSX.WorkBook {
   const records = parseDelimited(text, "\t");
 
   return buildWorkbook([
     {
       name: INFORMATICA_SHEETS.citas.sheet,
       header: INFORMATICA_SHEETS.citas.columns,
-      rows: citasRowsOf(records[0] ?? [], records.slice(1)),
+      rows: citasRowsOf(records[0] ?? [], records.slice(1), buildings),
     },
   ]);
 }
@@ -797,7 +799,8 @@ export function convertRawCitasCsv(text: string): XLSX.WorkBook {
  */
 function workOrdersRowsOf(
   header: readonly unknown[],
-  records: readonly unknown[][]
+  records: readonly unknown[][],
+  buildings?: BuildingLocationMatcher
 ): (string | number)[][] {
   const columns = indexHeader(header);
 
@@ -808,6 +811,8 @@ function workOrdersRowsOf(
   const submitAt = columns.get(normalize("Submit Date"))!;
   const siteAt = columns.get(normalize("Site"))!;
   const siteGroupAt = columns.get(normalize("Site Group"))!;
+  const addressAt = columns.get(normalize("Chg Location Address"))!;
+  const associatedAt = columns.get(normalize("Ubicacion_asociada"))!;
   const tierAt = columns.get(normalize("Categorization Tier 2"))!;
 
   const ordenes = new Counter();
@@ -819,7 +824,12 @@ function workOrdersRowsOf(
       continue;
     }
 
-    const edificio = textOf(record[siteAt]) || textOf(record[siteGroupAt]) || "Sin edificio";
+    const site = textOf(record[siteAt]) || textOf(record[siteGroupAt]);
+    const address = textOf(record[addressAt]);
+    const associated = textOf(record[associatedAt]);
+    const observed = buildings?.observe(site, address, associated);
+    const edificio =
+      observed ?? buildings?.resolve(site, address, associated) ?? (site || "Sin edificio");
     const tipo = textOf(record[tierAt]) || "Sin tipo";
 
     ordenes.add([...periodCells(date), edificio, tipo]);
@@ -828,14 +838,14 @@ function workOrdersRowsOf(
   return ordenes.toRows();
 }
 
-export function convertRawWorkOrdersCsv(text: string): XLSX.WorkBook {
+export function convertRawWorkOrdersCsv(text: string, buildings?: BuildingLocationMatcher): XLSX.WorkBook {
   const records = parseDelimited(text, "\t");
 
   return buildWorkbook([
     {
       name: INFORMATICA_SHEETS.workOrders.sheet,
       header: INFORMATICA_SHEETS.workOrders.columns,
-      rows: workOrdersRowsOf(records[0] ?? [], records.slice(1)),
+      rows: workOrdersRowsOf(records[0] ?? [], records.slice(1), buildings),
     },
   ]);
 }
@@ -1168,7 +1178,7 @@ function encuestasRowsOf(tab: TemplateTab): (string | number)[][] {
  * `Breve_Descripcion`, `Asignado_a`, `Puesto` and `Numero_incidencia` are never
  * read.
  */
-function incidenciasRowsOf(tab: TemplateTab): (string | number)[][] {
+function incidenciasRowsOf(tab: TemplateTab, buildings?: BuildingLocationMatcher): (string | number)[][] {
   const columns = indexHeader(tab.header);
   const abiertaAt = columns.get(normalize("Abierta"))!;
   const resueltaAt = columns.get(normalize("Resuelta"))!;
@@ -1182,10 +1192,11 @@ function incidenciasRowsOf(tab: TemplateTab): (string | number)[][] {
   for (const row of tab.rows) {
     const categoria = textOf(row[tier1At]) || "Sin categoria";
     const subcategoria = textOf(row[tier2At]) || "Sin subcategoria";
-    const edificio =
+    const sourceBuilding =
       (edificioAt === undefined ? "" : textOf(row[edificioAt])) ||
       (siteAt === undefined ? "" : textOf(row[siteAt])) ||
       "Sin edificio";
+    const edificio = buildings?.resolve(sourceBuilding) ?? sourceBuilding;
 
     const abierta = parseWorkbookDate(row[abiertaAt]);
     const resuelta = parseWorkbookDate(row[resueltaAt]);
@@ -1378,7 +1389,7 @@ function slasRowsOf(tab: TemplateTab, reference: string): (string | number)[][] 
  * adds and reorders tabs between weeks. A sheet with no rows is not written at
  * all, which leaves its page on "Próximamente".
  */
-export function convertInformaticaTemplateWorkbook(workbook: XLSX.WorkBook): XLSX.WorkBook {
+export function convertInformaticaTemplateWorkbook(workbook: XLSX.WorkBook, buildings?: BuildingLocationMatcher): XLSX.WorkBook {
   const tabs = templateTabsOf(workbook);
 
   if (tabs.length === 0) {
@@ -1401,13 +1412,13 @@ export function convertInformaticaTemplateWorkbook(workbook: XLSX.WorkBook): XLS
         encuestas.push(...encuestasRowsOf(tab));
         break;
       case "incidencias":
-        incidencias.push(...incidenciasRowsOf(tab));
+        incidencias.push(...incidenciasRowsOf(tab, buildings));
         break;
       case "workorders":
-        workOrders.push(...workOrdersRowsOf(tab.header, tab.rows));
+        workOrders.push(...workOrdersRowsOf(tab.header, tab.rows, buildings));
         break;
       case "citas":
-        citas.push(...citasRowsOf(tab.header, tab.rows));
+        citas.push(...citasRowsOf(tab.header, tab.rows, buildings));
         break;
       case "hicSerie":
         hic.push(...hicSerieRowsOf(tab));
@@ -1461,6 +1472,6 @@ export function convertInformaticaTemplateWorkbook(workbook: XLSX.WorkBook): XLS
  * Converts already-decoded CSV text of a known raw format into a flat workbook.
  * The workbook variant is `convertRawPeticionesWorkbook`.
  */
-export function convertRawInformaticaCsv(text: string, format: "citas" | "workorders"): XLSX.WorkBook {
-  return format === "citas" ? convertRawCitasCsv(text) : convertRawWorkOrdersCsv(text);
+export function convertRawInformaticaCsv(text: string, format: "citas" | "workorders", buildings?: BuildingLocationMatcher): XLSX.WorkBook {
+  return format === "citas" ? convertRawCitasCsv(text, buildings) : convertRawWorkOrdersCsv(text, buildings);
 }

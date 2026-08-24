@@ -19,6 +19,7 @@ import {
   INFORME_SUPPORT_TYPES,
 } from "../shared/informe.ts";
 import type {
+  BuildingLocationImportReport,
   InformaticaDataset,
   InformaticaDeckState,
   InformaticaPayload,
@@ -58,6 +59,11 @@ import {
   mergeOficinasDeckTemplate,
 } from "../shared/modules/oficinas/deck.ts";
 import { client } from "./db.js";
+import {
+  BuildingLocationResolver,
+  buildingLookupKey,
+  normalizeInformaticaBuildingLocations,
+} from "./buildingLocationMaster.js";
 import {
   mergeAgaDataset,
   parseAgaWorkbook,
@@ -637,13 +643,38 @@ async function readStoredInformaticaDataset(): Promise<InformaticaDataset | null
   }
 }
 
-async function buildInformaticaPayload(): Promise<InformaticaResponse> {
-  const [deck, dataset] = await Promise.all([
-    readStoredInformaticaDeck(),
-    readStoredInformaticaDataset(),
+async function readBuildingLocationMaster(): Promise<BuildingLocationResolver> {
+  const [master, aliases] = await Promise.all([
+    client.execute(
+      "SELECT source_building, location FROM building_location_master ORDER BY source_building"
+    ),
+    client.execute(
+      "SELECT source_alias, location FROM building_location_alias ORDER BY source_alias"
+    ),
   ]);
 
-  const data = dataset ?? emptyInformaticaDataset();
+  return new BuildingLocationResolver(
+    master.rows.map((row) => ({
+      building: String(row.source_building ?? ""),
+      location: String(row.location ?? ""),
+    })),
+    aliases.rows.map((row) => ({
+      alias: String(row.source_alias ?? ""),
+      location: String(row.location ?? ""),
+    }))
+  );
+}
+
+async function buildInformaticaPayload(): Promise<InformaticaResponse> {
+  const [deck, dataset, buildings] = await Promise.all([
+    readStoredInformaticaDeck(),
+    readStoredInformaticaDataset(),
+    readBuildingLocationMaster(),
+  ]);
+
+  const data = dataset
+    ? normalizeInformaticaBuildingLocations(dataset, buildings).dataset
+    : emptyInformaticaDataset();
 
   return { deck: deck ?? createDefaultInformaticaDeck(), data };
 }
@@ -733,7 +764,10 @@ function looksLikeWorkbook(buffer: Buffer): boolean {
  * Throws with a short reason when the file is neither a flat book nor a known
  * raw export; the caller turns that into a 400 naming the file.
  */
-function readInformaticaUpload(buffer: Buffer): InformaticaUploadWorkbook {
+function readInformaticaUpload(
+  buffer: Buffer,
+  buildings: BuildingLocationResolver
+): InformaticaUploadWorkbook {
   if (looksLikeWorkbook(buffer)) {
     const workbook = XLSX.read(buffer, { type: "buffer" });
 
@@ -755,7 +789,10 @@ function readInformaticaUpload(buffer: Buffer): InformaticaUploadWorkbook {
     // raw data in thirteen tabs and none of its names is a flat sheet, so a
     // flat book can never be mistaken for it.
     if (format === "template") {
-      return { workbook: convertInformaticaTemplateWorkbook(workbook), origin: "template" };
+      return {
+        workbook: convertInformaticaTemplateWorkbook(workbook, buildings),
+        origin: "template",
+      };
     }
 
     if (!hasFlatInformaticaSheet(workbook)) {
@@ -771,7 +808,10 @@ function readInformaticaUpload(buffer: Buffer): InformaticaUploadWorkbook {
   const format = detectRawInformaticaFormat(text);
 
   if (format === "citas" || format === "workorders") {
-    return { workbook: convertRawInformaticaCsv(text, format), origin: format };
+    return {
+      workbook: convertRawInformaticaCsv(text, format, buildings),
+      origin: format,
+    };
   }
 
   throw new Error("no es un libro de Excel ni un CSV con la cabecera de un export conocido");
@@ -800,6 +840,7 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
     }
 
     const workbooks: InformaticaUploadWorkbook[] = [];
+    const buildings = await readBuildingLocationMaster();
 
     // Every file is validated before anything is stored, and the answer names
     // the offending file instead of failing the whole upload anonymously.
@@ -811,7 +852,7 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
     // is also where person names are dropped: only aggregates go downstream.
     for (const file of uploaded) {
       try {
-        workbooks.push(readInformaticaUpload(file.buffer));
+        workbooks.push(readInformaticaUpload(file.buffer, buildings));
       } catch (err) {
         const detail = err instanceof Error ? err.message : "error desconocido";
 
@@ -824,37 +865,62 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
     const files = uploaded.map((file) => file.originalname);
     // Several files are folded into one workbook before parsing, so rows of the
     // same sheet coming from different files add up instead of overwriting.
-    const { dataset, report } = parseInformaticaPlanoWorkbook(
+    const parsed = parseInformaticaPlanoWorkbook(
       mergeInformaticaWorkbooks(selectInformaticaWorkbooksForMerge(workbooks))
     );
+    const normalized = normalizeInformaticaBuildingLocations(parsed.dataset, buildings);
+    const dataset = normalized.dataset;
+    const report = parsed.report;
 
     // The upload is folded into what is already stored instead of replacing it.
     // The real weekly flow sends the template plus the three request exports,
     // and each of those files only covers a couple of sections and the last few
     // months; replacing the dataset sent every other page back to
     // "Próximamente" every week. See `mergeInformaticaDataset` for the rule.
-    const stored: InformaticaDataset = mergeInformaticaDataset(
-      await readStoredInformaticaDataset(),
-      dataset,
-      { sourceFile: describeSourceFiles(files), uploadedAt: new Date().toISOString() }
-    );
-
-    await client.execute({
-      sql: `INSERT INTO informatica_dataset (id, data, source_file, uploaded_at)
-            VALUES (1, ?, ?, datetime('now'))
-            ON CONFLICT(id) DO UPDATE
-            SET data = excluded.data,
-                source_file = excluded.source_file,
-                uploaded_at = excluded.uploaded_at`,
-      args: [JSON.stringify(stored), stored.source.sourceFile],
+    const existing = await readStoredInformaticaDataset();
+    const normalizedExisting = existing
+      ? normalizeInformaticaBuildingLocations(existing, buildings).dataset
+      : null;
+    const stored: InformaticaDataset = mergeInformaticaDataset(normalizedExisting, dataset, {
+      sourceFile: describeSourceFiles(files),
+      uploadedAt: new Date().toISOString(),
     });
+
+    await client.batch(
+      [
+        ...buildings.learnedAliases().map((row) => ({
+          sql: `INSERT INTO building_location_alias
+                (normalized_alias, source_alias, location, observed_at)
+                VALUES (?, ?, ?, datetime('now'))
+                ON CONFLICT(normalized_alias, location) DO UPDATE
+                SET source_alias = excluded.source_alias,
+                    observed_at = excluded.observed_at`,
+          args: [buildingLookupKey(row.alias), row.alias, row.location],
+        })),
+        {
+          sql: `INSERT INTO informatica_dataset (id, data, source_file, uploaded_at)
+                VALUES (1, ?, ?, datetime('now'))
+                ON CONFLICT(id) DO UPDATE
+                SET data = excluded.data,
+                    source_file = excluded.source_file,
+                    uploaded_at = excluded.uploaded_at`,
+          args: [JSON.stringify(stored), stored.source.sourceFile],
+        },
+      ],
+      "write"
+    );
 
     // The upload answers with the full payload so the client rehydrates
     // without a second fetch, plus what the import actually read.
     const payload = await buildInformaticaPayload();
 
-    res.json({ ...payload, report: { ...report, files } } satisfies InformaticaResponse & {
-      report: InformaticaImportReport;
+    res.json({
+      ...payload,
+      report: { ...report, files, buildingLocations: normalized.report },
+    } satisfies InformaticaResponse & {
+      report: InformaticaImportReport & {
+        buildingLocations: BuildingLocationImportReport;
+      };
     });
   } catch (err) {
     const message =
@@ -1128,7 +1194,11 @@ router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res
     }
 
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-    const parsed = parseAgaGestionadoWorkbook(workbook, AGA_BUILDING_LOCATIONS);
+    const buildings = await readBuildingLocationMaster();
+    const parsed = parseAgaGestionadoWorkbook(
+      workbook,
+      buildings.masterRows > 0 ? buildings : AGA_BUILDING_LOCATIONS
+    );
 
     if (parsed.managed.weeklyTotals.length === 0) {
       return res.status(400).json({

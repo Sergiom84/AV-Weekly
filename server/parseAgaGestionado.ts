@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import type { BuildingLocationMatcher } from "../shared/building-locations.ts";
 import type {
   AgaBreakdownRow,
   AgaDepartmentBreakdown,
@@ -200,6 +201,20 @@ function locationLookup(mapping: Record<string, string>): Map<string, string> {
   return result;
 }
 
+function locationResolver(
+  source: Record<string, string> | BuildingLocationMatcher
+): (building: string) => string | null {
+  if (
+    typeof (source as Partial<BuildingLocationMatcher>).resolve === "function"
+  ) {
+    const matcher = source as BuildingLocationMatcher;
+    return (building) => matcher.resolve(building);
+  }
+
+  const locations = locationLookup(source as Record<string, string>);
+  return (building) => locations.get(normalize(building)) ?? null;
+}
+
 function addWeekCount(row: AgaBreakdownRow, week: string, count: number): void {
   row.counts.push({ week, count });
 }
@@ -247,13 +262,13 @@ function departmentProductRows(
 
 export function parseAgaGestionadoWorkbook(
   workbook: XLSX.WorkBook,
-  buildingLocations: Record<string, string> = {}
+  buildingLocations: Record<string, string> | BuildingLocationMatcher = {}
 ): AgaGestionadoParseResult {
   if (!workbook || !Array.isArray(workbook.SheetNames)) {
     throw new Error("El fichero enviado no es un libro de Excel válido.");
   }
 
-  const locations = locationLookup(buildingLocations);
+  const resolveLocation = locationResolver(buildingLocations);
   const builders = new Map<string, WeekBuilder>();
   const unknownLocations = new Map<string, number>();
   const sheets: AgaGestionadoSheetReport[] = [];
@@ -325,7 +340,7 @@ export function parseAgaGestionadoWorkbook(
       const department = departmentLabel(rawDepartment);
       const product = text(row[productAt]) || "Sin producto";
       const building = text(row[buildingAt]);
-      const location = locations.get(normalize(building)) ?? "Sin clasificar";
+      const location = resolveLocation(building) ?? "Sin clasificar";
 
       builder.total += 1;
       bump(builder.departments, department);

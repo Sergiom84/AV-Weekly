@@ -1,39 +1,17 @@
-import CategoryBarChart, {
-  type CategorySeries,
-} from "@/components/deck/CategoryBarChart";
-import KpiRow from "@/components/deck/KpiRow";
-import SeriesLineChart, {
-  type LineSeries,
-} from "@/components/deck/SeriesLineChart";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import {
-  decimal,
-  monthLabel,
-  percent,
-  reportMonth,
-  seriesColor,
-  uniqueSorted,
-} from "../aggregate";
+import { percent, reportMonth } from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface EncuestasPageProps extends InformaticaPageProps {
   dataset: InformaticaDataset;
 }
 
-/** The 1-to-5 scale, as the axis of the distribution. */
+/** The complete score scale is always visible, including scores with no answers. */
 const SCORES = [1, 2, 3, 4, 5];
 
 /**
- * `2.1.5 Encuestas Incidencias SSCC`: the reported month's score distribution
- * next to the response count month by month.
- *
- * The headline average is weighted by responses — the sum of score times
- * answers over the answers — not a mean of the five scores, which would let one
- * stray "1" weigh as much as a hundred fives and turn a 4,86 into a 3.
- *
- * The distribution is the reported month alone while the line covers every
- * month: the scores sit at five nearly always, so their line is a flat rule,
- * and what changes month to month is how many people answered.
+ * `2.1.5 Encuestas Incidencias SSCC`: score, response count and share for the
+ * latest closed month represented in the source data.
  */
 export default function EncuestasPage({
   page,
@@ -42,83 +20,61 @@ export default function EncuestasPage({
   dataset,
 }: EncuestasPageProps) {
   const rows = dataset.encuestas ?? [];
-  const months = uniqueSorted(rows.map((row) => row.mes));
-  const month = reportMonth(dataset, rows, (row) => row.mes);
-  const current = rows.filter((row) => row.mes === month);
-
-  const responsesFor = (score: number) =>
-    current
-      .filter((row) => Number(row.valoracion) === score)
-      .reduce((sum, row) => sum + row.respuestas, 0);
-
-  const distribution = SCORES.map((score) => ({
+  const month = reportMonth(dataset, rows, row => row.mes);
+  const current = rows.filter(row => row.mes === month);
+  const distribution = SCORES.map(score => ({
     score,
-    respuestas: responsesFor(score),
-  }));
-
-  const answers = distribution.reduce((sum, entry) => sum + entry.respuestas, 0);
-  const weighted = distribution.reduce(
-    (sum, entry) => sum + entry.score * entry.respuestas,
-    0
-  );
-  const average = answers > 0 ? weighted / answers : null;
-  const topShare = answers > 0 ? responsesFor(5) / answers : 0;
-
-  const monthlySeries: LineSeries[] = [
-    { key: "respuestas", label: "Respuestas recibidas", color: seriesColor(0) },
-  ];
-  const monthlyData = months.map((target) => ({
-    mes: monthLabel(target),
-    respuestas: rows
-      .filter((row) => row.mes === target)
+    responses: current
+      .filter(row => Number(row.valoracion) === score)
       .reduce((sum, row) => sum + row.respuestas, 0),
   }));
-
-  const distributionSeries: CategorySeries[] = [
-    { key: "respuestas", label: "Respuestas", color: seriesColor(0) },
-  ];
-  const distributionData = distribution.map((entry) => ({
-    nota: String(entry.score),
-    respuestas: entry.respuestas,
-  }));
-
-  const suffix = month ? ` ${monthLabel(month)}` : "";
+  const total = distribution.reduce((sum, row) => sum + row.responses, 0);
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
-      <KpiRow
-        items={[
-          {
-            label: `Respuestas${suffix}`,
-            value: answers.toLocaleString("es-ES"),
-          },
-          { label: "Nota media", value: decimal(average) },
-          { label: "Valoradas con 5", value: percent(topShare) },
-        ]}
-      />
-
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-[1.5cqi]">
-        <div className="flex min-h-0 flex-col">
-          <p className="shrink-0 pb-[0.4cqi] font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
-            Respuestas por mes
-          </p>
-          <SeriesLineChart
-            categoryKey="mes"
-            series={monthlySeries}
-            data={monthlyData}
-          />
-        </div>
-
-        <div className="flex min-h-0 flex-col">
-          <p className="shrink-0 pb-[0.4cqi] font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
-            Distribución de la valoración, 1 a 5{suffix}
-          </p>
-          <CategoryBarChart
-            categoryKey="nota"
-            series={distributionSeries}
-            data={distributionData}
-          />
-        </div>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full table-fixed border-collapse font-mono text-[1.35cqi] tabular-nums">
+          <thead>
+            <tr className="border-b border-border text-muted-foreground">
+              <th
+                scope="col"
+                className="w-1/2 px-[0.8cqi] py-[0.8cqi] text-left font-normal"
+              >
+                Promedio de encuestas
+              </th>
+              <th
+                scope="col"
+                className="w-1/4 px-[0.8cqi] py-[0.8cqi] text-center font-normal"
+              >
+                Cantidad
+              </th>
+              <th
+                scope="col"
+                className="w-1/4 px-[0.8cqi] py-[0.8cqi] text-center font-normal"
+              >
+                Porcentaje
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {distribution.map(row => (
+              <tr key={row.score} className="border-b border-border/60">
+                <th
+                  scope="row"
+                  className="px-[0.8cqi] py-[0.95cqi] text-left text-[1.55cqi] font-normal"
+                >
+                  {row.score}
+                </th>
+                <td className="px-[0.8cqi] py-[0.95cqi] text-center">
+                  {row.responses.toLocaleString("es-ES")}
+                </td>
+                <td className="px-[0.8cqi] py-[0.95cqi] text-center">
+                  {total > 0 ? percent(row.responses / total) : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </PageShell>
   );

@@ -6,6 +6,7 @@ import {
   mergeAgaManagedSection,
   parseAgaGestionadoWorkbook,
 } from "./parseAgaGestionado.ts";
+import { BuildingLocationResolver } from "./buildingLocationMaster.ts";
 
 function workbook(rows: unknown[][]): XLSX.WorkBook {
   const book = XLSX.utils.book_new();
@@ -73,6 +74,22 @@ describe("parser del export Gestionado AGA", () => {
 
     expect(parsed.managed.byProduct).toHaveLength(20);
     expect(parsed.managed.byDepartment).toHaveLength(20);
+  });
+
+  it("usa el maestro compartido de edificios en las importaciones AGA", () => {
+    const buildings = new BuildingLocationResolver([
+      { building: "MADRID-PASEO DE LA CASTELLANA, 81", location: "Madrid" },
+    ]);
+    const parsed = parseAgaGestionadoWorkbook(
+      workbook([
+        headers,
+        ["PORTATIL", 46248, "G1", "MADRID-PASEO DE LA CASTELLANA, 81", "ALMACEN"],
+      ]),
+      buildings
+    );
+
+    expect(countAt(parsed.managed.byLocation, "Madrid")).toBe(1);
+    expect(parsed.report.unknownLocations).toEqual([]);
   });
 });
 

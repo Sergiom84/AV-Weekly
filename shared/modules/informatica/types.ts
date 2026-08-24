@@ -4,6 +4,7 @@ import type {
   DeckPage,
   DeckState,
 } from "../../deck/core.ts";
+export type { BuildingLocationImportReport } from "../../building-locations.ts";
 
 /**
  * Contract for the "Informatica" deck.
