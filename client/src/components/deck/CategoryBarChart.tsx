@@ -10,11 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
-import {
-  COMPACT_LABELS_FROM,
-  groupedLabelOffset,
-  groupedLabelTopMargin,
-} from "./CategoryBarLabelLayout";
+import { groupedLabelPlacement } from "./CategoryBarLabelLayout";
 
 export interface CategorySeries {
   /** Key inside each chart row. */
@@ -32,6 +28,8 @@ interface CategoryBarChartProps {
   data: Record<string, number | string>[];
   /** Stacks the series instead of grouping them side by side. */
   stacked?: boolean;
+  /** Spreads adjacent value labels horizontally and tightens grouped gaps. */
+  fitGroupedValueLabels?: boolean;
   /**
    * Draws every category tick, angled, instead of letting Recharts drop the
    * ones that overlap. Opt-in: only needed for long text categories such as the
@@ -40,6 +38,9 @@ interface CategoryBarChartProps {
    */
   angledCategories?: boolean;
 }
+
+/** Above this many categories the standard value labels use compact text. */
+const COMPACT_LABELS_FROM = 14;
 
 /** Below this value a stacked segment is never labelled, however tall it draws. */
 const MIN_STACK_LABEL_VALUE = 9;
@@ -172,13 +173,11 @@ interface StackLabelProps {
 
 interface GroupedValueLabelProps extends StackLabelProps {
   seriesIndex: number;
-  compact: boolean;
 }
 
 /**
- * Value above a grouped column, lifted onto a stable level per series.
- * Neighbouring series no longer print their values on the same baseline, and
- * the chart reserves the matching top margin so the highest level is not cut.
+ * Horizontal value opened away from its adjacent series. This keeps a
+ * readable font on one level without the vertical cascade rejected in HIC.
  */
 function GroupedValueLabel({
   x,
@@ -186,9 +185,9 @@ function GroupedValueLabel({
   width,
   value,
   seriesIndex,
-  compact,
 }: GroupedValueLabelProps) {
   const box = { x: Number(x), y: Number(y), width: Number(width) };
+  const placement = groupedLabelPlacement(seriesIndex);
 
   if (
     value === undefined ||
@@ -202,16 +201,12 @@ function GroupedValueLabel({
 
   return (
     <text
-      x={box.x + box.width / 2}
-      y={box.y - 4 - groupedLabelOffset(seriesIndex)}
-      textAnchor="middle"
-      className={
-        compact
-          ? "fill-foreground text-[0.75cqi]"
-          : "fill-foreground text-[1.1cqi]"
-      }
+      x={box.x + box.width / 2 + placement.offset}
+      y={box.y - 3}
+      textAnchor={placement.textAnchor}
+      className="fill-foreground font-mono text-[0.75cqi] font-medium"
       stroke="var(--background)"
-      strokeWidth={2}
+      strokeWidth={1.5}
       paintOrder="stroke"
     >
       {value}
@@ -304,6 +299,7 @@ export default function CategoryBarChart({
   series,
   data,
   stacked = false,
+  fitGroupedValueLabels = false,
   angledCategories = false,
 }: CategoryBarChartProps) {
   const animate = usePresentationAnimation();
@@ -322,8 +318,10 @@ export default function CategoryBarChart({
       )
     : [];
   const topSeriesKey = series[series.length - 1]?.key;
-  const compactGroupedLabels =
-    series.length > 1 || data.length > COMPACT_LABELS_FROM;
+  const labelClass =
+    data.length > COMPACT_LABELS_FROM
+      ? "fill-foreground text-[0.75cqi]"
+      : "fill-foreground text-[1.1cqi]";
 
   return (
     <>
@@ -354,12 +352,14 @@ export default function CategoryBarChart({
           <BarChart
             data={data}
             margin={{
-              top: stacked ? 16 : groupedLabelTopMargin(series.length),
+              top: 16,
               right: 8,
               bottom: angledCategories ? 8 : 0,
               left: angledAxis?.marginLeft ?? 0,
             }}
-            barGap={1}
+            {...(fitGroupedValueLabels && !stacked
+              ? { barGap: 0, barCategoryGap: "2%" }
+              : { barGap: 1 })}
           >
             <CartesianGrid
               strokeDasharray="3 3"
@@ -429,12 +429,13 @@ export default function CategoryBarChart({
                 ) : (
                   <LabelList
                     dataKey={entry.key}
-                    content={
-                      <GroupedValueLabel
-                        seriesIndex={seriesIndex}
-                        compact={compactGroupedLabels}
-                      />
-                    }
+                    {...(fitGroupedValueLabels
+                      ? {
+                          content: (
+                            <GroupedValueLabel seriesIndex={seriesIndex} />
+                          ),
+                        }
+                      : { position: "top" as const, className: labelClass })}
                   />
                 )}
               </Bar>

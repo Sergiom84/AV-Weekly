@@ -1,19 +1,24 @@
 import { describe, expect, it } from "vitest";
-import {
-  groupedLabelOffset,
-  groupedLabelTopMargin,
-} from "../client/src/components/deck/CategoryBarLabelLayout.ts";
+import { groupedLabelPlacement } from "../client/src/components/deck/CategoryBarLabelLayout.ts";
 
 describe("CategoryBarChart grouped value labels", () => {
-  it("gives every grouped series a distinct vertical level", () => {
-    expect([0, 1, 2, 3].map(groupedLabelOffset)).toEqual([0, 12, 24, 36]);
+  it("opens the first pair horizontally instead of cascading it vertically", () => {
+    expect([0, 1].map(groupedLabelPlacement)).toEqual([
+      { offset: -1, textAnchor: "end" },
+      { offset: 1, textAnchor: "start" },
+    ]);
   });
 
-  it("reserves enough top margin for every label level", () => {
-    expect(groupedLabelTopMargin(4)).toBe(52);
+  it("repeats the same placement for the HIC pair", () => {
+    expect([2, 3].map(groupedLabelPlacement)).toEqual([
+      { offset: -1, textAnchor: "end" },
+      { offset: 1, textAnchor: "start" },
+    ]);
   });
 
-  it("keeps the original top margin for a single series", () => {
-    expect(groupedLabelTopMargin(1)).toBe(16);
+  it("never leaves a grouped label centred on its neighbour", () => {
+    expect(
+      [0, 1, 2, 3].map(index => groupedLabelPlacement(index).offset)
+    ).toEqual([-1, 1, -1, 1]);
   });
 });

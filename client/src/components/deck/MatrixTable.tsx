@@ -85,7 +85,7 @@ export default function MatrixTable({
                 key={column}
                 scope="col"
                 title={column}
-                className={`px-[0.08cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center ${variant === "report" ? "break-all font-semibold leading-tight" : "truncate font-normal"}`}
+                className={`text-center ${variant === "report" ? "break-words px-[0.06cqi] py-[calc(var(--fit-scale,1)*0.22cqi)] text-[length:calc(var(--fit-scale,1)*0.92cqi)] font-semibold leading-tight [overflow-wrap:anywhere]" : "truncate px-[0.08cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] font-normal"}`}
               >
                 {column}
               </th>

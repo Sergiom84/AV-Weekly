@@ -101,7 +101,7 @@ function DetailTable({
         </div>
 
         <div
-          className="mt-auto grid shrink-0 border-t border-border py-[0.3cqi] font-semibold"
+          className="grid shrink-0 border-t border-border py-[0.3cqi] font-semibold"
           style={{ gridTemplateColumns }}
           role="row"
         >
@@ -285,7 +285,7 @@ export default function TopTenIncidenciasPage({
           )}
         </div>
 
-        <div className="grid min-h-0 grid-rows-3 gap-[0.7cqi]">
+        <div className="grid min-h-0 content-start gap-[0.7cqi]">
           {detailTables.map(table => (
             <DetailTable
               key={table.view}

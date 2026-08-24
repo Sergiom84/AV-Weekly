@@ -58,7 +58,7 @@ export default function WorkOrdersPage({
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="-ml-[1.5%] min-h-0 w-[103%] flex-1 overflow-hidden">
         <MatrixTable
           rowHeader="Edificio"
           columns={matrix.columns}
