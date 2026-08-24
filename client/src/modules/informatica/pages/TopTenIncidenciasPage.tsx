@@ -1,4 +1,4 @@
-import MatrixTable, { type MatrixRow } from "@/components/deck/MatrixTable";
+import type { MatrixRow } from "@/components/deck/MatrixTable";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
@@ -32,6 +32,95 @@ interface ComparisonView {
   view: string;
   label: string;
   rows: MatrixRow[];
+}
+
+function DetailTable({
+  label,
+  columns,
+  rows,
+}: {
+  label: string;
+  columns: string[];
+  rows: MatrixRow[];
+}) {
+  const totals = columns.map((_, index) =>
+    rows.reduce((sum, row) => sum + (row.values[index] ?? 0), 0)
+  );
+  const gridTemplateColumns = `minmax(0, 1.6fr) repeat(${columns.length}, minmax(0, 1fr))`;
+
+  return (
+    <section className="flex min-h-0 flex-col" aria-label={label}>
+      <h3 className="h-[1.45cqi] shrink-0 font-mono text-[1.05cqi] uppercase leading-none tracking-wide text-muted-foreground">
+        {label}
+      </h3>
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-hidden font-mono text-[0.85cqi] leading-none tabular-nums"
+        role="table"
+      >
+        <div
+          className="grid shrink-0 border-b border-border py-[0.28cqi] text-muted-foreground"
+          style={{ gridTemplateColumns }}
+          role="row"
+        >
+          <span className="truncate text-left" role="columnheader">
+            Componente
+          </span>
+          {columns.map(column => (
+            <span
+              key={column}
+              className="truncate text-center"
+              role="columnheader"
+            >
+              {column}
+            </span>
+          ))}
+        </div>
+
+        <div className="min-h-0 overflow-hidden" role="rowgroup">
+          {rows.map(row => (
+            <div
+              key={row.label}
+              className="grid h-[1.05cqi] items-center border-b border-border/60"
+              style={{ gridTemplateColumns }}
+              role="row"
+            >
+              <span
+                className="truncate text-left"
+                role="rowheader"
+                title={row.label}
+              >
+                {row.label}
+              </span>
+              {columns.map((column, index) => (
+                <span key={column} className="truncate text-center" role="cell">
+                  {row.values[index] || ""}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <div
+          className="mt-auto grid shrink-0 border-t border-border py-[0.3cqi] font-semibold"
+          style={{ gridTemplateColumns }}
+          role="row"
+        >
+          <span className="truncate text-left" role="rowheader">
+            Total
+          </span>
+          {totals.map((total, index) => (
+            <span
+              key={columns[index]}
+              className="truncate text-center"
+              role="cell"
+            >
+              {total || ""}
+            </span>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 /** The "ten" of the title: rows kept per view, ranked by the latest month. */
@@ -198,19 +287,12 @@ export default function TopTenIncidenciasPage({
 
         <div className="grid min-h-0 grid-rows-3 gap-[0.7cqi]">
           {detailTables.map(table => (
-            <section key={table.view} className="flex min-h-0 flex-col">
-              <h3 className="shrink-0 pb-[0.25cqi] font-mono text-[1.05cqi] uppercase tracking-wide text-muted-foreground">
-                {table.label}
-              </h3>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <MatrixTable
-                  rowHeader="Componente"
-                  columns={columns}
-                  rows={table.rows}
-                  rowTotals={false}
-                />
-              </div>
-            </section>
+            <DetailTable
+              key={table.view}
+              label={table.label}
+              columns={columns}
+              rows={table.rows}
+            />
           ))}
         </div>
       </div>

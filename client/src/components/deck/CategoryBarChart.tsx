@@ -10,6 +10,11 @@ import {
   YAxis,
 } from "recharts";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
+import {
+  COMPACT_LABELS_FROM,
+  groupedLabelOffset,
+  groupedLabelTopMargin,
+} from "./CategoryBarLabelLayout";
 
 export interface CategorySeries {
   /** Key inside each chart row. */
@@ -35,9 +40,6 @@ interface CategoryBarChartProps {
    */
   angledCategories?: boolean;
 }
-
-/** Above this many categories the value labels need the compact size to fit. */
-const COMPACT_LABELS_FROM = 14;
 
 /** Below this value a stacked segment is never labelled, however tall it draws. */
 const MIN_STACK_LABEL_VALUE = 9;
@@ -168,6 +170,55 @@ interface StackLabelProps {
   index?: number;
 }
 
+interface GroupedValueLabelProps extends StackLabelProps {
+  seriesIndex: number;
+  compact: boolean;
+}
+
+/**
+ * Value above a grouped column, lifted onto a stable level per series.
+ * Neighbouring series no longer print their values on the same baseline, and
+ * the chart reserves the matching top margin so the highest level is not cut.
+ */
+function GroupedValueLabel({
+  x,
+  y,
+  width,
+  value,
+  seriesIndex,
+  compact,
+}: GroupedValueLabelProps) {
+  const box = { x: Number(x), y: Number(y), width: Number(width) };
+
+  if (
+    value === undefined ||
+    value === "" ||
+    !Number.isFinite(box.x) ||
+    !Number.isFinite(box.y) ||
+    !Number.isFinite(box.width)
+  ) {
+    return null;
+  }
+
+  return (
+    <text
+      x={box.x + box.width / 2}
+      y={box.y - 4 - groupedLabelOffset(seriesIndex)}
+      textAnchor="middle"
+      className={
+        compact
+          ? "fill-foreground text-[0.75cqi]"
+          : "fill-foreground text-[1.1cqi]"
+      }
+      stroke="var(--background)"
+      strokeWidth={2}
+      paintOrder="stroke"
+    >
+      {value}
+    </text>
+  );
+}
+
 /**
  * Stack total, written above the column. Rendered from the topmost series, the
  * only one whose `y` is the top of the whole stack.
@@ -271,10 +322,8 @@ export default function CategoryBarChart({
       )
     : [];
   const topSeriesKey = series[series.length - 1]?.key;
-  const labelClass =
-    data.length > COMPACT_LABELS_FROM
-      ? "fill-foreground text-[0.75cqi]"
-      : "fill-foreground text-[1.1cqi]";
+  const compactGroupedLabels =
+    series.length > 1 || data.length > COMPACT_LABELS_FROM;
 
   return (
     <>
@@ -305,7 +354,7 @@ export default function CategoryBarChart({
           <BarChart
             data={data}
             margin={{
-              top: 16,
+              top: stacked ? 16 : groupedLabelTopMargin(series.length),
               right: 8,
               bottom: angledCategories ? 8 : 0,
               left: angledAxis?.marginLeft ?? 0,
@@ -348,7 +397,7 @@ export default function CategoryBarChart({
                 fontSize: "1.2cqi",
               }}
             />
-            {series.map(entry => (
+            {series.map((entry, seriesIndex) => (
               <Bar
                 key={entry.key}
                 dataKey={entry.key}
@@ -380,8 +429,12 @@ export default function CategoryBarChart({
                 ) : (
                   <LabelList
                     dataKey={entry.key}
-                    position="top"
-                    className={labelClass}
+                    content={
+                      <GroupedValueLabel
+                        seriesIndex={seriesIndex}
+                        compact={compactGroupedLabels}
+                      />
+                    }
                   />
                 )}
               </Bar>
