@@ -1,13 +1,21 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
-import { AV_SERVICE, createDefaultDeck, isPageVisible } from "@shared/informe";
+import {
+  AV_SERVICE,
+  createDefaultDeck,
+  generateWeeklySpeech,
+  isPageVisible,
+} from "@shared/informe";
 import type { DeckPage } from "@shared/informe";
 import { createNotesPage, createSectionPage } from "@shared/deck/core";
 import { getDeckModule } from "@shared/deck/registry";
 import { useAvDeck } from "@/modules/av/useAvDeck";
 import MainNav from "@/components/MainNav";
 import HomeLink from "@/components/HomeLink";
-import DeckSidebar, { type SidebarUpload } from "@/components/deck/DeckSidebar";
+import DeckSidebar, {
+  type SidebarExportAction,
+  type SidebarUpload,
+} from "@/components/deck/DeckSidebar";
 import CoverPage from "@/components/deck/CoverPage";
 import IndexPage from "@/components/deck/IndexPage";
 import PageOrderControls from "@/components/deck/PageOrderControls";
@@ -20,7 +28,16 @@ import PresentationOverlay from "@/components/deck/PresentationOverlay";
 import WeeklySupportPage from "@/components/informe/WeeklySupportPage";
 import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, Loader2, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Copy, Eye, EyeOff, FileText, Loader2, Plus } from "lucide-react";
 
 function scrollToPage(pageId: string) {
   const node = document.getElementById(`slide-${pageId}`);
@@ -58,6 +75,39 @@ export default function Informe() {
   } = useAvDeck();
   const [editing, setEditing] = useState(false);
   const [presenting, setPresenting] = useState(false);
+  const [speechOpen, setSpeechOpen] = useState(false);
+  const [speechCopied, setSpeechCopied] = useState(false);
+  const speechRef = useRef<HTMLTextAreaElement>(null);
+
+  const speech = useMemo(
+    () => generateWeeklySpeech(weekly, deck),
+    [deck, weekly]
+  );
+
+  const copySpeech = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(speech);
+    } catch {
+      speechRef.current?.select();
+      document.execCommand("copy");
+    }
+    setSpeechCopied(true);
+  }, [speech]);
+
+  const exportActions = useMemo<SidebarExportAction[]>(
+    () => [
+      {
+        id: "weekly-speech",
+        label: "Speech semanal",
+        icon: <FileText className="h-4 w-4" />,
+        onClick: () => {
+          setSpeechCopied(false);
+          setSpeechOpen(true);
+        },
+      },
+    ],
+    []
+  );
 
   // Pages that ship with the deck are never deletable: only the ones a user
   // added by hand carry a remove control.
@@ -283,6 +333,7 @@ export default function Informe() {
                 onSelectPage={scrollToPage}
                 pdfHref="/api/informe/pdf"
                 onPresent={() => setPresenting(true)}
+                exportActions={exportActions}
               />
             </div>
           </div>
@@ -401,6 +452,46 @@ export default function Informe() {
           onClose={() => setPresenting(false)}
         />
       )}
+
+      <Dialog
+        open={speechOpen}
+        onOpenChange={open => {
+          setSpeechOpen(open);
+          if (!open) setSpeechCopied(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Speech semanal</DialogTitle>
+            <DialogDescription className="sr-only">
+              Speech semanal de Audiovisuales
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            ref={speechRef}
+            readOnly
+            value={speech}
+            aria-label="Speech semanal"
+            className="min-h-[55vh] w-full resize-y rounded-md border border-border bg-background p-4 font-mono text-sm leading-relaxed text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <DialogFooter className="items-center">
+            <span
+              className="mr-auto font-mono text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              {speechCopied ? "Copiado" : ""}
+            </span>
+            <Button
+              type="button"
+              onClick={() => void copySpeech()}
+              className="gap-2"
+            >
+              <Copy className="h-4 w-4" />
+              Copiar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

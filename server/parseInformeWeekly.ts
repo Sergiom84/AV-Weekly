@@ -51,6 +51,108 @@ const SHEET_ROLE_BY_TEXT: Array<{ match: string[]; role: MatrixRole }> = [
 
 const TOTAL_LABEL = "TOTAL";
 
+const DETAIL_TYPES: Exclude<SupportType, "Remotos">[] = [
+  "Programados",
+  "Presenciales",
+  "Incidencias",
+  "Correctivos",
+];
+
+type DetailType = (typeof DETAIL_TYPES)[number];
+
+interface CanonicalResolution {
+  tier2: string;
+  tier3: string;
+}
+
+const FALLBACK_RESOLUTION: Record<DetailType, CanonicalResolution> = {
+  Programados: { tier2: "SALA", tier3: "PREPARACION SALA" },
+  Presenciales: { tier2: "SALA", tier3: "DES/MONTAJE" },
+  Incidencias: { tier2: "CABLEADO", tier3: "SANEADO" },
+  Correctivos: { tier2: "EQUIPO AUDIO", tier3: "CONFIGURACION" },
+};
+
+const EXACT_RESOLUTIONS: Record<DetailType, Set<string>> = {
+  Programados: new Set([
+    "SALA|PREPARACION SALA",
+    "SALA|PRESTAMO",
+    "WEBEX|CONEXION",
+    "WEBEX|SEMINARIO WEB",
+    "WEBEX|TRADUCCION",
+    "MEET|CONEXION",
+    "MEET|TRADUCCION",
+    "OTRAS VC|CONEXION",
+  ]),
+  Presenciales: new Set([
+    "SALA|PREPARACION SALA",
+    "SALA|DES/INSTALACION",
+    "SALA|DES/MONTAJE",
+    "SALA|ENCENDIDO/APAGADO",
+    "SALA|EVENTO",
+    "SALA|ETIQUETADO",
+    "WEBEX|CONEXION",
+    "WEBEX|TRADUCCION",
+    "OTRAS VC|CONEXION",
+    "MEET|CONEXION",
+  ]),
+  Incidencias: new Set([
+    "WEBEX|CONEXION",
+    "WEBEX|FORMACION",
+    "WEBEX|GESTION",
+    "CABLEADO|PRESTAMO",
+    "CABLEADO|SANEADO",
+    "CABLEADO|SUSTITUCION",
+    "PC/PORTATIL|CONFIGURACION",
+    "PC/PORTATIL|FORMACION",
+    "DOMOTICA|CONFIGURACION",
+    "DOMOTICA|FORMACION",
+    "DOMOTICA|REINICIO",
+    "DOMOTICA|SUSTITUCION",
+    "MEET|CONEXION",
+    "MEET|FORMACION",
+  ]),
+  Correctivos: new Set([
+    "ALMACEN|INVENTARIO",
+    "ALMACEN|TRASLADO",
+    "CABLEADO|SANEADO",
+    "CABLEADO|SUSTITUCION",
+    "PC/PORTATIL|CONFIGURACION",
+    "PC/PORTATIL|REINICIO",
+    "PC/PORTATIL|SUSTITUCION",
+    "EQUIPO AUDIO|CONFIGURACION",
+    "EQUIPO AUDIO|REINICIO",
+    "EQUIPO AUDIO|SUSTITUCION",
+    "EQUIPO VIDEO|CONFIGURACION",
+    "EQUIPO VIDEO|REINICIO",
+    "EQUIPO VIDEO|SUSTITUCION",
+  ]),
+};
+
+const GROUPED_TIER2: Record<"Incidencias" | "Correctivos", Set<string>> = {
+  Incidencias: new Set([
+    "EQUIPO VIDEO",
+    "MONITOR",
+    "EQUIPO AUDIO",
+    "VC CISCO",
+    "PERIFERICO PC",
+    "OTRAS VC",
+    "PROYECTOR",
+    "TRADUCCION",
+    "ROOMWIZARD/QR",
+    "VIDEO WALL",
+  ]),
+  Correctivos: new Set([
+    "PERIFERICO PC",
+    "MONITOR",
+    "DOMOTICA",
+    "VIDEO WALL",
+    "PROYECTOR",
+    "VC CISCO",
+    "VC USB",
+    "ROOMWIZARD/QR",
+  ]),
+};
+
 function normalizeText(value: unknown) {
   return String(value ?? "")
     .normalize("NFD")
@@ -58,6 +160,145 @@ function normalizeText(value: unknown) {
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
+}
+
+function normalizeResolutionToken(value: unknown) {
+  return normalizeText(value)
+    .replace(/\\/g, "/")
+    .replace(/\s*\/\s*/g, "/")
+    .replace(/\s*\.\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeTier2(value: unknown) {
+  const normalized = normalizeResolutionToken(value);
+
+  if (normalized === "SALAS") return "SALA";
+  if (normalized === "EQUIPO DE VIDEO") return "EQUIPO VIDEO";
+  if (normalized === "VIDEOWALL") return "VIDEO WALL";
+  if (normalized === "VC CISCO") return "VC CISCO";
+  if (normalized === "VC USB") return "VC USB";
+  if (normalized === "ROOMWIZARD/QR") return "ROOMWIZARD/QR";
+  if (normalized === "PC/PORTATIL") return "PC/PORTATIL";
+
+  return normalized;
+}
+
+function canonicalResolution(
+  type: DetailType,
+  row: ResolutionRow
+): CanonicalResolution | null {
+  const tier2 = normalizeTier2(row.tier2);
+  let tier3 = normalizeResolutionToken(row.tier3);
+
+  // The source sometimes leaves the action blank below the SALAS group. The
+  // operational spreadsheet assigns that row to DES/INSTALACION.
+  if (type === "Presenciales" && tier2 === "SALA" && !tier3) {
+    tier3 = "DES/INSTALACION";
+  }
+
+  if (!tier2) {
+    return null;
+  }
+
+  if (
+    (type === "Incidencias" || type === "Correctivos") &&
+    GROUPED_TIER2[type].has(tier2)
+  ) {
+    return { tier2, tier3: tier2 };
+  }
+
+  const key = `${tier2}|${tier3}`;
+  return EXACT_RESOLUTIONS[type].has(key) ? { tier2, tier3 } : null;
+}
+
+/** Normalizes the aliases used by the operational sheet and sums duplicates. */
+export function normalizeInformeResolutionRows(
+  type: DetailType,
+  rows: ResolutionRow[]
+): ResolutionRow[] {
+  const aggregated = new Map<string, ResolutionRow>();
+
+  for (const row of rows) {
+    const canonical = canonicalResolution(type, row);
+
+    if (!canonical) {
+      continue;
+    }
+
+    const key = `${canonical.tier2}|${canonical.tier3}`;
+    const existing = aggregated.get(key);
+
+    if (existing) {
+      existing.total += row.total;
+      continue;
+    }
+
+    aggregated.set(key, {
+      category: row.category || type,
+      tier2: canonical.tier2,
+      tier3: canonical.tier3,
+      total: row.total,
+    });
+  }
+
+  return Array.from(aggregated.values())
+    .filter((row) => row.total > 0)
+    .sort(
+      (a, b) =>
+        a.tier2.localeCompare(b.tier2, "es") || a.tier3.localeCompare(b.tier3, "es")
+    );
+}
+
+/**
+ * Makes the resolution detail add up to the location total for the reported
+ * week. This is the deterministic equivalent of the four in-memory patches in
+ * the operational Apps Script.
+ */
+export function reconcileInformeResolutionRows(
+  type: DetailType,
+  rows: ResolutionRow[],
+  expectedTotal: number
+): ResolutionRow[] {
+  const reconciled = normalizeInformeResolutionRows(type, rows).map((row) => ({ ...row }));
+  const detailTotal = reconciled.reduce((sum, row) => sum + row.total, 0);
+  const difference = expectedTotal - detailTotal;
+
+  if (difference === 0) {
+    return reconciled;
+  }
+
+  const fallback = FALLBACK_RESOLUTION[type];
+  const fallbackIndex = reconciled.findIndex(
+    (row) => row.tier2 === fallback.tier2 && row.tier3 === fallback.tier3
+  );
+  const current = fallbackIndex >= 0 ? reconciled[fallbackIndex].total : 0;
+  const adjusted = current + difference;
+
+  if (adjusted < 0) {
+    throw new Error(
+      `El detalle de ${type} supera el total semanal en ${Math.abs(difference)} y no puede reconciliarse sin tickets negativos.`
+    );
+  }
+
+  if (fallbackIndex >= 0) {
+    reconciled[fallbackIndex] = { ...reconciled[fallbackIndex], total: adjusted };
+  } else if (adjusted > 0) {
+    reconciled.push({
+      category: type,
+      tier2: fallback.tier2,
+      tier3: fallback.tier3,
+      total: adjusted,
+    });
+  }
+
+  return reconciled
+    .filter((row) => row.total > 0)
+    .sort(
+      (a, b) =>
+        a.tier2.localeCompare(b.tier2, "es") || a.tier3.localeCompare(b.tier3, "es")
+    );
 }
 
 /**
@@ -164,7 +405,32 @@ function parseMatrixSheet(worksheet: XLSX.WorkSheet): WeeklyMatrix | null {
     dataRows.reduce((sum, row) => sum + (row.values[weekIndex] || 0), 0)
   );
 
-  return { weeks, rows: dataRows, totals };
+  return densifyWeeklyMatrix({ weeks, rows: dataRows, totals });
+}
+
+/** Inserts zero-valued columns for missing weeks between the first and last. */
+export function densifyWeeklyMatrix(matrix: WeeklyMatrix): WeeklyMatrix {
+  if (matrix.weeks.length < 2) {
+    return matrix;
+  }
+
+  const first = matrix.weeks[0];
+  const last = matrix.weeks[matrix.weeks.length - 1];
+  const weeks = Array.from({ length: last - first + 1 }, (_, index) => first + index);
+  const originalIndex = new Map(matrix.weeks.map((week, index) => [week, index]));
+  const rows = matrix.rows.map((row) => {
+    const values = weeks.map((week) => {
+      const index = originalIndex.get(week);
+      return index === undefined ? 0 : (row.values[index] ?? 0);
+    });
+
+    return { ...row, values, total: values.reduce((sum, value) => sum + value, 0) };
+  });
+  const totals = weeks.map((_, weekIndex) =>
+    rows.reduce((sum, row) => sum + (row.values[weekIndex] ?? 0), 0)
+  );
+
+  return { weeks, rows, totals };
 }
 
 function parseDetailSheet(worksheet: XLSX.WorkSheet): ResolutionRow[] {
@@ -269,10 +535,56 @@ export function parseInformeWeeklyWorkbook(workbook: XLSX.WorkBook): InformeWeek
     );
   }
 
+  for (const type of DETAIL_TYPES) {
+    const typeData = byType[type];
+    const matrix = typeData.locations;
+    const weekIndex = matrix?.weeks.indexOf(maxWeek) ?? -1;
+
+    if (weekIndex < 0) {
+      typeData.resolutions = normalizeInformeResolutionRows(type, typeData.resolutions);
+      continue;
+    }
+
+    typeData.resolutions = reconcileInformeResolutionRows(
+      type,
+      typeData.resolutions,
+      matrix?.totals[weekIndex] ?? 0
+    );
+  }
+
   return {
     byType,
     maxWeek,
     sourceFile: null,
     uploadedAt: null,
   };
+}
+
+/** Updates only the reported week and preserves every other historical week. */
+export function mergeReportedResolutionHistory(
+  history: Record<SupportType, Record<string, ResolutionRow[]>>,
+  dataset: InformeWeeklyDataset
+): Record<SupportType, Record<string, ResolutionRow[]>> {
+  if (dataset.maxWeek <= 0) {
+    return history;
+  }
+
+  const week = String(dataset.maxWeek);
+  const merged = { ...history };
+
+  for (const type of DETAIL_TYPES) {
+    const typeData = dataset.byType[type];
+    const matrix = typeData.locations;
+
+    if (!matrix?.weeks.includes(dataset.maxWeek)) {
+      continue;
+    }
+
+    merged[type] = {
+      ...(history[type] ?? {}),
+      [week]: typeData.resolutions,
+    };
+  }
+
+  return merged;
 }

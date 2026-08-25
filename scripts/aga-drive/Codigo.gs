@@ -51,12 +51,13 @@ var CONFIG_KEYS = {
 };
 
 /**
- * ID de la carpeta "Bruto" de sergio.hlara84@gmail.com, la que ya recibe los
- * tres ficheros semanales. `inicializarHoja` la deja puesta en la pestaña
+ * ID de la carpeta "bruto" del Drive corporativo, la que recibe los tres
+ * ficheros semanales. `inicializarHoja` la deja puesta en la pestaña
  * "Configuración" para no tener que pegarla a mano; sigue siendo editable ahí
- * si la carpeta cambia algún día.
+ * si la carpeta cambia algún día — esa celda manda siempre, esto es solo la
+ * semilla inicial.
  */
-var DEFAULT_FOLDER_ID = '1D4AmMBILXmjuYaD2ngDg413pJfYoHgEP';
+var DEFAULT_FOLDER_ID = '1gqUPPVsPOE1xy3aJB2dSwNWD3WnDxK8a';
 
 /** Header of the plain-text format. Must match `AGA_TEXTO_HEADER` in the app. */
 var TEXTO_HEADER = 'AGA TEXTO PLANO v1';

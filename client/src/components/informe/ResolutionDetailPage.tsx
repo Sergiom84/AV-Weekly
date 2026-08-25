@@ -1,9 +1,16 @@
 import type {
   DeckPage,
   InformeWeeklyDataset,
+  ResolutionTableRow,
   WeekSelection,
 } from "@shared/informe";
-import { defaultWeekSelection, resolveWeekSelection } from "@shared/informe";
+import {
+  calculateResolutionTableTotals,
+  defaultWeekSelection,
+  resolutionCellKey,
+  resolutionValueAt,
+  resolveWeekSelection,
+} from "@shared/informe";
 import EditableNumber from "@/components/deck/EditableNumber";
 import EditableText from "@/components/deck/EditableText";
 import SlideHeading from "@/components/deck/SlideHeading";
@@ -18,13 +25,7 @@ interface ResolutionDetailPageProps {
 }
 
 /** A row of the matrix: a hardware/software group and one of its resolutions. */
-interface ResolutionKey {
-  tier2: string;
-  tier3: string;
-}
-
-const cellKey = (row: ResolutionKey, week: number) =>
-  `${row.tier2}|${row.tier3}:${week}`;
+type ResolutionKey = ResolutionTableRow;
 
 /**
  * Resolution detail slide: the hardware/software group and its resolution down
@@ -125,36 +126,25 @@ export default function ResolutionDetailPage({
   }
 
   const isOverridden = (row: ResolutionKey, week: number) =>
-    Object.prototype.hasOwnProperty.call(page.overrides, cellKey(row, week));
-
-  const valueAt = (row: ResolutionKey, week: number): number | null => {
-    if (isOverridden(row, week)) {
-      return page.overrides[cellKey(row, week)];
-    }
-
-    const imported = byWeek[String(week)];
-
-    if (!imported) {
-      return null;
-    }
-
-    const match = imported.find(
-      entry => entry.tier2 === row.tier2 && entry.tier3 === row.tier3
+    Object.prototype.hasOwnProperty.call(
+      page.overrides,
+      resolutionCellKey(row, week)
     );
 
-    return match ? match.total : null;
-  };
+  const valueAt = (row: ResolutionKey, week: number): number | null =>
+    resolutionValueAt(byWeek, page.overrides, row, week);
 
   const setCell = (row: ResolutionKey, week: number, value: number | null) =>
-    onChange({ overrides: { ...page.overrides, [cellKey(row, week)]: value } });
+    onChange({
+      overrides: { ...page.overrides, [resolutionCellKey(row, week)]: value },
+    });
 
-  const rowTotal = (row: ResolutionKey) =>
-    weeks.reduce((sum, week) => sum + (valueAt(row, week) ?? 0), 0);
-
-  const weekTotal = (week: number) =>
-    rows.reduce((sum, row) => sum + (valueAt(row, week) ?? 0), 0);
-
-  const grandTotal = weeks.reduce((sum, week) => sum + weekTotal(week), 0);
+  const totals = calculateResolutionTableTotals(
+    available,
+    rows,
+    byWeek,
+    page.overrides
+  );
 
   // Group rows so the hardware/software cell spans its resolutions, as in the
   // printed report.
@@ -278,7 +268,7 @@ export default function ResolutionDetailPage({
                       </td>
                     ))}
                     <td className="truncate bg-muted/40 px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.26cqi)] text-center font-semibold">
-                      {rowTotal(row) || ""}
+                      {totals.rowTotals[key]}
                     </td>
                   </tr>
                 );
@@ -297,11 +287,11 @@ export default function ResolutionDetailPage({
                     key={week}
                     className="truncate px-[0.1cqi] py-[calc(var(--fit-scale,1)*0.42cqi)] text-center"
                   >
-                    {weekTotal(week) || ""}
+                    {totals.weekTotals[String(week)] ?? 0}
                   </td>
                 ))}
                 <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.42cqi)] text-center">
-                  {grandTotal || ""}
+                  {totals.grandTotal}
                 </td>
               </tr>
             </tbody>

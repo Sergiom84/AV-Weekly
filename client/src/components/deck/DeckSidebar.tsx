@@ -33,6 +33,13 @@ export interface SidebarUpload {
   onUpload: (files: File[]) => Promise<DeckActionResult>;
 }
 
+export interface SidebarExportAction {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+  onClick: () => void;
+}
+
 interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
   deck: DeckStateOf<TPage> | null;
   uploads: SidebarUpload[];
@@ -52,6 +59,8 @@ interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
   pdfHref: string;
   /** Opens the fullscreen, one-slide-at-a-time viewer. */
   onPresent: () => void;
+  /** Module-specific actions rendered inside the shared Exportar section. */
+  exportActions?: SidebarExportAction[];
 }
 
 function formatUploadedAt(value: string | null): string | null {
@@ -277,6 +286,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   onSelectPage,
   pdfHref,
   onPresent,
+  exportActions = [],
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
 
@@ -391,6 +401,20 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
             <Play className="h-4 w-4" />
             Presentar
           </Button>
+
+          {exportActions.map(action => (
+            <Button
+              key={action.id}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={action.onClick}
+            >
+              {action.icon}
+              {action.label}
+            </Button>
+          ))}
 
           <Button
             type="button"

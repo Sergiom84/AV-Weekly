@@ -60,3 +60,15 @@ export {
   emptyMonthlyDataset,
   emptyWeeklyDataset,
 } from "./modules/av/types.ts";
+
+export type {
+  ResolutionTableRow,
+  ResolutionTableTotals,
+} from "./modules/av/speech.ts";
+
+export {
+  calculateResolutionTableTotals,
+  generateWeeklySpeech,
+  resolutionCellKey,
+  resolutionValueAt,
+} from "./modules/av/speech.ts";
