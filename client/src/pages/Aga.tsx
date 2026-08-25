@@ -125,7 +125,9 @@ export default function Aga() {
             ? dataset.managed?.source
             : slot.id === "office"
               ? dataset.office?.source
-              : dataset.source;
+              : slot.id === "texto"
+                ? dataset.texto
+                : dataset.source;
 
         return {
           id: `aga-upload-${slot.id}`,
@@ -137,7 +139,7 @@ export default function Aga() {
           onUpload: (files: File[]) => uploadTo(slot.id, files),
         };
       }),
-    [dataset.managed?.source, dataset.office?.source, dataset.source, uploadTo]
+    [dataset.managed?.source, dataset.office?.source, dataset.texto, dataset.source, uploadTo]
   );
 
   const artwork = MODULE.deck?.artwork;

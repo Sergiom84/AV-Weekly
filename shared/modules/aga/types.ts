@@ -198,6 +198,14 @@ export interface AgaDataset {
   office?: AgaOfficeSection;
   /** Section 3. Absent until the annual import has run. */
   annual?: AgaAnnualSection;
+  /**
+   * Last plain-text import from the AGA Drive spreadsheet.
+   *
+   * Separate from `source` because that one names whatever upload touched the
+   * dataset last, and the sidebar has to be able to say when the text slot
+   * itself was last fed.
+   */
+  texto?: DatasetSource;
   source: DatasetSource;
   /** Names of the sheets the last upload read, in workbook order. */
   sheetsFound?: string[];

@@ -66,9 +66,11 @@ import {
 } from "./buildingLocationMaster.js";
 import {
   mergeAgaDataset,
+  mergeAgaWeeks,
   parseAgaWorkbook,
   type AgaImportReport,
 } from "./parseAgaPlano.js";
+import { mergeAgaAnnualSection, parseAgaTexto } from "./parseAgaTexto.js";
 import {
   mergeAgaOfficeSection,
   parseAgaOfficeWorkbook,
@@ -91,7 +93,10 @@ import {
   type InformaticaImportReport,
   type InformaticaUploadWorkbook,
 } from "./parseInformaticaPlano.js";
-import { parseInformeWeeklyWorkbook } from "./parseInformeWeekly.js";
+import {
+  mergeReportedResolutionHistory,
+  parseInformeWeeklyWorkbook,
+} from "./parseInformeWeekly.js";
 import { parseInformePlanoWorkbook } from "./parseInformePlano.js";
 import {
   mergeMonthlyDatasets,
@@ -415,29 +420,10 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
       latestYear(storedResolutions.byYear) ?? String(new Date().getUTCFullYear());
     const resolutionHistory =
       storedResolutions.byYear[currentYear] ?? emptyResolutionHistory();
-
-    for (const type of INFORME_SUPPORT_TYPES) {
-      const typeData = dataset.byType[type];
-      const matrix = typeData.categories ?? typeData.locations;
-
-      if (!matrix || typeData.resolutions.length === 0) {
-        continue;
-      }
-
-      const lastWeekWithData = matrix.weeks.filter(
-        (_, index) => (matrix.totals[index] ?? 0) > 0
-      );
-      const reportedWeek = lastWeekWithData[lastWeekWithData.length - 1];
-
-      if (reportedWeek === undefined) {
-        continue;
-      }
-
-      resolutionHistory[type] = {
-        ...resolutionHistory[type],
-        [String(reportedWeek)]: typeData.resolutions,
-      };
-    }
+    const mergedResolutionHistory = mergeReportedResolutionHistory(
+      resolutionHistory,
+      dataset
+    );
 
     await client.batch(
       [
@@ -457,7 +443,7 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
                 SET data = excluded.data, uploaded_at = excluded.uploaded_at`,
           args: [
             JSON.stringify({
-              byYear: { ...storedResolutions.byYear, [currentYear]: resolutionHistory },
+              byYear: { ...storedResolutions.byYear, [currentYear]: mergedResolutionHistory },
               sourceFile: storedResolutions.sourceFile,
               uploadedAt: storedResolutions.uploadedAt,
             }),
@@ -1208,9 +1194,6 @@ router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res
     }
 
     const existing = (await readStoredAgaDataset()) ?? emptyAgaDataset();
-    const priorProducts = new Set(
-      (existing.managed?.byProduct ?? []).map((row) => agaManagedLabel(row.label))
-    );
     const selected = {
       ...parsed.managed,
       // These are the six departments selected by the published deck. The raw
@@ -1219,15 +1202,12 @@ router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res
       byDepartment: parsed.managed.byDepartment.filter((row) =>
         AGA_MANAGED_DEPARTMENTS.has(agaManagedLabel(row.label))
       ),
-      // Miguel still has to confirm the visual product filter. Until then,
-      // preserve the sixteen established series; a fresh database uses the
-      // deterministic top sixteen instead of drawing all sixty-one products.
-      byProduct:
-        priorProducts.size > 0
-          ? parsed.managed.byProduct.filter((row) =>
-              priorProducts.has(agaManagedLabel(row.label))
-            )
-          : parsed.managed.byProduct.slice(0, 16),
+      // Products are stored whole, all sixty-odd of them. Slide 2.3 draws the
+      // busiest fifteen, but it picks them after the weeks are joined: the
+      // filter that used to run here kept only the products already stored,
+      // which froze the series — a product first seen this week could never
+      // enter — and the top-N alternative charted a product reaching the top
+      // as a zero for the previous week it did have figures for.
     };
     const stamp = {
       sourceFile: req.file.originalname,
@@ -1254,6 +1234,83 @@ router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al procesar Gestionado ZPT025";
+    res.status(400).json({ error: message });
+  }
+});
+
+/**
+ * Import of the plain-text tab produced by the AGA Drive spreadsheet.
+ *
+ * Takes the whole report in one go, where the three workbook endpoints each
+ * take one section. Unlike them it applies no presentation filter: the Drive
+ * script already decided which departments and how many products the slides
+ * show, and re-filtering here would drop rows it deliberately produced.
+ *
+ * Accepts a `.txt` upload (`file`) or a pasted body (`{ texto }`), because the
+ * colleague copies the tab and the sidebar uploads a file.
+ */
+router.post("/api/aga/upload/texto", upload.single("file"), async (req, res) => {
+  try {
+    const body = req.body as { texto?: unknown } | undefined;
+    const pasted = typeof body?.texto === "string" ? body.texto : "";
+    const input = req.file ? req.file.buffer.toString("utf8") : pasted;
+
+    if (input.trim() === "") {
+      return res
+        .status(400)
+        .json({ error: "Debes adjuntar o pegar el texto plano de la hoja de Drive." });
+    }
+
+    const parsed = parseAgaTexto(input);
+    const existing = (await readStoredAgaDataset()) ?? emptyAgaDataset();
+    const stamp = {
+      sourceFile: req.file?.originalname ?? "Texto plano (Drive)",
+      uploadedAt: new Date().toISOString(),
+    };
+
+    const stored: AgaDataset = {
+      ...existing,
+      ...(parsed.weeks.length > 0
+        ? { weeks: mergeAgaWeeks(existing.weeks ?? [], parsed.weeks) }
+        : {}),
+      ...(parsed.managed
+        ? {
+            managed: mergeAgaManagedSection(existing.managed, {
+              ...parsed.managed,
+              source: stamp,
+            }),
+          }
+        : {}),
+      ...(parsed.office
+        ? { office: mergeAgaOfficeSection(existing.office, { ...parsed.office, source: stamp }) }
+        : {}),
+      ...(parsed.annual
+        ? { annual: mergeAgaAnnualSection(existing.annual, { ...parsed.annual, source: stamp }) }
+        : {}),
+      texto: stamp,
+      // The GPS slot of the sidebar reads `source`, so a text import must not
+      // claim it: doing so relabels every other slot with the name of this
+      // file. It only fills it in when nothing has been imported yet.
+      source: existing.source?.sourceFile ? existing.source : stamp,
+    };
+
+    await client.execute({
+      sql: `INSERT INTO aga_dataset (id, data, source_file, uploaded_at)
+            VALUES (1, ?, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE
+            SET data = excluded.data,
+                source_file = excluded.source_file,
+                uploaded_at = excluded.uploaded_at`,
+      args: [JSON.stringify(stored), stored.source.sourceFile],
+    });
+
+    res.json({
+      ...(await buildAgaPayload()),
+      report: { ...parsed.report, file: stamp.sourceFile },
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Error al procesar el texto plano de AGA";
     res.status(400).json({ error: message });
   }
 });

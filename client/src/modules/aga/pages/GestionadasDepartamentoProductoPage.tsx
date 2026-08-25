@@ -1,5 +1,5 @@
 import { AGA_PAGE_DEPARTMENT } from "@shared/modules/aga/deck";
-import { departmentProducts } from "@shared/modules/aga/managed";
+import { AGA_PRODUCT_CHART_ROWS, departmentProducts } from "@shared/modules/aga/managed";
 import type { AgaDataset } from "@shared/modules/aga/types";
 import ManagedBreakdown from "./ManagedBreakdown";
 import type { AgaPageProps } from "./PageShell";
@@ -27,6 +27,7 @@ export default function GestionadasDepartamentoProductoPage({
       dataset={dataset}
       rows={departmentProducts(dataset.managed, department)}
       categoryKey="producto"
+      limit={AGA_PRODUCT_CHART_ROWS}
     />
   );
 }

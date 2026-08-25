@@ -29,17 +29,36 @@ function countAt(counts: AgaWeekCount[], week: string): number {
 }
 
 /**
+ * Bars the product charts draw.
+ *
+ * The published deck showed twelve, and the responsible's own note asks for a
+ * maximum of fifteen. Fifteen is kept because the cut now happens here: it
+ * decides how many bars are drawn, not which rows survive the import, so
+ * raising or lowering it never destroys a comparison.
+ */
+export const AGA_PRODUCT_CHART_ROWS = 15;
+
+/**
  * The rows of a breakdown restricted to the given weeks, descending by the
  * count of the last one — the order the deck draws them in.
  *
  * Rows that are zero across every requested week are dropped: they are labels
  * of another week, not bars of this one.
+ *
+ * `limit` keeps the top rows of the LAST requested week, which is the whole
+ * reason the cut lives here and not in the importers. A product breakdown
+ * carries some sixty products a week, and the slide draws fifteen; truncating
+ * on the way in stores the top fifteen of each week separately, so a product
+ * that reaches the top this week but not last week loses its previous-week
+ * value and is charted as a zero it never had. Cutting after the weeks are
+ * joined keeps every real figure behind the bars that are drawn.
  */
 export function breakdownForWeeks(
   rows: AgaBreakdownRow[] | undefined,
-  weeks: string[]
+  weeks: string[],
+  limit?: number
 ): { label: string; counts: number[] }[] {
-  return (rows ?? [])
+  const ordered = (rows ?? [])
     .map((row) => ({
       label: row.label,
       counts: weeks.map((week) => countAt(row.counts, week)),
@@ -50,6 +69,8 @@ export function breakdownForWeeks(
         b.counts[b.counts.length - 1] - a.counts[a.counts.length - 1] ||
         a.label.localeCompare(b.label, "es")
     );
+
+  return limit && limit > 0 ? ordered.slice(0, limit) : ordered;
 }
 
 /**

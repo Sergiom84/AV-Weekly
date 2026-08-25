@@ -24,6 +24,11 @@ interface ManagedBreakdownProps extends AgaPageProps {
    * is the only one that states it.
    */
   topShare?: boolean;
+  /**
+   * Bars drawn, taken from the top of the latest week. Undefined draws every
+   * row, which is what the department and location slides want.
+   */
+  limit?: number;
 }
 
 /**
@@ -44,10 +49,11 @@ export default function ManagedBreakdown({
   rows,
   categoryKey,
   topShare = false,
+  limit,
 }: ManagedBreakdownProps) {
   const reported = new Set(rows.flatMap((row) => row.counts.map((c) => c.week)));
   const weeks = lastTwoWeeks(dataset.managed).filter((week) => reported.has(week));
-  const imported = breakdownForWeeks(rows, weeks);
+  const imported = breakdownForWeeks(rows, weeks, limit);
 
   const entries = imported.map((row) => ({
     label: row.label,

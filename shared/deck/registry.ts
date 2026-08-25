@@ -162,30 +162,20 @@ export const DECK_MODULES: DeckModule[] = [
     layers: 2,
     deck: {
       apiBase: "/api/aga",
+      // The AGA Drive spreadsheet (see scripts/aga-drive/) reads the three raw
+      // exports and writes this text. It is the only upload the sidebar shows;
+      // the routes for the three raw workbooks still exist server-side (see
+      // routes.ts) for direct use, but are not offered here — one input keeps
+      // the weekly labels (department, project, building) owned in one place,
+      // the Drive mapping tabs, instead of drifting between two.
       uploads: [
         {
-          id: "plano",
-          label: "Excel GPS semanal",
-          path: "/api/aga/upload/plano",
-          error: "No se pudo cargar el excel GPS",
+          id: "texto",
+          label: "Texto plano (Drive)",
+          path: "/api/aga/upload/texto",
+          error: "No se pudo cargar el texto plano de AGA",
           multiple: false,
-          accept: ".xlsx,.xls",
-        },
-        {
-          id: "gestionado",
-          label: "Gestionado ZPT025",
-          path: "/api/aga/upload/gestionado",
-          error: "No se pudo cargar el export Gestionado de ZPT025",
-          multiple: false,
-          accept: ".xlsx,.xls",
-        },
-        {
-          id: "office",
-          label: "Licencias Office",
-          path: "/api/aga/upload/office",
-          error: "No se pudo cargar el export de licencias Office",
-          multiple: false,
-          accept: ".xlsx,.xls",
+          accept: ".txt,.tsv,.csv",
         },
       ],
       // No AGA artwork has been produced yet, so it reuses the corporate
