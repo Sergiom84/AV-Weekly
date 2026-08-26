@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import SeriesLineChart, {
-  type LineSeries,
-} from "@/components/deck/SeriesLineChart";
+import WeeklyBarChart, {
+  type WeeklySeries,
+} from "@/components/deck/WeeklyBarChart";
 import ValueGrid from "@/components/deck/ValueGrid";
 import KpiRow from "@/components/deck/KpiRow";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
@@ -35,10 +35,36 @@ import {
   withOverride,
 } from "../overrides";
 import PageShell, { type OficinasPageProps } from "./PageShell";
+import YearSelector, { type YearSelection } from "./YearSelector";
+
+/** One directorate table of the row the incident slides print. */
+export interface DTTableSpec {
+  /** Names the matrix this table counts, printed above it. */
+  caption: string;
+  rows: OficinasRow[];
+  /**
+   * Offices, ratio and weekly average columns. On by default; the
+   * "Validadoras" table of the published slide prints the six weeks alone.
+   */
+  aggregates?: boolean;
+}
 
 interface DTPageProps extends OficinasPageProps {
-  /** Directorate matrix of the current year. */
+  /**
+   * Directorate matrix of the current year: what the chart draws, which weeks
+   * the tables print, and — when `tables` is absent — the single table itself.
+   */
   rows: OficinasRow[];
+  /**
+   * Directorate tables printed side by side, as the published incident slides
+   * do with the three validator matrices at once. Falls back to one table over
+   * `rows`, which is what a section with a single matrix needs.
+   *
+   * Each table computes its own offices, ratio and weekly average over its own
+   * matrix, so the "sin" and "con" scopes legitimately disagree. The six-week
+   * window is shared: it is the report's window, not the matrix's.
+   */
+  tables?: DTTableSpec[];
   /** Same matrix for the previous year. Empty when the template does not ship it. */
   previousRows?: OficinasRow[];
   year: number;
@@ -76,13 +102,7 @@ interface DTPageProps extends OficinasPageProps {
    * (peticiones, recicladores). A page passes at most one of the two;
    * `yearSelector` wins when both are given.
    */
-  yearSelector?: {
-    /** Years `comparison` has besides `year` itself, oldest first. */
-    available: number[];
-    /** Years currently drawn, a subset of `available`. */
-    selected: number[];
-    onChange: (years: number[]) => void;
-  };
+  yearSelector?: YearSelection;
 }
 
 /** Trailing weeks the table prints, as the published deck does. */
@@ -118,10 +138,14 @@ function yearOnYearFromTotals(
 }
 
 /**
- * The layout every directorate page of the report shares: the weekly line of
- * the current year against the previous one, the year-on-year headline of the
- * last reported week, and the directorate table with its offices, its ratio,
- * its weekly average and the trailing six weeks.
+ * The layout every directorate page of the report shares: the weekly grouped
+ * bars of the current year against the past ones, the year-on-year headline of
+ * the last reported week, and the directorate table with its offices, its
+ * ratio, its weekly average and the trailing six weeks.
+ *
+ * The bars carry no value label. Fifty-two weeks times three or four years is
+ * an order of magnitude more labels than the slide holds, and the printed
+ * annual comparison prints none either.
  *
  * The two aggregate columns are read from `dtStats`, which excludes the week in
  * course — the template is exported mid-week and its last column is a partial
@@ -137,6 +161,7 @@ export default function DTPage({
   editing,
   onChange,
   rows,
+  tables,
   previousRows = [],
   year,
   masters,
@@ -151,7 +176,9 @@ export default function DTPage({
   // The multi-year selector only ever draws from `comparison`, the past-year
   // series measured at the scope of the line on screen. `previousRows` keeps
   // driving the chart for a section that has no such flat series.
-  const extraYears = yearSelector ? [...yearSelector.selected].sort((a, b) => a - b) : [];
+  const extraYears = yearSelector
+    ? [...yearSelector.selected].sort((a, b) => a - b)
+    : [];
 
   const currentWeeks = totals
     ? seriesWeeks(totals, year)
@@ -191,7 +218,9 @@ export default function DTPage({
           }),
         },
         ...extraYears.map(y => {
-          const reportedWeeks = new Set(comparison ? seriesWeeks(comparison, y) : []);
+          const reportedWeeks = new Set(
+            comparison ? seriesWeeks(comparison, y) : []
+          );
           const rowId = `y${y}`;
 
           return {
@@ -246,7 +275,8 @@ export default function DTPage({
                   // zero: the recycler sheet jumps from week 1 to week 21.
                   const imported = previousReported.has(week)
                     ? previousRows.reduce(
-                        (sum, row) => sum + valueAt(row.values, previousYear, week),
+                        (sum, row) =>
+                          sum + valueAt(row.values, previousYear, week),
                         0
                       )
                     : null;
@@ -262,7 +292,7 @@ export default function DTPage({
           : []),
       ];
 
-  const series: LineSeries[] = seriesRows.map(entry => ({
+  const series: WeeklySeries[] = seriesRows.map(entry => ({
     key: entry.key,
     label:
       entry.key === "actual"
@@ -294,7 +324,9 @@ export default function DTPage({
 
   const lastWeek = reported[reported.length - 1] ?? null;
   const compareYear = yearSelector
-    ? (extraYears.length > 0 ? Math.max(...extraYears) : null)
+    ? extraYears.length > 0
+      ? Math.max(...extraYears)
+      : null
     : previousYear;
   const headline =
     lastWeek === null
@@ -334,44 +366,17 @@ export default function DTPage({
     <PageShell page={page} editing={editing} onChange={onChange}>
       {editing && controls}
 
-      {editing && yearSelector && (
-        <div
-          role="group"
-          aria-label="Años comparados"
-          className="flex shrink-0 flex-wrap items-center gap-[0.6cqi] print:hidden"
-        >
-          {yearSelector.available.map(y => {
-            const active = yearSelector.selected.includes(y);
-
-            return (
-              <button
-                key={y}
-                type="button"
-                aria-pressed={active}
-                onClick={() =>
-                  yearSelector.onChange(
-                    active
-                      ? yearSelector.selected.filter(item => item !== y)
-                      : [...yearSelector.selected, y]
-                  )
-                }
-                className={
-                  active
-                    ? "rounded-md border border-foreground px-[0.9cqi] py-[0.35cqi] font-mono text-[1.1cqi] tabular-nums text-foreground"
-                    : "rounded-md border border-border px-[0.9cqi] py-[0.35cqi] font-mono text-[1.1cqi] tabular-nums text-muted-foreground transition-colors hover:text-foreground"
-                }
-              >
-                {y}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {editing && yearSelector && <YearSelector selection={yearSelector} />}
 
       <KpiRow items={items} />
 
       <div className="flex min-h-0 flex-[3] flex-col">
-        <SeriesLineChart categoryKey="semana" series={series} data={data} />
+        <WeeklyBarChart
+          weeks={chartWeeks}
+          series={series}
+          data={data}
+          labels={false}
+        />
       </div>
 
       {caption && (
@@ -381,13 +386,50 @@ export default function DTPage({
       )}
 
       <div className="min-h-0 flex-[2]">
-        <DTTable
-          stats={stats}
-          weeks={window}
-          rows={rows}
-          year={year}
-          totals={totalsOverWindow}
-        />
+        {tables ? (
+          <div className="flex h-full min-h-0 w-full items-stretch gap-[1.2cqi]">
+            {tables.map(table => {
+              const aggregates = table.aggregates !== false;
+
+              return (
+                <div
+                  key={table.caption}
+                  className="flex min-h-0 min-w-0 flex-col gap-[0.3cqi]"
+                  // The three tables share one box, so each takes the width its
+                  // own column count needs: ten columns cannot live in the
+                  // space seven do.
+                  style={{
+                    flexGrow: window.length + (aggregates ? 4 : 1),
+                    flexBasis: 0,
+                  }}
+                >
+                  <p className="shrink-0 truncate text-center font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
+                    {table.caption}
+                  </p>
+                  <div className="min-h-0 flex-1">
+                    <DTTable
+                      stats={dtStats(table.rows, year, masters, reported)}
+                      weeks={window}
+                      rows={table.rows}
+                      year={year}
+                      totals={columnTotals(table.rows, year, window)}
+                      aggregates={aggregates}
+                      compact
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <DTTable
+            stats={stats}
+            weeks={window}
+            rows={rows}
+            year={year}
+            totals={totalsOverWindow}
+          />
+        )}
       </div>
 
       {editing && (
@@ -411,6 +453,32 @@ interface DTTableProps {
   rows: OficinasRow[];
   year: number;
   totals: number[];
+  /**
+   * Offices, ratio and weekly average columns. On by default; the
+   * "Validadoras" table of the published slide prints the six weeks alone.
+   */
+  aggregates?: boolean;
+  /**
+   * Three tables in the box of one, as the published incident slides print
+   * them. Tightens the type and pins every column width, so ten columns fit a
+   * third of the slide instead of truncating the directorate names, and keeps
+   * the source pivot's own wording rather than the deck's.
+   */
+  compact?: boolean;
+}
+
+/** Column widths of the compact table, as a share of its own box. */
+function compactWidths(weeks: number, aggregates: boolean): string[] {
+  // The aggregate columns hold six characters ("144,42") against the three a
+  // week holds, so an even split truncates exactly the figures the slide is
+  // read for.
+  const leading = aggregates ? [26, 8, 10, 12] : [34];
+  const rest = 100 - leading.reduce((sum, share) => sum + share, 0);
+  const perWeek = weeks === 0 ? rest : rest / weeks;
+
+  return [...leading, ...Array.from({ length: weeks }, () => perWeek)].map(
+    share => `${share}%`
+  );
 }
 
 /**
@@ -420,46 +488,85 @@ interface DTTableProps {
  * Font and padding shrink to the box the slide gives it, like every other deck
  * table, so a template that grows a directorate never spills over the slide.
  */
-function DTTable({ stats, weeks, rows, year, totals }: DTTableProps) {
+function DTTable({
+  stats,
+  weeks,
+  rows,
+  year,
+  totals,
+  aggregates = true,
+  compact = false,
+}: DTTableProps) {
   const { containerRef, tableRef } = useFitTableScale<
     HTMLDivElement,
     HTMLTableElement
-  >({ deps: [stats.length, weeks.length] });
+  >({ deps: [stats.length, weeks.length, aggregates, compact] });
 
   const byLabel = new Map(rows.map(row => [row.label, row]));
+  const widths = compact ? compactWidths(weeks.length, aggregates) : null;
+  const offices = stats.reduce((sum, entry) => sum + entry.offices, 0);
+  const counted = stats.reduce((sum, entry) => sum + entry.total, 0);
 
   return (
     <div ref={containerRef} className="h-full max-h-full w-full overflow-auto">
       <table
         ref={tableRef}
-        className="w-full min-w-full table-fixed border-collapse font-mono text-[length:calc(var(--fit-scale,1)*1.15cqi)] leading-none tabular-nums"
+        className={`w-full min-w-full table-fixed border-collapse font-mono leading-none tabular-nums ${
+          compact
+            ? "text-[length:calc(var(--fit-scale,1)*0.85cqi)]"
+            : "text-[length:calc(var(--fit-scale,1)*1.15cqi)]"
+        }`}
       >
+        <colgroup>
+          <col style={{ width: widths ? widths[0] : "22%" }} />
+          {aggregates &&
+            [1, 2, 3].map(index => (
+              <col
+                key={index}
+                style={widths ? { width: widths[index] } : undefined}
+              />
+            ))}
+          {weeks.map((week, index) => (
+            <col
+              key={week}
+              style={
+                widths
+                  ? { width: widths[(aggregates ? 4 : 1) + index] }
+                  : undefined
+              }
+            />
+          ))}
+        </colgroup>
         <thead>
           <tr className="border-b border-border text-muted-foreground">
             <th
               scope="col"
-              className="w-[22%] truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-normal"
+              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-normal"
             >
-              Territorial
+              {compact ? "Semana" : "Territorial"}
             </th>
-            <th
-              scope="col"
-              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
-            >
-              OF
-            </th>
-            <th
-              scope="col"
-              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
-            >
-              Ratio
-            </th>
-            <th
-              scope="col"
-              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
-            >
-              Media
-            </th>
+            {aggregates && (
+              <>
+                <th
+                  scope="col"
+                  className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+                >
+                  OF
+                </th>
+                <th
+                  scope="col"
+                  className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+                >
+                  Ratio
+                </th>
+                <th
+                  scope="col"
+                  className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+                >
+                  Media
+                </th>
+              </>
+            )}
             {weeks.map(week => (
               <th
                 key={week}
@@ -481,15 +588,19 @@ function DTTable({ stats, weeks, rows, year, totals }: DTTableProps) {
               >
                 {entry.dt}
               </th>
-              <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
-                {entry.offices === 0 ? "" : entry.offices}
-              </td>
-              <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
-                {entry.ratio === null ? "" : decimal(entry.ratio)}
-              </td>
-              <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
-                {decimal(entry.average)}
-              </td>
+              {aggregates && (
+                <>
+                  <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                    {entry.offices === 0 ? "" : entry.offices}
+                  </td>
+                  <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                    {entry.ratio === null ? "" : decimal(entry.ratio)}
+                  </td>
+                  <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                    {decimal(entry.average)}
+                  </td>
+                </>
+              )}
               {weeks.map(week => (
                 <td
                   key={week}
@@ -506,15 +617,26 @@ function DTTable({ stats, weeks, rows, year, totals }: DTTableProps) {
               scope="row"
               className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left"
             >
-              Total
+              {compact ? "Total general" : "Total"}
             </th>
-            <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
-              {stats.reduce((sum, entry) => sum + entry.offices, 0) || ""}
-            </td>
-            <td className="px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center" />
-            <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
-              {decimal(stats.reduce((sum, entry) => sum + entry.average, 0))}
-            </td>
+            {aggregates && (
+              <>
+                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+                  {offices || ""}
+                </td>
+                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+                  {/* The published pivot totals the ratio too, over the whole
+                      network. Blank while no office master is seeded, like the
+                      rows above it. */}
+                  {compact && offices > 0 ? decimal(counted / offices) : ""}
+                </td>
+                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+                  {decimal(
+                    stats.reduce((sum, entry) => sum + entry.average, 0)
+                  )}
+                </td>
+              </>
+            )}
             {weeks.map((week, index) => (
               <td
                 key={week}

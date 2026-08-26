@@ -29,18 +29,22 @@ const DEFAULT_EXTRA_YEARS = 2;
  * per-DT matrix, so a past year is selectable without inventing a directorate
  * split the source never measured.
  *
+ * The slide prints the three validator matrices side by side, so the variant
+ * selector does not choose a table: it chooses the scope the bars are drawn at,
+ * and with it the past years the year selector may offer.
+ *
  * The two selectors compose, and the second is bounded by the first.
- * `comparisonSeries` answers which years exist at the scope the page is showing,
+ * `comparisonSeries` answers which years exist at the scope the page is charting,
  * so switching to "solo validadoras" leaves the year buttons out rather than
  * charting a "sin validadoras" past year against a "solo" present one. Today
  * the historico is a "sin validadoras" series, which is the variant the client
- * deck publishes; the "con" line keeps the template's own total sheet, which is
+ * deck publishes; the "con" bars keep the template's own total sheet, which is
  * what that sheet counts.
  *
  * The charted current year follows the same rule: the total sheet while the page
- * shows the "con validadoras" matrix, and the column total of the matrix on
- * screen otherwise. A line that counts more incidents than the table under it is
- * worse than one that differs from the published total.
+ * charts the "con validadoras" matrix, and the column total of the matrix on
+ * screen otherwise. Bars that count more incidents than the table under them are
+ * worse than ones that differ from the published total.
  */
 export default function IncidenciasDTPage({
   page,
@@ -73,6 +77,18 @@ export default function IncidenciasDTPage({
       editing={editing}
       onChange={onChange}
       rows={rows}
+      tables={[
+        {
+          caption: "Comparativa sin Validadoras",
+          rows: dtMatrix(section, "sin"),
+        },
+        { caption: "Total con Validadoras", rows: dtMatrix(section, "con") },
+        {
+          caption: "Validadoras",
+          rows: dtMatrix(section, "solo"),
+          aggregates: false,
+        },
+      ]}
       year={year}
       masters={dataset.masters}
       totals={variant === "con" ? section?.totalsByWeek : undefined}

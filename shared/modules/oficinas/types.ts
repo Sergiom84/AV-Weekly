@@ -398,18 +398,33 @@ export type OficinasSectionKey =
 /* Deck                                                                        */
 /* -------------------------------------------------------------------------- */
 
-/** Page kinds of the Oficinas deck. Prefixed `ofi` so they never collide with the other modules. */
+/**
+ * Page kinds of the Oficinas deck. Prefixed `ofi` so they never collide with the
+ * other modules.
+ *
+ * The `...Semanal` kinds are the ones the published PDF is built from: the
+ * annual bar comparison over the top and the dimension pivoted across the
+ * fifty-two weeks underneath. The kinds without the suffix are the deck's own
+ * readings of the same sections — the ranked top-twelve elements, the share by
+ * request type — kept beside them because the team may prefer either.
+ */
 export type OficinasPageKind =
   | CoreDeckPageKind
   | "ofiAsignadasDT"
   | "ofiAsignadasElemento"
+  | "ofiAsignadasSemanal"
   | "ofiResueltasDT"
   | "ofiResueltasElemento"
+  | "ofiResueltasSemanal"
   | "ofiPeticionesDT"
+  | "ofiPeticionesDTSemanal"
   | "ofiPeticionesTipo"
+  | "ofiPeticionesTipoSemanal"
   | "ofiEncuestas"
   | "ofiRecicladoresDT"
-  | "ofiRecicladoresElemento";
+  | "ofiRecicladoresDTSemanal"
+  | "ofiRecicladoresElemento"
+  | "ofiRecicladoresElementoSemanal";
 
 /** Series a page reports on. Oficinas pages are not typed by series. */
 export type OficinasSeries = string;

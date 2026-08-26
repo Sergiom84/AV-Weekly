@@ -31,18 +31,52 @@ interface PageSpec {
 }
 
 /**
- * Every page between the section divider "1." and the closing slide.
+ * Every page between the section divider "1." and the closing slide, in the
+ * order of the published PDF ("Informe semanal | Oficinas").
+ *
+ * The report opens each subsection with a divider and then draws the same slide
+ * twice, once per dimension: the territorial reading first and the component one
+ * after it. That is why the numbering runs 1.1, 1.2, 1.1, 1.2 rather than
+ * straight down — the PDF groups by dimension, not by section.
+ *
+ * Each `...Semanal` page is the clone of a printed slide. The page right after
+ * it, where there is one, is the deck's own reading of the same data (the ranked
+ * elements, the share by request type); they sit next to each other so the team
+ * can compare and hide whichever they do not want to send.
  *
  * Declared as data, not as literals inside `createDefaultOficinasDeck`, so the
  * merge that repairs already stored decks stays generic over this list: adding a
- * page here is enough, there is no second list of ids to keep in sync.
+ * page here is enough, there is no second list of ids to keep in sync. Page ids
+ * are a stored contract and never change, so a page that moved or was retitled
+ * keeps the id it was seeded with.
  */
 export const OFICINAS_PAGE_SPECS: PageSpec[] = [
-  { id: "oficinas-seccion-asignadas", kind: "section", title: "1.1 Incidencias asignadas" },
+  {
+    id: "oficinas-seccion-asignadas",
+    kind: "section",
+    title: "1.1 Incidencias asignadas y resueltas por territorial",
+  },
   {
     id: "oficinas-asignadas-dt",
     kind: "ofiAsignadasDT",
-    title: "1.1 Incidencias asignadas por DT",
+    title: "1.1 Volumetría de incidencias asignadas",
+    sections: ["asignadas"],
+  },
+  {
+    id: "oficinas-resueltas-dt",
+    kind: "ofiResueltasDT",
+    title: "1.2 Volumetría de incidencias resueltas",
+    sections: ["resueltas"],
+  },
+  {
+    id: "oficinas-seccion-resueltas",
+    kind: "section",
+    title: "1.2 Incidencias asignadas y resueltas por componente",
+  },
+  {
+    id: "oficinas-asignadas-semanal",
+    kind: "ofiAsignadasSemanal",
+    title: "1.1 Comparativa de incidencias asignadas sin validadoras",
     sections: ["asignadas"],
   },
   {
@@ -51,11 +85,10 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     title: "1.1 Incidencias asignadas por elemento",
     sections: ["asignadas"],
   },
-  { id: "oficinas-seccion-resueltas", kind: "section", title: "1.2 Incidencias resueltas" },
   {
-    id: "oficinas-resueltas-dt",
-    kind: "ofiResueltasDT",
-    title: "1.2 Incidencias resueltas por DT",
+    id: "oficinas-resueltas-semanal",
+    kind: "ofiResueltasSemanal",
+    title: "1.2 Comparativa de incidencias resueltas sin validadoras",
     sections: ["resueltas"],
   },
   {
@@ -64,11 +97,23 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     title: "1.2 Incidencias resueltas por elemento",
     sections: ["resueltas"],
   },
-  { id: "oficinas-seccion-peticiones", kind: "section", title: "1.3 Peticiones" },
+  { id: "oficinas-seccion-peticiones", kind: "section", title: "1.3 Peticiones resueltas" },
+  {
+    id: "oficinas-peticiones-dt-semanal",
+    kind: "ofiPeticionesDTSemanal",
+    title: "1.3 Volumetría de peticiones resueltas por territorial",
+    sections: ["peticiones"],
+  },
   {
     id: "oficinas-peticiones-dt",
     kind: "ofiPeticionesDT",
     title: "1.3 Peticiones por DT",
+    sections: ["peticiones"],
+  },
+  {
+    id: "oficinas-peticiones-tipo-semanal",
+    kind: "ofiPeticionesTipoSemanal",
+    title: "1.3 Volumetría de peticiones resueltas",
     sections: ["peticiones"],
   },
   {
@@ -77,18 +122,34 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     title: "1.3 Peticiones por tipo",
     sections: ["peticiones"],
   },
-  { id: "oficinas-seccion-encuestas", kind: "section", title: "1.4 Encuestas" },
+  {
+    id: "oficinas-seccion-encuestas",
+    kind: "section",
+    title: "1.4 Volumetría Encuestas Peticiones",
+  },
   {
     id: "oficinas-encuestas",
     kind: "ofiEncuestas",
-    title: "1.4 Valoración de las encuestas",
+    title: "1.4 Volumetría de encuestas realizadas (Peticiones)",
     sections: ["encuestas"],
   },
   { id: "oficinas-seccion-recicladores", kind: "section", title: "1.5 Recicladores" },
   {
+    id: "oficinas-recicladores-dt-semanal",
+    kind: "ofiRecicladoresDTSemanal",
+    title: "1.5 Volumetría de incidencias resueltas Recicladores",
+    sections: ["recicladores"],
+  },
+  {
     id: "oficinas-recicladores-dt",
     kind: "ofiRecicladoresDT",
     title: "1.5 Recicladores por DT",
+    sections: ["recicladores"],
+  },
+  {
+    id: "oficinas-recicladores-elemento-semanal",
+    kind: "ofiRecicladoresElementoSemanal",
+    title: "1.5 Recicladores resueltos por elemento",
     sections: ["recicladores"],
   },
   {
@@ -193,7 +254,7 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
       kind: "cover",
       supportType: null,
       text: {
-        title: "Informe semanal del servicio",
+        title: "Informe de seguimiento de Oficinas",
         subtitle: SERVICE,
         period: "",
       },
@@ -206,10 +267,17 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
       id: "index",
       kind: "index",
       supportType: null,
+      // Seven entries, which is one more than the index slide draws by default:
+      // `Oficinas.tsx` widens `itemKeys` to match the printed index.
       text: {
         title: "Contenido",
-        item1: "1. Servicio Soporte Oficinas",
-        item2: "2. Kanban",
+        item1: "1. Revisión de métricas",
+        item2: "1.1 Incidencias asignadas y resueltas por territorial",
+        item3: "1.2 Incidencias asignadas y resueltas por componente",
+        item4: "1.3 Peticiones",
+        item5: "1.4 Volumetría Encuestas Peticiones",
+        item6: "1.5 Recicladores",
+        item7: "2. Kanban",
       },
       visible: true,
       weekSelection: null,
@@ -221,7 +289,7 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
       id: "oficinas-seccion-servicio",
       kind: "section",
       supportType: null,
-      text: { title: "1. Servicio Soporte Oficinas", subtitle: SERVICE },
+      text: { title: "1. Revisión de métricas", subtitle: SERVICE },
       visible: true,
       weekSelection: null,
       years: null,
@@ -237,7 +305,7 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
     id: "closing",
     kind: "closing",
     supportType: null,
-    text: { title: "Gracias", subtitle: "" },
+    text: { title: "¡Gracias!", subtitle: "" },
     visible: true,
     weekSelection: null,
     years: null,

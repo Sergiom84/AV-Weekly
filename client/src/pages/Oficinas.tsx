@@ -31,14 +31,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOficinasDeck } from "@/modules/oficinas/useOficinasDeck";
 import AsignadasDTPage from "@/modules/oficinas/pages/AsignadasDTPage";
 import AsignadasElementoPage from "@/modules/oficinas/pages/AsignadasElementoPage";
+import AsignadasSemanalPage from "@/modules/oficinas/pages/AsignadasSemanalPage";
 import EncuestasPage from "@/modules/oficinas/pages/EncuestasPage";
 import PeticionesDTPage from "@/modules/oficinas/pages/PeticionesDTPage";
+import PeticionesDTSemanalPage from "@/modules/oficinas/pages/PeticionesDTSemanalPage";
 import PeticionesTipoPage from "@/modules/oficinas/pages/PeticionesTipoPage";
+import PeticionesTipoSemanalPage from "@/modules/oficinas/pages/PeticionesTipoSemanalPage";
 import RecicladoresDTPage from "@/modules/oficinas/pages/RecicladoresDTPage";
+import RecicladoresDTSemanalPage from "@/modules/oficinas/pages/RecicladoresDTSemanalPage";
 import RecicladoresElementoPage from "@/modules/oficinas/pages/RecicladoresElementoPage";
+import RecicladoresElementoSemanalPage from "@/modules/oficinas/pages/RecicladoresElementoSemanalPage";
 import ResueltasDTPage from "@/modules/oficinas/pages/ResueltasDTPage";
 import ResueltasElementoPage from "@/modules/oficinas/pages/ResueltasElementoPage";
+import ResueltasSemanalPage from "@/modules/oficinas/pages/ResueltasSemanalPage";
 import type { OficinasDataPageProps } from "@/modules/oficinas/pages/PageShell";
+
+/** Index entries the printed report lists, one more than the slide draws by default. */
+const INDEX_ITEMS = ["item1", "item2", "item3", "item4", "item5", "item6", "item7"];
 
 const MODULE = getDeckModule("oficinas");
 
@@ -52,13 +61,19 @@ const DATA_PAGES: Record<
   (props: OficinasDataPageProps) => ReactElement
 > = {
   "oficinas-asignadas-dt": AsignadasDTPage,
+  "oficinas-asignadas-semanal": AsignadasSemanalPage,
   "oficinas-asignadas-elemento": AsignadasElementoPage,
   "oficinas-resueltas-dt": ResueltasDTPage,
+  "oficinas-resueltas-semanal": ResueltasSemanalPage,
   "oficinas-resueltas-elemento": ResueltasElementoPage,
+  "oficinas-peticiones-dt-semanal": PeticionesDTSemanalPage,
   "oficinas-peticiones-dt": PeticionesDTPage,
+  "oficinas-peticiones-tipo-semanal": PeticionesTipoSemanalPage,
   "oficinas-peticiones-tipo": PeticionesTipoPage,
   "oficinas-encuestas": EncuestasPage,
+  "oficinas-recicladores-dt-semanal": RecicladoresDTSemanalPage,
   "oficinas-recicladores-dt": RecicladoresDTPage,
+  "oficinas-recicladores-elemento-semanal": RecicladoresElementoSemanalPage,
   "oficinas-recicladores-elemento": RecicladoresElementoPage,
 };
 
@@ -195,6 +210,7 @@ export default function Oficinas() {
             number={number}
             muted={muted}
             background={artwork?.divider}
+            itemKeys={INDEX_ITEMS}
           />
         );
       case "section":

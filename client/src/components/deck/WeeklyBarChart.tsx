@@ -22,7 +22,16 @@ interface WeeklyBarChartProps {
   weeks: number[];
   series: WeeklySeries[];
   /** One entry per week, holding a numeric value per series key. */
-  data: Record<string, number | string>[];
+  data: Record<string, number | string | null>[];
+  /**
+   * Value on top of every bar. On by default, as the weekly support slides
+   * print it.
+   *
+   * A full year against several past ones is the case that has to turn it off:
+   * fifty-two weeks times three or four bars is more labels than the slide has
+   * pixels, and the printed annual comparison carries none either.
+   */
+  labels?: boolean;
 }
 
 /** Above this many weeks the value labels need the compact size to fit. */
@@ -36,7 +45,12 @@ const AXIS_TICK = { fill: "var(--muted-foreground)", className: "text-[1.1cqi]" 
  * Weekly totals as grouped bars, one group per week and one bar per year.
  * Every bar carries its value on top, as in the printed report.
  */
-export default function WeeklyBarChart({ weeks, series, data }: WeeklyBarChartProps) {
+export default function WeeklyBarChart({
+  weeks,
+  series,
+  data,
+  labels = true,
+}: WeeklyBarChartProps) {
   const animate = usePresentationAnimation();
   const labelClass =
     weeks.length > COMPACT_LABELS_FROM
@@ -88,7 +102,9 @@ export default function WeeklyBarChart({ weeks, series, data }: WeeklyBarChartPr
               isAnimationActive={animate}
               animationDuration={700}
             >
-              <LabelList dataKey={entry.key} position="top" className={labelClass} />
+              {labels && (
+                <LabelList dataKey={entry.key} position="top" className={labelClass} />
+              )}
             </Bar>
           ))}
           </BarChart>

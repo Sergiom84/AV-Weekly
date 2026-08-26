@@ -3,6 +3,7 @@ import type {
   OficinasElementRow,
   OficinasIncidencias,
   OficinasMasters,
+  OficinasRecicladores,
   OficinasRow,
   OficinasValidadoras,
   OficinasWeekValue,
@@ -98,6 +99,63 @@ export function rowOverWeeks(
   weeks: number[]
 ): number[] {
   return weeks.map(week => valueAt(row?.values, year, week));
+}
+
+/**
+ * A set of labelled rows collapsed into one weekly series, summed per year and
+ * week and sorted.
+ *
+ * What the annual comparison chart needs from a section that publishes no total
+ * sheet of its own: recyclers keep their past years as two separate directorate
+ * matrices (`byDT` carries 2024 and the current year, `byDTPrevious` carries
+ * 2025), and a chart cannot draw a matrix.
+ */
+export function weeklyTotals(
+  rows: { values: OficinasWeekValue[] }[]
+): OficinasWeekValue[] {
+  const totals = new Map<string, OficinasWeekValue>();
+
+  for (const row of rows) {
+    for (const entry of row.values) {
+      const key = `${entry.year}:${entry.week}`;
+      const current = totals.get(key);
+
+      if (current) {
+        current.value += entry.value;
+      } else {
+        totals.set(key, { ...entry });
+      }
+    }
+  }
+
+  return Array.from(totals.values()).sort(
+    (a, b) => a.year - b.year || a.week - b.week
+  );
+}
+
+/**
+ * The recycler weekly series across every year the dataset holds.
+ *
+ * Both matrices are read because the year, not the field, is what separates
+ * them: the template writes the current year into `byDT` and the previous one
+ * into `byDTPrevious`, and the historico seed added 2024 to `byDT`.
+ *
+ * `byDT` wins a year both carry, and that year is then skipped rather than
+ * added: the two fields hold the same measure, so folding them together would
+ * double a week instead of completing it.
+ */
+export function recicladoresSeries(
+  section: OficinasRecicladores | undefined
+): OficinasWeekValue[] {
+  const current = weeklyTotals(section?.byDT ?? []);
+  const years = new Set(current.map(entry => entry.year));
+  const previous = weeklyTotals(section?.byDTPrevious ?? []).filter(
+    entry => !years.has(entry.year)
+  );
+
+  return [...current, ...previous].sort(
+    (a, b) => a.year - b.year || a.week - b.week
+  );
 }
 
 /** Column totals of a set of rows over the given weeks. */
