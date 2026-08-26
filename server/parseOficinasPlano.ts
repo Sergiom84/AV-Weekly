@@ -368,7 +368,7 @@ function readElementMatrix(
     }
 
     const componentKey = spellingKey(componente);
-    const rowKey = `${componentKey} ${spellingKey(elemento)}`;
+    const rowKey = `${componentKey} ${spellingKey(elemento)}`;
 
     if (!components.has(componentKey)) {
       components.set(componentKey, new Map());
@@ -760,6 +760,10 @@ function mergeIncidencias(
       ),
     })),
     byElement: mergeRows(existing?.byElement, incoming.byElement),
+    // Carried over untouched, like `masters`: the past years come from the
+    // manual historico and the weekly template has no column to fold into them,
+    // so rebuilding the section from the upload alone would drop them.
+    history: existing?.history,
   };
 }
 

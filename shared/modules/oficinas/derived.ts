@@ -198,6 +198,38 @@ export function dtMatrix(
   return section?.byDT.find(matrix => matrix.variant === variant)?.rows ?? [];
 }
 
+/**
+ * The past-year series a variant may be charted against, or an empty series
+ * when the sources carry no comparable year for it.
+ *
+ * Comparability is a question about scope, not about availability: the deck has
+ * four years of weekly totals for assigned and resolved incidents, but they were
+ * not all measured the same way. `totalsByWeek` is the template's own total
+ * sheet and counts the validators; `history` is the manual historico, which
+ * counts them out. Drawing one against the other puts two different populations
+ * on the same axis and inflates every year-on-year variation the slide prints.
+ *
+ * So a variant is offered exactly the years measured at its own scope: the
+ * total sheet plus whatever the historico tagged "con" for the "con" variant,
+ * and only the historico for the other two. Today that means the published
+ * "sin validadoras" slide is the one with the comparison, and "solo
+ * validadoras" has none.
+ *
+ * `totalsByWeek` comes first so it wins `valueAt` if the historico ever ships a
+ * "con" year the template already reports: the template is the published source.
+ */
+export function comparisonSeries(
+  section: OficinasIncidencias | undefined,
+  variant: OficinasValidadoras
+): OficinasWeekValue[] {
+  const history =
+    section?.history?.find(entry => entry.variant === variant)?.values ?? [];
+
+  return variant === "con"
+    ? [...(section?.totalsByWeek ?? []), ...history]
+    : history;
+}
+
 /** The element rows of a component, in source order. */
 export function elementsOf(
   rows: OficinasElementRow[] | undefined,

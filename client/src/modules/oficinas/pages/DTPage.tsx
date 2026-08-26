@@ -23,6 +23,7 @@ import {
   decimal,
   variationLabel,
   weekLabel,
+  yearColor,
 } from "../aggregate";
 import {
   PREVIOUS_ROW,
@@ -59,10 +60,62 @@ interface DTPageProps extends OficinasPageProps {
    * matrices the table counts.
    */
   caption?: string;
+  /**
+   * Past-year weekly series the multi-year selector draws, measured at the same
+   * scope as the current-year line on screen (`comparisonSeries` in the shared
+   * contract). Only read when `yearSelector` is given.
+   */
+  comparison?: OficinasWeekValue[];
+  /**
+   * Turns the single "año anterior" line into a multi-year one, sourced from
+   * `comparison` rather than from `previousRows`.
+   *
+   * Only a section that has a flat weekly series for past years — asignadas and
+   * resueltas, through the historico seed — can offer this: `previousRows` stays
+   * the mechanism for a section whose previous year is a real per-DT matrix
+   * (peticiones, recicladores). A page passes at most one of the two;
+   * `yearSelector` wins when both are given.
+   */
+  yearSelector?: {
+    /** Years `comparison` has besides `year` itself, oldest first. */
+    available: number[];
+    /** Years currently drawn, a subset of `available`. */
+    selected: number[];
+    onChange: (years: number[]) => void;
+  };
 }
 
 /** Trailing weeks the table prints, as the published deck does. */
 const WINDOW = 6;
+
+/**
+ * The `yearOnYear` headline computed off a flat weekly series instead of a
+ * per-DT matrix: what the multi-year selector needs, since the years it
+ * compares only exist as a total, not as directorate rows.
+ *
+ * The current figure is passed in rather than read from `comparison`: the
+ * current year is charted from the matrix on screen for two of the three
+ * variants, and reading it from a series that only carries past years would
+ * headline a zero.
+ */
+function yearOnYearFromTotals(
+  comparison: OficinasWeekValue[] | undefined,
+  current: number,
+  compareYear: number | null,
+  week: number
+): { week: number; current: number; previous: number | null } {
+  if (compareYear === null || !comparison) {
+    return { week, current, previous: null };
+  }
+
+  const reported = seriesWeeks(comparison, compareYear).includes(week);
+
+  return {
+    week,
+    current,
+    previous: reported ? valueAt(comparison, compareYear, week) : null,
+  };
+}
 
 /**
  * The layout every directorate page of the report shares: the weekly line of
@@ -91,20 +144,24 @@ export default function DTPage({
   throughWeek,
   controls,
   caption,
+  comparison,
+  yearSelector,
 }: DTPageProps) {
   const previousYear = year - 1;
+  // The multi-year selector only ever draws from `comparison`, the past-year
+  // series measured at the scope of the line on screen. `previousRows` keeps
+  // driving the chart for a section that has no such flat series.
+  const extraYears = yearSelector ? [...yearSelector.selected].sort((a, b) => a - b) : [];
 
   const currentWeeks = totals
     ? seriesWeeks(totals, year)
     : Array.from(new Set(rows.flatMap(row => seriesWeeks(row.values, year))));
   const lastCurrentWeek = currentWeeks[currentWeeks.length - 1] ?? null;
   const weekLimit = throughWeek ?? lastCurrentWeek;
-  const chartWeeks = Array.from(
-    new Set([
-      ...currentWeeks,
-      ...previousRows.flatMap(row => seriesWeeks(row.values, previousYear)),
-    ])
-  )
+  const otherYearsWeeks = yearSelector
+    ? extraYears.flatMap(y => (comparison ? seriesWeeks(comparison, y) : []))
+    : previousRows.flatMap(row => seriesWeeks(row.values, previousYear));
+  const chartWeeks = Array.from(new Set([...currentWeeks, ...otherYearsWeeks]))
     .filter(week => weekLimit === null || week <= weekLimit)
     .sort((a, b) => a - b);
 
@@ -117,41 +174,38 @@ export default function DTPage({
     previousRows.flatMap(row => seriesWeeks(row.values, previousYear))
   );
 
-  const seriesRows = [
-    {
-      label: "Año en curso",
-      row: TOTAL_ROW,
-      key: "actual",
-      color: CURRENT_YEAR_COLOR,
-      cells: chartWeeks.map(week => {
-        const key = cellKey(TOTAL_ROW, weekColumn(week));
+  const seriesRows = yearSelector
+    ? [
+        {
+          label: "Año en curso",
+          key: "actual",
+          color: CURRENT_YEAR_COLOR,
+          cells: chartWeeks.map(week => {
+            const key = cellKey(TOTAL_ROW, weekColumn(week));
 
-        return {
-          key,
-          value: overriddenValue(page, key, currentAt(week)),
-          overridden: isOverridden(page, key),
-        };
-      }),
-    },
-    // A previous year the template never shipped is not drawn as a flat zero:
-    // the assigned and resolved sections have no year-on-year sheet at all.
-    ...(previousRows.length > 0
-      ? [
-          {
-            label: "Año anterior",
-            row: PREVIOUS_ROW,
-            key: "previo",
-            color: PREVIOUS_YEAR_COLOR,
+            return {
+              key,
+              value: overriddenValue(page, key, currentAt(week)),
+              overridden: isOverridden(page, key),
+            };
+          }),
+        },
+        ...extraYears.map(y => {
+          const reportedWeeks = new Set(comparison ? seriesWeeks(comparison, y) : []);
+          const rowId = `y${y}`;
+
+          return {
+            label: String(y),
+            key: rowId,
+            color: yearColor(y, year),
             cells: chartWeeks.map(week => {
-              const key = cellKey(PREVIOUS_ROW, weekColumn(week));
-              // A week the previous year never reported is a gap, not a zero:
-              // the recycler sheet jumps from week 1 to week 21.
-              const imported = previousReported.has(week)
-                ? previousRows.reduce(
-                    (sum, row) => sum + valueAt(row.values, previousYear, week),
-                    0
-                  )
-                : null;
+              const key = cellKey(rowId, weekColumn(week));
+              // A week that year never reported (2023 only starts at week 22)
+              // is a gap, not a zero.
+              const imported =
+                comparison && reportedWeeks.has(week)
+                  ? valueAt(comparison, y, week)
+                  : null;
 
               return {
                 key,
@@ -159,14 +213,63 @@ export default function DTPage({
                 overridden: isOverridden(page, key),
               };
             }),
-          },
-        ]
-      : []),
-  ];
+          };
+        }),
+      ]
+    : [
+        {
+          label: "Año en curso",
+          key: "actual",
+          color: CURRENT_YEAR_COLOR,
+          cells: chartWeeks.map(week => {
+            const key = cellKey(TOTAL_ROW, weekColumn(week));
+
+            return {
+              key,
+              value: overriddenValue(page, key, currentAt(week)),
+              overridden: isOverridden(page, key),
+            };
+          }),
+        },
+        // A previous year the template never shipped is not drawn as a flat
+        // zero: the assigned and resolved sections have no year-on-year sheet
+        // at all.
+        ...(previousRows.length > 0
+          ? [
+              {
+                label: "Año anterior",
+                key: "previo",
+                color: PREVIOUS_YEAR_COLOR,
+                cells: chartWeeks.map(week => {
+                  const key = cellKey(PREVIOUS_ROW, weekColumn(week));
+                  // A week the previous year never reported is a gap, not a
+                  // zero: the recycler sheet jumps from week 1 to week 21.
+                  const imported = previousReported.has(week)
+                    ? previousRows.reduce(
+                        (sum, row) => sum + valueAt(row.values, previousYear, week),
+                        0
+                      )
+                    : null;
+
+                  return {
+                    key,
+                    value: overriddenValue(page, key, imported),
+                    overridden: isOverridden(page, key),
+                  };
+                }),
+              },
+            ]
+          : []),
+      ];
 
   const series: LineSeries[] = seriesRows.map(entry => ({
     key: entry.key,
-    label: `${entry.label} (${entry.row === TOTAL_ROW ? year : previousYear})`,
+    label:
+      entry.key === "actual"
+        ? `${entry.label} (${year})`
+        : entry.key === "previo"
+          ? `${entry.label} (${previousYear})`
+          : entry.label,
     color: entry.color,
   }));
 
@@ -190,8 +293,20 @@ export default function DTPage({
   const totalsOverWindow = columnTotals(rows, year, window);
 
   const lastWeek = reported[reported.length - 1] ?? null;
+  const compareYear = yearSelector
+    ? (extraYears.length > 0 ? Math.max(...extraYears) : null)
+    : previousYear;
   const headline =
-    lastWeek === null ? null : yearOnYear(rows, previousRows, year, lastWeek);
+    lastWeek === null
+      ? null
+      : yearSelector
+        ? yearOnYearFromTotals(
+            comparison,
+            currentAt(lastWeek),
+            compareYear,
+            lastWeek
+          )
+        : yearOnYear(rows, previousRows, year, lastWeek);
 
   const items =
     headline === null
@@ -201,11 +316,11 @@ export default function DTPage({
             label: `Semana ${headline.week}`,
             value: headline.current.toLocaleString("es-ES"),
           },
-          ...(headline.previous === null
+          ...(headline.previous === null || compareYear === null
             ? []
             : [
                 {
-                  label: `Semana ${headline.week} de ${previousYear}`,
+                  label: `Semana ${headline.week} de ${compareYear}`,
                   value: headline.previous.toLocaleString("es-ES"),
                 },
                 {
@@ -218,6 +333,40 @@ export default function DTPage({
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
       {editing && controls}
+
+      {editing && yearSelector && (
+        <div
+          role="group"
+          aria-label="Años comparados"
+          className="flex shrink-0 flex-wrap items-center gap-[0.6cqi] print:hidden"
+        >
+          {yearSelector.available.map(y => {
+            const active = yearSelector.selected.includes(y);
+
+            return (
+              <button
+                key={y}
+                type="button"
+                aria-pressed={active}
+                onClick={() =>
+                  yearSelector.onChange(
+                    active
+                      ? yearSelector.selected.filter(item => item !== y)
+                      : [...yearSelector.selected, y]
+                  )
+                }
+                className={
+                  active
+                    ? "rounded-md border border-foreground px-[0.9cqi] py-[0.35cqi] font-mono text-[1.1cqi] tabular-nums text-foreground"
+                    : "rounded-md border border-border px-[0.9cqi] py-[0.35cqi] font-mono text-[1.1cqi] tabular-nums text-muted-foreground transition-colors hover:text-foreground"
+                }
+              >
+                {y}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <KpiRow items={items} />
 

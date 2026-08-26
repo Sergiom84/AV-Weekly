@@ -30,6 +30,7 @@
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+require("dotenv/config");
 const XLSX = require("xlsx");
 const { createClient } = require("@libsql/client");
 
@@ -131,10 +132,18 @@ async function main() {
     .map(([dt, offices]) => ({ dt, offices }))
     .sort((a, b) => a.dt.localeCompare(b.dt, "es"));
 
-  const url = process.env.URL_TURSO ?? "file:./data/av-weekly.db";
+  // Same resolution order as `server/db-config.ts`: URL_TURSO first, then the
+  // legacy SQL_TURSO name the project's .env actually carries, then the local
+  // file. Diverging from that order is how a seeding script silently writes to
+  // an unused local sqlite file while the running app reads Turso.
+  const url =
+    process.env.URL_TURSO?.trim() ||
+    process.env.SQL_TURSO?.trim() ||
+    "file:./data/av-weekly.db";
   const client = createClient(
     url.startsWith("file:") ? { url } : { url, authToken: process.env.TOKEN_TURSO }
   );
+  console.log(`BD: ${url.startsWith("file:") ? url : url.replace(/\/\/.*@/, "//<host>")}`);
 
   await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS oficinas_dataset (

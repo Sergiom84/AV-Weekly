@@ -159,3 +159,31 @@ export function oficinasColor(index: number): string {
 /** Colours of the year-on-year lines: the previous year muted, the current one dominant. */
 export const CURRENT_YEAR_COLOR = "var(--informe-serie-4)";
 export const PREVIOUS_YEAR_COLOR = "var(--informe-serie-2)";
+
+/**
+ * Colour of a year line on a multi-year chart (`1.1 Incidencias asignadas por
+ * DT` and whichever page picks up the same selector next).
+ *
+ * The current year and the immediate previous one keep the fixed pair every
+ * other Oficinas chart already uses, so a reader does not learn a second
+ * colour language for the same two years on a different slide. Anything
+ * older draws from the general palette, skipping both fixed colours so a
+ * third year is never confused with the current or the previous one.
+ */
+const OLDER_YEAR_COLORS = OFICINAS_SERIES_COLORS.filter(
+  (color) => color !== CURRENT_YEAR_COLOR && color !== PREVIOUS_YEAR_COLOR
+);
+
+export function yearColor(year: number, currentYear: number): string {
+  if (year === currentYear) {
+    return CURRENT_YEAR_COLOR;
+  }
+
+  if (year === currentYear - 1) {
+    return PREVIOUS_YEAR_COLOR;
+  }
+
+  const age = currentYear - year - 2;
+
+  return OLDER_YEAR_COLORS[age % OLDER_YEAR_COLORS.length];
+}

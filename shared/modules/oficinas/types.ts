@@ -253,16 +253,41 @@ export interface OficinasDTMatrix {
 }
 
 /**
+ * A weekly series of past years together with the validator scope it measures.
+ *
+ * The weekly template only ever ships the current year, so every year before it
+ * comes from the manual historico workbook ("DATOS Weekly historico_oficinas
+ * _Recicladores.xlsx"), seeded by `scripts/importar-historico-oficinas.mjs`.
+ *
+ * The variant is carried explicitly because that workbook does not declare it
+ * and it is not the one the total sheet counts: its weekly columns reproduce
+ * the "sin validadoras" matrix of the template exactly — twenty of the
+ * thirty-four verified weeks of assigned incidents match to the unit, and none
+ * matches the "con validadoras" total. Storing those years untagged inside
+ * `totalsByWeek` is what made the chart compare a "con" current year against a
+ * "sin" past one.
+ */
+export interface OficinasHistorySeries {
+  variant: OficinasValidadoras;
+  values: OficinasWeekValue[];
+}
+
+/**
  * Assigned or resolved incidents: the same three sheets in both cases.
  *
  * `totalsByWeek` comes from the dedicated total sheet (1 and 6), not from the
  * sum of a matrix: the pivots are refreshed by hand and the two disagree by a
- * few rows on some weeks. The published series is the total sheet.
+ * few rows on some weeks. The published series is the total sheet, which counts
+ * the validators — it reproduces the "con validadoras" matrix week by week.
+ *
+ * `history` carries the past years, each tagged with the scope it was measured
+ * at, and is never written by an upload: the template has no past year to fold.
  */
 export interface OficinasIncidencias {
   totalsByWeek: OficinasWeekValue[];
   byDT: OficinasDTMatrix[];
   byElement: OficinasElementRow[];
+  history?: OficinasHistorySeries[];
 }
 
 /**
