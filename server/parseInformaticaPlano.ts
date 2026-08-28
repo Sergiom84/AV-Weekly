@@ -1182,8 +1182,23 @@ export function parseInformaticaPlanoWorkbook(
 /* Dataset merging                                                             */
 /* -------------------------------------------------------------------------- */
 
+/** `2026/08#09`: the sort at the end of `mergeSectionRows` compares text. */
+function weekKey(mes: string, semana: number): string {
+  return mes + "#" + String(semana).padStart(2, "0");
+}
+
 /**
- * How the temporal key of a section is read, or `null` when it has none.
+ * How the ownership key of a section is read, or `null` when it has none.
+ *
+ * Most sections arrive complete every week — the template ships the whole
+ * history of work orders and appointments — so the month is the right grain:
+ * re-sending them rewrites the months they carry.
+ *
+ * `peticiones` and `peticionesProducto` are the exception. They come from the
+ * backlog, released and managed exports, which are a snapshot of **one** week.
+ * Keying them by month made an upload own weeks it never mentioned, so week 35
+ * erased weeks 32 to 34. They are keyed by week instead, zero-padded so the
+ * final sort orders week 9 before week 10.
  *
  * `edificios` is a dimension table, not a series: it has no period, so an
  * upload that carries it replaces it whole.
@@ -1193,8 +1208,8 @@ const SECTION_MONTH: Record<InformaticaSectionKey, ((row: never) => string) | nu
   incidencias: (row: InformaticaIncidenciaRow) => row.mes,
   encuestas: (row: InformaticaEncuestaRow) => row.mes,
   workOrders: (row: InformaticaWorkOrderRow) => row.mes,
-  peticiones: (row: InformaticaPeticionRow) => row.mes,
-  peticionesProducto: (row: InformaticaPeticionProductoRow) => row.mes,
+  peticiones: (row: InformaticaPeticionRow) => weekKey(row.mes, row.semana),
+  peticionesProducto: (row: InformaticaPeticionProductoRow) => weekKey(row.mes, row.semana),
   peticionesAnual: (row: InformaticaPeticionAnualRow) => row.mes,
   citas: (row: InformaticaCitaRow) => row.mes,
   citasAnual: (row: InformaticaCitaAnualRow) => row.mes,
@@ -1209,9 +1224,11 @@ const SECTION_MONTH: Record<InformaticaSectionKey, ((row: never) => string) | nu
 /**
  * Folds one section of an upload into the section already stored.
  *
- * The rule is "the months the upload talks about are the months it owns": every
- * month present in `incoming` is rebuilt from `incoming`, and every month it
- * does not mention survives untouched. One rule covers both behaviours the
+ * The rule is "the periods the upload talks about are the periods it owns":
+ * every key present in `incoming` is rebuilt from `incoming`, and every key it
+ * does not mention survives untouched. The grain of that key is whatever
+ * `SECTION_MONTH` declares for the section — the month for most of them, the
+ * week for `peticiones`. One rule covers both behaviours the
  * weekly flow needs. The raw sheets of the template arrive complete each week,
  * so re-sending them rewrites the months they carry and adds the new one, which
  * makes a repeated upload idempotent instead of doubling every count. The

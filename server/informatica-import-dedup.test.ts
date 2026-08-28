@@ -7,10 +7,12 @@ import {
   detectRawInformaticaFormat,
 } from "./convertInformaticaRaw.ts";
 import {
+  mergeInformaticaDataset,
   mergeInformaticaWorkbooks,
   parseInformaticaPlanoWorkbook,
   selectInformaticaWorkbooksForMerge,
 } from "./parseInformaticaPlano.ts";
+import type { InformaticaDataset } from "../shared/modules/informatica/types.ts";
 
 const citasHeader = ["Incidencia", "Walkup", "Cita_Previa", "Smart_Tech"];
 const workOrdersHeader = [
@@ -172,5 +174,48 @@ describe("Informatica import source overlap", () => {
     expect(
       parseInformaticaPlanoWorkbook(mergeInformaticaWorkbooks(selected)).dataset.citas?.[0]?.citas
     ).toBe(1);
+  });
+});
+
+function peticion(semana: number, total: number) {
+  return {
+    fecha: null,
+    semana,
+    mes: "2026/08",
+    origen: "On Site",
+    estado: "En vuelo",
+    entidad: "Peticiones",
+    total,
+  };
+}
+
+describe("mergeInformaticaDataset con secciones semanales", () => {
+  const source = { sourceFile: "PLANO", uploadedAt: "2026-08-24T09:00:00.000Z" };
+
+  it("una subida solo posee su propia semana en peticiones", () => {
+    const stored: InformaticaDataset = { source, peticiones: [peticion(33, 700)] };
+    const incoming: InformaticaDataset = { source, peticiones: [peticion(34, 714)] };
+
+    const merged = mergeInformaticaDataset(stored, incoming, source);
+
+    expect(merged.peticiones).toEqual([peticion(33, 700), peticion(34, 714)]);
+  });
+
+  it("reenviar la misma semana la reescribe en vez de duplicarla", () => {
+    const stored: InformaticaDataset = { source, peticiones: [peticion(34, 700)] };
+    const incoming: InformaticaDataset = { source, peticiones: [peticion(34, 714)] };
+
+    expect(mergeInformaticaDataset(stored, incoming, source).peticiones).toEqual([
+      peticion(34, 714),
+    ]);
+  });
+
+  it("ordena las semanas por numero, no por texto", () => {
+    const stored: InformaticaDataset = { source, peticiones: [peticion(9, 1), peticion(10, 2)] };
+    const incoming: InformaticaDataset = { source, peticiones: [peticion(11, 3)] };
+
+    expect(
+      mergeInformaticaDataset(stored, incoming, source).peticiones?.map((row) => row.semana)
+    ).toEqual([9, 10, 11]);
   });
 });
