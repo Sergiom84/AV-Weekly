@@ -93,6 +93,7 @@ import {
   type InformaticaImportReport,
   type InformaticaUploadWorkbook,
 } from "./parseInformaticaPlano.js";
+import { parseInformaticaTexto } from "./parseInformaticaTexto.js";
 import {
   mergeReportedResolutionHistory,
   parseInformeWeeklyWorkbook,
@@ -912,6 +913,58 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
     const message =
       err instanceof Error ? err.message : "Error al procesar el libro plano de Informática";
     res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * Text produced by the Drive spreadsheet (see `scripts/informatica-drive/`).
+ *
+ * Accepts a `.txt` upload (`file`) or a pasted body (`{ texto }`), because the
+ * colleague either copies the `PLANO` tab or saves it as a file. The payload is
+ * folded into what is stored, exactly like the flat workbook upload: the text
+ * carries the whole monthly history, so re-sending it is idempotent.
+ */
+router.post("/api/informatica/upload/texto", upload.single("file"), async (req, res) => {
+  try {
+    const body = req.body as { texto?: unknown } | undefined;
+    const pasted = typeof body?.texto === "string" ? body.texto : "";
+    const uploaded = req.file ? req.file.buffer.toString("utf8") : "";
+    const texto = uploaded || pasted;
+
+    if (texto.trim() === "") {
+      return res
+        .status(400)
+        .json({ error: "Debes adjuntar o pegar el texto plano de la hoja de Drive." });
+    }
+
+    const { dataset, meta } = parseInformaticaTexto(texto);
+    const buildings = await readBuildingLocationMaster();
+    const normalized = normalizeInformaticaBuildingLocations(dataset, buildings).dataset;
+    const existing = await readStoredInformaticaDataset();
+    const normalizedExisting = existing
+      ? normalizeInformaticaBuildingLocations(existing, buildings).dataset
+      : null;
+    const stored = mergeInformaticaDataset(normalizedExisting, normalized, {
+      sourceFile: req.file?.originalname ?? meta.source ?? "PLANO (Drive)",
+      uploadedAt: new Date().toISOString(),
+    });
+
+    await client.execute({
+      sql: `INSERT INTO informatica_dataset (id, data, source_file, uploaded_at)
+            VALUES (1, ?, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE
+            SET data = excluded.data,
+                source_file = excluded.source_file,
+                uploaded_at = excluded.uploaded_at`,
+      args: [JSON.stringify(stored), stored.source.sourceFile],
+    });
+
+    return res.json(await buildInformaticaPayload());
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Error al procesar el texto plano de Informática";
+
+    return res.status(400).json({ error: message });
   }
 });
 

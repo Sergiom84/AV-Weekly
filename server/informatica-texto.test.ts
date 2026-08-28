@@ -1,9 +1,16 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { Server } from "node:http";
+import express from "express";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   INFORMATICA_TEXTO_HEADER,
+  INFORMATICA_TEXTO_SECTIONS,
   serializeInformaticaTexto,
 } from "../shared/modules/informatica/texto.ts";
 import type { InformaticaDataset } from "../shared/modules/informatica/types.ts";
+import { getDeckModule } from "../shared/deck/registry.ts";
 import { parseInformaticaTexto } from "./parseInformaticaTexto.ts";
 
 const source = { sourceFile: "Backlog.xlsx", uploadedAt: "2026-08-24T09:00:00.000Z" };
@@ -230,5 +237,167 @@ describe("parseInformaticaTexto", () => {
 
     expect(round.citas).toEqual(dataset.citas);
     expect(round.edificios).toEqual(dataset.edificios);
+  });
+});
+
+describe("punto de entrada del deck", () => {
+  it("ofrece la subida de texto plano de Drive", () => {
+    const uploads = getDeckModule("informatica").deck?.uploads ?? [];
+
+    expect(uploads[0]).toMatchObject({
+      id: "texto",
+      label: "Texto plano (Drive)",
+      path: "/api/informatica/upload/texto",
+      multiple: false,
+      accept: ".txt,.tsv,.csv",
+    });
+    // The raw workbooks keep their own slot while the Drive flow beds in.
+    expect(uploads.map((slot) => slot.id)).toContain("plano");
+  });
+
+  it("declara las ocho secciones que el script de Drive escribe", () => {
+    expect(Object.values(INFORMATICA_TEXTO_SECTIONS)).toHaveLength(8);
+  });
+});
+
+/** One `PETICIONES` row of the given week, as the `PLANO` tab writes it. */
+function textoDeSemana(fecha: string, semana: number, total: number): string {
+  return [
+    INFORMATICA_TEXTO_HEADER,
+    `semana\t${fecha}`,
+    "",
+    "[PETICIONES]",
+    [fecha, "2026/08", semana, "On Site", "En vuelo", "Peticiones", total].join("\t"),
+  ].join("\n");
+}
+
+/**
+ * The route over a real database, because merging is what it is for.
+ *
+ * `mergeInformaticaDataset` is unit-tested on its own in
+ * `informatica-import-dedup.test.ts`, but that proves the function merges, not
+ * that the route calls it. The failure this guards against is the route
+ * replacing the stored dataset — which no assertion over the parser can see.
+ */
+describe("POST /api/informatica/upload/texto", () => {
+  let origin = "";
+  let server: Server;
+  let dataDir = "";
+  let closeClient: (() => Promise<void>) | undefined;
+
+  beforeAll(async () => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "av-weekly-informatica-texto-"));
+    process.env.APP_DATA_DIR = dataDir;
+
+    const [{ initDb, client }, { default: routes }] = await Promise.all([
+      import("./db.js"),
+      import("./routes.js"),
+    ]);
+
+    await initDb();
+    closeClient = async () => client.close();
+
+    const app = express();
+    app.use(express.json());
+    app.use(routes);
+
+    await new Promise<void>((resolve) => {
+      server = app.listen(0, "127.0.0.1", () => resolve());
+    });
+
+    const address = server.address();
+
+    if (!address || typeof address === "string") {
+      throw new Error("El servidor de prueba no expuso un puerto TCP");
+    }
+
+    origin = `http://127.0.0.1:${address.port}`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+    await closeClient?.();
+
+    try {
+      fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch (error) {
+      // The native libSQL binding keeps its Windows directory handle until the
+      // process exits, so the temp directory is left to the OS.
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "EPERM") {
+        throw error;
+      }
+    }
+  });
+
+  it("rechaza un cuerpo vacio", async () => {
+    const response = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texto: "   " }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("texto plano"),
+    });
+  });
+
+  it("rechaza un texto sin la cabecera del formato", async () => {
+    const response = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texto: "PEGADO CUALQUIERA\n" }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining(INFORMATICA_TEXTO_HEADER),
+    });
+  });
+
+  it("funde la semana nueva con la almacenada en vez de reemplazarla", async () => {
+    const form = new FormData();
+
+    form.append(
+      "file",
+      new Blob([textoDeSemana("2026-08-10", 33, 700)], { type: "text/plain" }),
+      "PLANO-33.txt"
+    );
+
+    const primera = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      body: form,
+    });
+
+    expect(primera.status).toBe(200);
+
+    const segunda = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texto: textoDeSemana("2026-08-17", 34, 714) }),
+    });
+
+    expect(segunda.status).toBe(200);
+
+    // The answer carries the payload the deck rehydrates from, so the sidebar
+    // does not need a second fetch after an upload.
+    const body = (await segunda.json()) as { data: InformaticaDataset };
+
+    expect(body.data.peticiones?.map((row) => [row.semana, row.total])).toEqual([
+      [33, 700],
+      [34, 714],
+    ]);
+
+    const almacenado = (await (await fetch(`${origin}/api/informatica`)).json()) as {
+      data: InformaticaDataset;
+    };
+
+    expect(almacenado.data.peticiones?.map((row) => [row.semana, row.total])).toEqual([
+      [33, 700],
+      [34, 714],
+    ]);
+    expect(almacenado.data.sheetsFound).toContain("peticiones");
   });
 });

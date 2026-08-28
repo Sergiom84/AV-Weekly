@@ -127,7 +127,20 @@ export const DECK_MODULES: DeckModule[] = [
     layers: 2,
     deck: {
       apiBase: "/api/informatica",
+      // The Informatica Drive spreadsheet (see scripts/informatica-drive/) reads
+      // the five raw exports and writes this text, so it goes first. Unlike AGA,
+      // the raw workbooks keep their own slot: the Drive flow is not yet part of
+      // the weekly routine, and removing the direct upload would leave the week
+      // depending on a script nobody has run in anger.
       uploads: [
+        {
+          id: "texto",
+          label: "Texto plano (Drive)",
+          path: "/api/informatica/upload/texto",
+          error: "No se pudo cargar el texto plano de Informática",
+          multiple: false,
+          accept: ".txt,.tsv,.csv",
+        },
         {
           id: "plano",
           label: "Libro plano",
