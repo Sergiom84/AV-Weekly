@@ -352,7 +352,7 @@ La aplicación tiene que poder generar un informe de un mes pasado sin abrir el 
 eso el `PLANO` **emite siempre la serie mensual completa**, no solo la semana en curso:
 
 - `INCIDENCIAS`, todos los meses de `2.1.1` y `Hoja 13`.
-- `ENCUESTAS`, todos los meses del histórico `B4:D22`.
+- `ENCUESTAS`, la distribución real mes × valoración de las columnas anonimizadas `C` y `H` de `2.1.5 Encuestas (datos)`. `B4:D22` solo conserva total y media y no permite reconstruir una distribución sin inventarla; se usa únicamente como contraste. El export actual puede incorporar respuestas tardías y por eso algún mes no coincide exactamente con el histórico ya congelado.
 - `WORKORDERS`, la serie mensual de `Hoja 14` y el detalle del mes en curso.
 - El total mensual combinado de `Hoja 15`.
 - `IMACS`, los meses de `Hoja 19`.
@@ -399,6 +399,11 @@ Dentro de este trabajo, porque son defectos que producen cifras mal:
 3. **`COUNTIFS` sobre columnas enteras.** Todas las de `2.1.6 (Informe)`, `Hoja 18` y
    `Hoja 19` barren `$P:$P`, `$I:$I`, `$B:$B` completas. Se acotan al número de filas
    realmente escrito, que el script conoce.
+4. **`Posiciones` mezcla días y cantidades.** El bloque de `2.2.1 (Informe)` suma hoy
+   `Días Reales` para On Site/BBVA Technology y `Cantidad` para RENOVE/DAAS, llegando a
+   mostrar 38.558 supuestas posiciones en el backlog de la muestra. El `PLANO` usa siempre
+   la columna semántica `Cantidad`; la reparación del libro debe alinear sus fórmulas con
+   esa misma regla.
 
 ---
 

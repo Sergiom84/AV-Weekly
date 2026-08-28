@@ -1534,10 +1534,12 @@ function serializarPlano(agregado, meta) {
 El `PLANO` emite la serie mensual entera, no solo la semana. Las fuentes de cada sección histórica son las de la spec, apartado 8:
 
 - `incidencias`: los meses de `2.1.1` (bloques BBVA y BBVA TECH como métrica) y el desglose por categoría de `2.1.2 (Datos)`.
-- `encuestas`: los meses del histórico `2.1.5 (Informe)!B4:D22`, convertidos a filas por valoración con el reparto de `C26:C30` para el mes vivo.
+- `encuestas`: la distribución real mes × valoración de `2.1.5 Encuestas (datos)!C:H`, donde la tarea 6 ya dejó solo las columnas de cálculo y eliminó PII. `2.1.5 (Informe)!B4:D22` sirve para contrastar total y media, pero no para reconstruir puntuaciones históricas.
 - `workOrders`: la serie mensual de `Hoja 14` más el detalle edificio × tipo del mes en curso de `2.1.6 (Informe)`.
 - `imacs`: los meses de `Hoja 19`.
 - `peticiones` y `peticionesProducto`: solo la semana en curso. Es todo lo que el libro tiene, y por eso la tarea 3 existe.
+
+En `peticiones`, los orígenes salen de las fórmulas `D:G` del informe: BBVA Technology, los tres productos RENOVE, los productos que contienen `APPLE DAAS` y On Site como resto. Se emiten las entidades `Peticiones` (una por fila) y `Posiciones` (suma de `Cantidad`). No se replica el defecto del libro que usa `Días Reales` como posiciones para dos orígenes.
 
 - [ ] **Step 4: Escribe la pestaña**
 

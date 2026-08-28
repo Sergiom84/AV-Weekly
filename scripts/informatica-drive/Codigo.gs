@@ -1581,3 +1581,468 @@ function escribirDatos(clasificacion, informe) {
     informe.desconocidos.push('Dirección sin DT/edificio: ' + unknownAddresses[unknownAddress]);
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Aggregation and PLANO                                                       */
+/* -------------------------------------------------------------------------- */
+
+var SECTION = {
+  edificios: 'EDIFICIOS',
+  incidencias: 'INCIDENCIAS',
+  encuestas: 'ENCUESTAS',
+  workOrders: 'WORKORDERS',
+  peticiones: 'PETICIONES',
+  peticionesProducto: 'PETICIONESPRODUCTO',
+  citas: 'CITAS',
+  imacs: 'IMACS'
+};
+
+var SECTION_ORDER = [
+  'edificios',
+  'incidencias',
+  'encuestas',
+  'workOrders',
+  'peticiones',
+  'peticionesProducto',
+  'citas',
+  'imacs'
+];
+
+/** Adds amount to one aggregate tuple. The separator cannot occur in a sheet cell. */
+function bump(buckets, keys, amount) {
+  var key = keys.join('\u0000');
+
+  buckets[key] = (buckets[key] || 0) + amount;
+}
+
+/** Stable aggregate rows, ready for the fixed-order text contract. */
+function rows(buckets) {
+  var out = [];
+
+  for (var key in buckets) {
+    if (Object.prototype.hasOwnProperty.call(buckets, key)) {
+      out.push(key.split('\u0000').concat([buckets[key]]));
+    }
+  }
+
+  return out.sort(function (left, right) {
+    var a = left.join('\t');
+    var b = right.join('\t');
+
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+}
+
+/** ISO week number, resolved through Thursday like the server parser. */
+function isoWeekNumber(date) {
+  var day = (date.getUTCDay() + 6) % 7;
+  var thursday = new Date(date.getTime() + (3 - day) * 86400000);
+  var firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
+  var firstOffset = (firstThursday.getUTCDay() + 6) % 7;
+  var firstWeekThursday = new Date(firstThursday.getTime() + (3 - firstOffset) * 86400000);
+
+  return 1 + Math.round((thursday.getTime() - firstWeekThursday.getTime()) / (7 * 86400000));
+}
+
+function monthLabel(date) {
+  return date.getUTCFullYear() + '/' + pad2(date.getUTCMonth() + 1);
+}
+
+function monthStart(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function periodCells(date) {
+  return [isoDate(date), monthLabel(date), isoWeekNumber(date)];
+}
+
+/** DD/MM/YYYY used by the yearly IMAC book, whose dates are not American. */
+function imacDate(value) {
+  var parsed = toDate(value);
+
+  if (parsed && parsed.getUTCFullYear() >= 2000 && parsed.getUTCFullYear() <= 2100) return parsed;
+
+  var match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text(value));
+
+  if (!match || Number(match[3]) < 2000 || Number(match[3]) > 2100) return null;
+
+  return utcDate(Number(match[3]), Number(match[2]), Number(match[1]));
+}
+
+function sourceRows(source) {
+  return source.grid.slice(source.headerRow + 1);
+}
+
+function valueAt(row, columns, name) {
+  var index = columns[normalize(name)];
+
+  return index === undefined ? null : row[index];
+}
+
+function within(date, bounds) {
+  var time = date.getTime();
+
+  return time >= bounds.monday.getTime() && time <= bounds.sunday.getTime();
+}
+
+function peticionOrigin(product) {
+  var value = normalize(product);
+
+  if (value.indexOf('BBVA TECHNOLOGY') >= 0) return 'BBVA Tech';
+  if (value.indexOf('APPLE DAAS') >= 0) return 'DAAS APPLE';
+  if (
+    value === 'PORTATIL' ||
+    value.indexOf('PORTATIL ESTANDAR') >= 0 ||
+    value.indexOf('PORTATIL WINDOWS ONBOARDING') >= 0 ||
+    value.indexOf('TECLADO Y RATON INALAMBRICOS') >= 0
+  ) {
+    return 'RENOVE';
+  }
+
+  return 'On Site';
+}
+
+function agregarPeticiones(found, extraction, peticiones, productos) {
+  var specs = [
+    ['backlog', 'En vuelo'],
+    ['liberadas', 'Liberadas'],
+    ['gestionadas', 'Gestionadas']
+  ];
+  var period = periodCells(weekBounds(extraction).monday);
+
+  for (var specIndex = 0; specIndex < specs.length; specIndex += 1) {
+    var entry = found[specs[specIndex][0]];
+    var state = specs[specIndex][1];
+
+    if (!entry) continue;
+
+    var source = firstSource(entry, state);
+    var data = sourceRows(source);
+
+    for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+      var row = data[rowIndex] || [];
+      var product = text(valueAt(row, source.columns, 'Denominación Producto')) || 'Sin producto';
+      var origin = peticionOrigin(product);
+      var quantity = toNumber(valueAt(row, source.columns, 'Cantidad'));
+
+      bump(peticiones, period.concat([origin, state, 'Peticiones']), 1);
+      bump(peticiones, period.concat([origin, state, 'Posiciones']), quantity > 0 ? quantity : 1);
+
+      // The workbook's product top-ten is the backlog, not movements already released/managed.
+      if (specs[specIndex][0] === 'backlog') {
+        bump(productos, period.concat([product, state]), 1);
+      }
+    }
+  }
+}
+
+function agregarIncidencias(found, incidencias) {
+  var grids = templateGrids(found);
+  var series = [
+    [monthlySource(grids, '3-3'), 'BBVA'],
+    [monthlySource(grids, '4-4'), 'BBVA TECH']
+  ];
+  var metrics = ['Resueltas', 'Asignadas', 'Asignaciones'];
+
+  for (var seriesIndex = 0; seriesIndex < series.length; seriesIndex += 1) {
+    var source = series[seriesIndex][0];
+    var scope = series[seriesIndex][1];
+    var data = sourceRows(source);
+
+    for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+      var parsedDate = toDate(data[rowIndex][0]);
+
+      if (!parsedDate) continue;
+
+      var date = monthStart(parsedDate);
+
+      for (var metricIndex = 0; metricIndex < metrics.length; metricIndex += 1) {
+        var amount = toNumber(data[rowIndex][metricIndex + 1]);
+
+        bump(
+          incidencias,
+          periodCells(date).concat(['', '', scope + ' - ' + metrics[metricIndex], '']),
+          amount
+        );
+      }
+    }
+  }
+
+  var top = topFiveSource(grids);
+  var header = top.grid[0] || [];
+
+  for (var categoryRow = top.headerRow + 1; categoryRow < top.grid.length; categoryRow += 1) {
+    var category = text((top.grid[categoryRow] || [])[0]);
+
+    if (category === '' || normalize(category) === 'TOTAL') continue;
+
+    for (var column = 2; column < header.length; column += 1) {
+      var categoryDate = toDate(header[column]);
+
+      if (!categoryDate) continue;
+
+      bump(
+        incidencias,
+        periodCells(monthStart(categoryDate)).concat([category, '', 'Incidencias', '']),
+        toNumber((top.grid[categoryRow] || [])[column])
+      );
+    }
+  }
+}
+
+function agregarEncuestas(found, encuestas) {
+  if (!found.encuestas) return;
+
+  var source = firstSource(found.encuestas, 'Encuestas');
+  var header = source.grid[source.headerRow] || [];
+  var monthAt = source.columns[normalize('Fecha')];
+  var scoreAt = columnLikeIndex(header, 'Nivel de satis');
+  var data = sourceRows(source);
+
+  if (monthAt === undefined || scoreAt < 0) {
+    throw new Error('El template de encuestas no trae mes y valoración para PLANO.');
+  }
+
+  for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+    var date = toDate((data[rowIndex] || [])[monthAt]);
+    var score = text((data[rowIndex] || [])[scoreAt]);
+
+    if (!date || score === '') continue;
+
+    date = monthStart(date);
+    bump(encuestas, [isoDate(date), monthLabel(date), score], 1);
+  }
+}
+
+function agregarWorkOrders(found, workOrders) {
+  if (!found.workOrders) return;
+
+  var source = firstSource(found.workOrders, 'Work Orders');
+  var data = sourceRows(source);
+  var technicianLookup = readLookup(TAB.workOrdersDatos, 25, 26, 2);
+
+  for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+    var row = data[rowIndex] || [];
+    var date = toDate(valueAt(row, source.columns, 'Submit Date'));
+
+    if (!date) continue;
+
+    var technician = valueAt(row, source.columns, 'Submitter');
+    var resolved = technicianLookup[normalize(technician)];
+    var building = resolved ? text(resolved[0]) : '#N/A';
+    var kind = text(valueAt(row, source.columns, 'Categorization Tier 2')) || 'Sin tipo';
+
+    bump(workOrders, periodCells(date).concat([building, kind]), 1);
+  }
+}
+
+function agregarCitas(found, extraction, citas) {
+  if (!found.citas) return;
+
+  var source = firstSource(found.citas, 'Citas SmartTech');
+  var data = sourceRows(source);
+  var bounds = weekBounds(extraction);
+
+  for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+    var row = data[rowIndex] || [];
+    var booked = toDate(valueAt(row, source.columns, 'Cita_Previa'));
+    var walkup = booked ? null : toDate(valueAt(row, source.columns, 'Walkup'));
+    var date = booked || walkup;
+    var building = text(valueAt(row, source.columns, 'Smart_Tech'));
+
+    if (!date || !within(date, bounds) || building === '' || normalize(building).indexOf('TELEFONIA') >= 0) {
+      continue;
+    }
+
+    bump(citas, periodCells(date).concat([building, booked ? 'Con Cita' : 'Sin Cita']), 1);
+  }
+}
+
+function agregarImacs(found, imacs) {
+  if (!found.imac || !found.imac.grids) return;
+
+  for (var gridIndex = 0; gridIndex < found.imac.grids.length; gridIndex += 1) {
+    var grid = found.imac.grids[gridIndex].grid;
+    var header = grid[0] || [];
+    var columns = headerIndex(header);
+    var dateAt = columnLikeIndex(header, 'Fecha limite');
+
+    if (dateAt < 0) dateAt = columnLikeIndex(header, 'Fecha solicitud');
+
+    var buildingAt = columns[normalize('Edificio')];
+    var jobsAt = columns[normalize('nº trabajos')];
+    var requestsAt = columns[normalize('Solicitudes')];
+
+    if (dateAt < 0 && buildingAt !== undefined) dateAt = 0;
+    if (dateAt < 0 || buildingAt === undefined || jobsAt === undefined || requestsAt === undefined) continue;
+
+    for (var rowIndex = 1; rowIndex < grid.length; rowIndex += 1) {
+      var row = grid[rowIndex] || [];
+      var date = imacDate(row[dateAt]);
+      var city = text(row[buildingAt]);
+
+      if (!date || city === '') continue;
+
+      date = monthStart(date);
+      bump(imacs, [isoDate(date), monthLabel(date), city, 'Solicitudes'], toNumber(row[requestsAt]));
+      bump(imacs, [isoDate(date), monthLabel(date), city, 'Intervenciones'], toNumber(row[jobsAt]));
+    }
+  }
+}
+
+/** Emits only workbook masters; it never modifies them or infers cross-master aliases. */
+function agregarEdificios(found) {
+  var tuples = {};
+
+  function add(building, dt, smartTech, workOrder, imac, peticion) {
+    var cells = [text(building), text(dt), text(smartTech), text(workOrder), text(imac), text(peticion)];
+
+    if (cells[0] === '') return;
+
+    tuples[cells.join('\u0000')] = cells;
+  }
+
+  var smartSheet = sheetByName(TAB.citasInforme, false);
+
+  if (smartSheet && smartSheet.getLastRow() >= 4) {
+    var smartRows = smartSheet.getRange(4, 1, Math.min(smartSheet.getLastRow() - 3, 100), 3).getValues();
+
+    for (var smartIndex = 0; smartIndex < smartRows.length; smartIndex += 1) {
+      if (normalize(smartRows[smartIndex][0]).indexOf('SMART TECH') === 0) {
+        add(smartRows[smartIndex][2], smartRows[smartIndex][1], smartRows[smartIndex][0], '', '', '');
+      }
+    }
+  }
+
+  var petSheet = sheetByName(TAB.gestionadas, false);
+
+  if (petSheet && petSheet.getLastRow() >= 2) {
+    var petRows = petSheet.getRange(2, 24, Math.min(petSheet.getLastRow() - 1, 2000), 3).getValues();
+
+    for (var petIndex = 0; petIndex < petRows.length; petIndex += 1) {
+      add(petRows[petIndex][2], petRows[petIndex][1], '', '', '', petRows[petIndex][0]);
+    }
+  }
+
+  var workSheet = sheetByName(TAB.workOrdersDatos, false);
+
+  if (workSheet && workSheet.getLastRow() >= 2) {
+    var workRows = workSheet.getRange(2, 28, Math.min(workSheet.getLastRow() - 1, 100), 1).getValues();
+
+    for (var workIndex = 0; workIndex < workRows.length; workIndex += 1) {
+      add(workRows[workIndex][0], '', '', workRows[workIndex][0], '', '');
+    }
+  }
+
+  if (found.imac && found.imac.grids) {
+    var seenImacs = {};
+
+    for (var gridIndex = 0; gridIndex < found.imac.grids.length; gridIndex += 1) {
+      var grid = found.imac.grids[gridIndex].grid;
+      var columns = headerIndex(grid[0] || []);
+      var buildingAt = columns[normalize('Edificio')];
+
+      if (buildingAt === undefined) continue;
+
+      for (var rowIndex = 1; rowIndex < grid.length; rowIndex += 1) {
+        var building = text((grid[rowIndex] || [])[buildingAt]);
+
+        if (building !== '' && !seenImacs[normalize(building)]) {
+          seenImacs[normalize(building)] = true;
+          add(building, '', '', '', building, '');
+        }
+      }
+    }
+  }
+
+  var keys = Object.keys(tuples).sort();
+  var out = [];
+
+  for (var index = 0; index < keys.length; index += 1) {
+    out.push(tuples[keys[index]].concat(['Si', index + 1]));
+  }
+
+  return out;
+}
+
+/** Builds the eight aggregate sections. No raw row or free-text field is returned. */
+function agregar(clasificacion, extraction) {
+  var found = clasificacion.found || clasificacion;
+  var date = toDate(extraction);
+
+  if (!date) throw new Error('No hay una fecha de extracción válida para generar PLANO.');
+
+  var buckets = {
+    incidencias: {},
+    encuestas: {},
+    workOrders: {},
+    peticiones: {},
+    peticionesProducto: {},
+    citas: {},
+    imacs: {}
+  };
+
+  agregarIncidencias(found, buckets.incidencias);
+  agregarEncuestas(found, buckets.encuestas);
+  agregarWorkOrders(found, buckets.workOrders);
+  agregarPeticiones(found, date, buckets.peticiones, buckets.peticionesProducto);
+  agregarCitas(found, date, buckets.citas);
+  agregarImacs(found, buckets.imacs);
+
+  return {
+    edificios: agregarEdificios(found),
+    incidencias: rows(buckets.incidencias),
+    encuestas: rows(buckets.encuestas),
+    workOrders: rows(buckets.workOrders),
+    peticiones: rows(buckets.peticiones),
+    peticionesProducto: rows(buckets.peticionesProducto),
+    citas: rows(buckets.citas),
+    imacs: rows(buckets.imacs)
+  };
+}
+
+function planoCell(value) {
+  return String(value == null ? '' : value).replace(/[\t\r\n]+/g, ' ').trim();
+}
+
+/** Exact counterpart of shared/modules/informatica/texto.ts. */
+function serializarPlano(agregado, meta) {
+  var out = [TEXTO_HEADER];
+
+  if (meta.week) out.push('semana\t' + planoCell(meta.week));
+  if (meta.generated) out.push('generado\t' + planoCell(meta.generated));
+  if (meta.source) out.push('origen\t' + planoCell(meta.source));
+
+  for (var index = 0; index < SECTION_ORDER.length; index += 1) {
+    var key = SECTION_ORDER[index];
+    var values = agregado[key] || [];
+
+    if (values.length === 0) continue;
+
+    out.push('');
+    out.push('[' + SECTION[key] + ']');
+
+    for (var rowIndex = 0; rowIndex < values.length; rowIndex += 1) {
+      var cells = [];
+
+      for (var column = 0; column < values[rowIndex].length; column += 1) {
+        cells.push(planoCell(values[rowIndex][column]));
+      }
+
+      out.push(cells.join('\t'));
+    }
+  }
+
+  return out.join('\n');
+}
+
+function escribirPlano(textoPlano) {
+  var sheet = sheetByName(TAB.plano, true);
+  var lines = String(textoPlano).split('\n');
+  var values = [];
+
+  for (var index = 0; index < lines.length; index += 1) values.push([lines[index]]);
+
+  sheet.clear();
+  sheet.getRange(1, 1, values.length, 1).setValues(values);
+}
