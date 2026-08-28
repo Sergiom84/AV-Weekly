@@ -55,6 +55,9 @@ export default function RecicladoresDTSemanalPage({
       totals={series}
       comparison={series}
       throughWeek={reportWeek(dataset, year)}
+      rankByAverage
+      layout="volumetrias-semanales"
+      headlineLabel="Recicladores"
       yearSelector={
         availableYears.length > 0
           ? {

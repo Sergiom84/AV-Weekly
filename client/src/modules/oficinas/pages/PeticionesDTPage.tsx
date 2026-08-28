@@ -26,11 +26,15 @@ export default function PeticionesDTPage({
       editing={editing}
       onChange={onChange}
       rows={rows}
+      tables={[{ caption: "Peticiones por DT", rows }]}
       previousRows={dataset.peticiones?.byDTPrevious ?? []}
       year={year}
       masters={dataset.masters}
       totals={dataset.peticiones?.totalsByWeek}
       throughWeek={reportWeek(dataset, year)}
+      metricLabel="Peticiones"
+      layout="incidencias-territoriales"
+      compactWeekPriority
     />
   );
 }

@@ -50,6 +50,9 @@ export default function PeticionesTipoSemanalPage({
       totals={totals}
       comparison={totals}
       throughWeek={reportWeek(dataset, year)}
+      rankByAverage
+      layout="volumetrias-semanales"
+      headlineLabel="Peticiones"
       yearSelector={
         availableYears.length > 0
           ? {

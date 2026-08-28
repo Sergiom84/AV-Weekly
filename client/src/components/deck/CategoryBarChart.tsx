@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
+import { formatChartMetric, metricAxisWidth } from "@shared/deck/core";
 import { groupedLabelPlacement } from "./CategoryBarLabelLayout";
 
 export interface CategorySeries {
@@ -37,6 +38,8 @@ interface CategoryBarChartProps {
    * identity. Month and year axes read better with the default.
    */
   angledCategories?: boolean;
+  /** Brings the Y-axis labels flush with the slide content above the chart. */
+  alignYAxisStart?: boolean;
 }
 
 /** Above this many categories the standard value labels use compact text. */
@@ -104,7 +107,12 @@ function AngledTick({ x, y, fontSize, payload }: AngledTickProps) {
  * from the longest label: the text shrinks only once the tilted text no longer
  * fits inside `CATEGORY_BAND` of the plot.
  */
-function angledAxisMetrics(labels: string[], width: number, height: number) {
+function angledAxisMetrics(
+  labels: string[],
+  width: number,
+  height: number,
+  yAxisWidth: number
+) {
   const longest = labels.reduce((max, label) => Math.max(max, label.length), 0);
   const band = height * CATEGORY_BAND;
 
@@ -121,8 +129,8 @@ function angledAxisMetrics(labels: string[], width: number, height: number) {
 
   // The leftmost label reaches back from its own tick; the Y axis and half a
   // slot already absorb part of that reach, the rest becomes left margin.
-  const slot = Math.max(1, (width - Y_AXIS_WIDTH) / Math.max(1, labels.length));
-  const overhang = textWidth * Math.cos(RADIANS) - Y_AXIS_WIDTH - slot / 2;
+  const slot = Math.max(1, (width - yAxisWidth) / Math.max(1, labels.length));
+  const overhang = textWidth * Math.cos(RADIANS) - yAxisWidth - slot / 2;
   const marginLeft = Math.round(Math.min(Math.max(overhang, 0), width * 0.12));
 
   return { fontSize, tickHeight, marginLeft };
@@ -287,9 +295,6 @@ const AXIS_TICK = {
   className: "text-[1.1cqi]",
 };
 
-/** Kept in sync with the `<YAxis width>` below; the axis maths needs the number. */
-const Y_AXIS_WIDTH = 40;
-
 /**
  * Grouped or stacked bars over an arbitrary category axis: month, year, week or
  * supplier. The weekly variant of the AV deck stays in `WeeklyBarChart`.
@@ -301,15 +306,20 @@ export default function CategoryBarChart({
   stacked = false,
   fitGroupedValueLabels = false,
   angledCategories = false,
+  alignYAxisStart = false,
 }: CategoryBarChartProps) {
   const animate = usePresentationAnimation();
   const { ref: chartRef, box } = useChartBox();
+  const yAxisWidth = metricAxisWidth(
+    data.flatMap(entry => series.map(item => entry[item.key]))
+  );
   const angledAxis =
     angledCategories && box.width > 0 && box.height > 0
       ? angledAxisMetrics(
           data.map(entry => String(entry[categoryKey] ?? "")),
           box.width,
-          box.height
+          box.height,
+          yAxisWidth
         )
       : null;
   const stackTotals = stacked
@@ -322,6 +332,9 @@ export default function CategoryBarChart({
     data.length > COMPACT_LABELS_FROM
       ? "fill-foreground text-[0.75cqi]"
       : "fill-foreground text-[1.1cqi]";
+  const yAxisAlignmentOffset = alignYAxisStart
+    ? Math.round(box.width * 0.01)
+    : 0;
 
   return (
     <>
@@ -353,13 +366,13 @@ export default function CategoryBarChart({
             data={data}
             margin={{
               top: 16,
-              right: 8,
+              right: 0,
               bottom: angledCategories ? 8 : 0,
-              left: angledAxis?.marginLeft ?? 0,
+              left: (angledAxis?.marginLeft ?? 0) - yAxisAlignmentOffset,
             }}
             {...(fitGroupedValueLabels && !stacked
               ? { barGap: 0, barCategoryGap: "2%" }
-              : { barGap: 1 })}
+              : { barGap: 1, barCategoryGap: "5%" })}
           >
             <CartesianGrid
               strokeDasharray="3 3"
@@ -384,8 +397,9 @@ export default function CategoryBarChart({
             <YAxis
               stroke="var(--border)"
               tick={AXIS_TICK}
+              tickFormatter={formatChartMetric}
               tickLine={false}
-              width={40}
+              width={yAxisWidth}
             />
             <Tooltip
               cursor={{ fill: "var(--muted)", fillOpacity: 0.4 }}

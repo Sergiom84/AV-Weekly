@@ -31,6 +31,8 @@ interface CategorySharePageProps extends OficinasPageProps {
    * alone would say the top twelve are the whole service.
    */
   total?: number;
+  /** Compact cards and centre the short three-column pivot. */
+  compactPresentation?: boolean;
 }
 
 /**
@@ -52,6 +54,7 @@ export default function CategorySharePage({
   kpis = [],
   topN,
   total: totalOverride,
+  compactPresentation = false,
 }: CategorySharePageProps) {
   const cells = entries.map(entry => {
     const key = cellKey(entry.label, column);
@@ -80,18 +83,23 @@ export default function CategorySharePage({
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
-      <KpiRow items={kpis} />
+      <KpiRow items={kpis} compact={compactPresentation} />
 
-      <div className="flex min-h-0 flex-[3] flex-col">
+      <div
+        className={`flex min-h-0 flex-col ${
+          compactPresentation ? "flex-[2.55]" : "flex-[3]"
+        }`}
+      >
         <CategoryBarChart
           categoryKey="categoria"
           series={series}
           data={data}
           angledCategories
+          alignYAxisStart={compactPresentation}
         />
       </div>
 
-      <div className="min-h-0 flex-[2]">
+      <div className={`min-h-0 ${compactPresentation ? "flex-[2.45]" : "flex-[2]"}`}>
         <ShareTable
           rows={ranked.map(cell => ({
             label: cell.label,
@@ -100,6 +108,7 @@ export default function CategorySharePage({
           }))}
           total={total}
           header={seriesLabel}
+          compact={compactPresentation}
         />
       </div>
 
@@ -123,38 +132,47 @@ interface ShareTableProps {
   rows: { label: string; value: number; share: number }[];
   total: number;
   header: string;
+  compact?: boolean;
 }
 
 /** Two-column breakdown printed under the bars: the count and its share. */
-function ShareTable({ rows, total, header }: ShareTableProps) {
+function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
   const { containerRef, tableRef } = useFitTableScale<
     HTMLDivElement,
     HTMLTableElement
   >({ deps: [rows.length] });
+  const labelWidth = compact ? "w-1/3" : "w-[60%]";
+  const numericWidth = compact ? "w-1/3" : "";
 
   return (
     <div ref={containerRef} className="h-full max-h-full w-full overflow-auto">
       <table
         ref={tableRef}
-        className="w-full min-w-full table-fixed border-collapse font-mono text-[length:calc(var(--fit-scale,1)*1.15cqi)] leading-none tabular-nums"
+        className={`table-fixed border-collapse font-mono leading-none tabular-nums ${
+          compact
+            ? "text-[length:calc(var(--fit-scale,1)*1.5cqi)]"
+            : "text-[length:calc(var(--fit-scale,1)*1.15cqi)]"
+        } ${
+          compact ? "mx-auto w-[30%]" : "w-full min-w-full"
+        }`}
       >
         <thead>
           <tr className="border-b border-border text-muted-foreground">
             <th
               scope="col"
-              className="w-[60%] truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-normal"
+              className={`${labelWidth} truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-normal`}
             >
               {header}
             </th>
             <th
               scope="col"
-              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+              className={`${numericWidth} truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal`}
             >
               Nº
             </th>
             <th
               scope="col"
-              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+              className={`${numericWidth} truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal`}
             >
               %
             </th>
@@ -179,12 +197,18 @@ function ShareTable({ rows, total, header }: ShareTableProps) {
             </tr>
           ))}
 
-          <tr className="border-t border-border font-medium">
+          <tr
+            className={
+              compact
+                ? "bg-[var(--informe-serie-4)] font-medium text-white"
+                : "border-t border-border font-medium"
+            }
+          >
             <th
               scope="row"
               className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left"
             >
-              Total
+              {compact ? "Total general" : "Total"}
             </th>
             <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
               {total}

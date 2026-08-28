@@ -28,10 +28,14 @@ export default function RecicladoresDTPage({
       editing={editing}
       onChange={onChange}
       rows={rows}
+      tables={[{ caption: "Recicladores por DT", rows }]}
       previousRows={dataset.recicladores?.byDTPrevious ?? []}
       year={year}
       masters={dataset.masters}
       throughWeek={reportWeek(dataset, year)}
+      metricLabel="Recicladores"
+      layout="incidencias-territoriales"
+      compactWeekPriority
     />
   );
 }

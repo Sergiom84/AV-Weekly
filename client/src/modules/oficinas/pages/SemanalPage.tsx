@@ -1,14 +1,27 @@
 import ValueGrid from "@/components/deck/ValueGrid";
+import KpiRow from "@/components/deck/KpiRow";
 import WeeklyBarChart, {
   type WeeklySeries,
 } from "@/components/deck/WeeklyBarChart";
+import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
-import { seriesWeeks, valueAt } from "@shared/modules/oficinas/derived";
+import {
+  defaultWeekSelection,
+  reportedWeekAvailability,
+  resolveWeekSelection,
+  type WeekSelection,
+} from "@shared/deck/core";
+import {
+  rankedRowsByAverage,
+  rowsWithOtrosLast,
+  seriesWeeks,
+  valueAt,
+} from "@shared/modules/oficinas/derived";
 import type {
   OficinasRow,
   OficinasWeekValue,
 } from "@shared/modules/oficinas/types";
-import { decimal, weekLabel, yearColor } from "../aggregate";
+import { decimal, variationLabel, weekLabel, yearColor } from "../aggregate";
 import {
   TOTAL_ROW,
   cellKey,
@@ -31,9 +44,10 @@ import YearSelector, { type YearSelection } from "./YearSelector";
  *
  * Two rules decide what the chart is allowed to say:
  *
- * - The axis is always the full year. The past years run to week 52 and cutting
- *   the axis at the current week would hide the second half of every one of
- *   them, which is the comparison the slide exists for.
+ * - "Todas" and an explicit range can show the full year, including the later
+ *   weeks of historic series. A trailing window instead ends at the current
+ *   report week, so it never points into future empty columns of the active
+ *   year.
  * - A week a year never reported is a gap, never a zero. The historico starts at
  *   week 22 of 2023 and the current year stops at the reported week; a
  *   zero-filled bar would claim a week that was measured and empty instead of
@@ -42,6 +56,19 @@ import YearSelector, { type YearSelection } from "./YearSelector";
 
 /** The axis of every annual comparison: the full ISO year, as the slides print it. */
 const ALL_WEEKS = Array.from({ length: 52 }, (_, index) => index + 1);
+
+/**
+ * Visual contracts for annual weekly comparisons.
+ *
+ * The data mechanics remain shared, while layout changes are opt-in by family
+ * so a correction for the requested comparison slides does not spill into the
+ * recycler or request-type slides that use the same renderer.
+ */
+export type SemanalLayout =
+  | "standard-semanal"
+  | "comparativas-semanales"
+  | "peticiones-territorial-semanal"
+  | "volumetrias-semanales";
 
 interface SemanalPageProps extends OficinasPageProps {
   /** Rows of the pivot underneath the chart, in the order the slide prints them. */
@@ -76,6 +103,12 @@ interface SemanalPageProps extends OficinasPageProps {
    * rows out of seventy-six is a figure nothing on the slide supports.
    */
   totalRow?: boolean;
+  /** Sort the table by the visible `Media` column, highest first. */
+  rankByAverage?: boolean;
+  /** Named visual family that owns the page-specific presentation rules. */
+  layout?: SemanalLayout;
+  /** Measure named in the weekly headline cards, when this slide has them. */
+  headlineLabel?: string;
 }
 
 export default function SemanalPage({
@@ -91,11 +124,23 @@ export default function SemanalPage({
   yearSelector,
   caption,
   totalRow = true,
+  rankByAverage = false,
+  layout = "standard-semanal",
+  headlineLabel,
 }: SemanalPageProps) {
+  const isComparisonLayout = layout === "comparativas-semanales";
+  const isPeticionesTerritorial = layout === "peticiones-territorial-semanal";
+  const hasWideAverage = layout === "volumetrias-semanales";
+  // Dimension names are read as a list, including the long request types, so
+  // they stay anchored to the left edge while all numeric columns are centred.
+  const centersRowHeader = false;
+  const highlightsTotal =
+    isPeticionesTerritorial || layout === "volumetrias-semanales";
+  const usesComparisonLabels =
+    isComparisonLayout || isPeticionesTerritorial || hasWideAverage;
   const extraYears = yearSelector
     ? [...yearSelector.selected].sort((a, b) => a - b)
     : [];
-
   // The line is the published series when the page has one, and the column
   // total of its own rows otherwise.
   const currentReported = new Set(
@@ -107,6 +152,18 @@ export default function SemanalPage({
     totals
       ? valueAt(totals, year, week)
       : rows.reduce((sum, row) => sum + valueAt(row.values, year, week), 0);
+  const weekSelection: WeekSelection =
+    page.weekSelection ?? defaultWeekSelection(ALL_WEEKS[ALL_WEEKS.length - 1]);
+  const currentReportWeeks = Array.from(currentReported).filter(
+    week =>
+      throughWeek === null || throughWeek === undefined || week <= throughWeek
+  );
+  const selectedWeeks = resolveWeekSelection(
+    weekSelection,
+    weekSelection.mode === "window"
+      ? reportedWeekAvailability(ALL_WEEKS, currentReportWeeks)
+      : ALL_WEEKS
+  );
 
   // Past years first, so the bars group oldest to newest inside a week and the
   // legend reads in the same order the printed slide does.
@@ -119,7 +176,7 @@ export default function SemanalPage({
 
       return {
         key: rowId,
-        label: `Año ${comparisonYear}`,
+        label: String(comparisonYear),
         color: yearColor(comparisonYear, year),
         cells: ALL_WEEKS.map(week => {
           const key = cellKey(rowId, weekColumn(week));
@@ -138,7 +195,7 @@ export default function SemanalPage({
     }),
     {
       key: "actual",
-      label: `Año ${year}`,
+      label: String(year),
       color: yearColor(year, year),
       cells: ALL_WEEKS.map(week => {
         const key = cellKey(TOTAL_ROW, weekColumn(week));
@@ -175,6 +232,39 @@ export default function SemanalPage({
 
     return point;
   });
+  const chartData = data.filter((_, index) =>
+    selectedWeeks.includes(ALL_WEEKS[index])
+  );
+
+  const lastWeek = currentReportWeeks.at(-1) ?? null;
+  const compareYear = extraYears.length > 0 ? Math.max(...extraYears) : null;
+  const previous =
+    lastWeek === null || compareYear === null || !comparison
+      ? null
+      : seriesWeeks(comparison, compareYear).includes(lastWeek)
+        ? valueAt(comparison, compareYear, lastWeek)
+        : null;
+  const headlineItems =
+    headlineLabel === undefined || lastWeek === null
+      ? []
+      : [
+          {
+            label: `${headlineLabel} S${lastWeek}`,
+            value: currentAt(lastWeek).toLocaleString("es-ES"),
+          },
+          ...(compareYear === null || previous === null
+            ? []
+            : [
+                {
+                  label: String(compareYear),
+                  value: previous.toLocaleString("es-ES"),
+                },
+                {
+                  label: "Variación",
+                  value: variationLabel(previous, currentAt(lastWeek)),
+                },
+              ]),
+        ];
 
   // Denominator of the `Media` column: the weeks the current year reports up to
   // and including the closed one. The trailing partial column of the source is
@@ -194,17 +284,27 @@ export default function SemanalPage({
         <YearSelector selection={yearSelector} />
       )}
 
+      {editing && (
+        <WeekRangeSelector
+          selection={weekSelection}
+          available={ALL_WEEKS}
+          onChange={next => onChange({ weekSelection: next })}
+        />
+      )}
+
+      <KpiRow items={headlineItems} compact />
+
       <div className="flex min-h-0 flex-[3] flex-col">
         <WeeklyBarChart
-          weeks={ALL_WEEKS}
+          weeks={selectedWeeks}
           series={series}
-          data={data}
-          labels={false}
+          data={chartData}
+          labels={usesComparisonLabels}
         />
       </div>
 
       {caption && (
-        <p className="shrink-0 font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
+        <p className="shrink-0 text-center font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
           {caption}
         </p>
       )}
@@ -214,8 +314,15 @@ export default function SemanalPage({
           rowHeader={rowHeader}
           rows={rows}
           year={year}
+          visibleWeeks={selectedWeeks}
           mediaWeeks={mediaWeeks}
           totalRow={totalRow}
+          rankByAverage={rankByAverage}
+          showGroupDividers={usesComparisonLabels}
+          peticionesTerritorial={isPeticionesTerritorial}
+          highlightTotal={highlightsTotal}
+          centerRowHeader={centersRowHeader}
+          wideAverage={hasWideAverage}
         />
       </div>
 
@@ -251,9 +358,22 @@ interface SemanalTableProps {
   rowHeader: string;
   rows: OficinasRow[];
   year: number;
+  /** Week columns currently visible in the chart. */
+  visibleWeeks: number[];
   /** Weeks the `Media` column averages over. */
   mediaWeeks: number[];
   totalRow: boolean;
+  rankByAverage: boolean;
+  /** Thin separators after the dimension and average columns. */
+  showGroupDividers: boolean;
+  /** Keeps the catch-all territorial category as the final row. */
+  peticionesTerritorial: boolean;
+  /** Marks a complete pivot total with the report's orange band. */
+  highlightTotal: boolean;
+  /** Centre the dimension labels in the volumetry pivots. */
+  centerRowHeader: boolean;
+  /** Gives the weekly volumetry slides a little more room for their average. */
+  wideAverage: boolean;
 }
 
 /**
@@ -270,15 +390,28 @@ function SemanalTable({
   rowHeader,
   rows,
   year,
+  visibleWeeks,
   mediaWeeks,
   totalRow,
+  rankByAverage,
+  showGroupDividers,
+  peticionesTerritorial,
+  highlightTotal,
+  centerRowHeader,
+  wideAverage,
 }: SemanalTableProps) {
   const { containerRef, tableRef } = useFitTableScale<
     HTMLDivElement,
     HTMLTableElement
-  >({ deps: [rows.length, mediaWeeks.length, totalRow] });
+  >({ deps: [rows.length, visibleWeeks.length, mediaWeeks.length, totalRow] });
 
-  const entries = rows.map(row => {
+  const rankedRows = rankByAverage
+    ? rankedRowsByAverage(rows, year, mediaWeeks)
+    : rows;
+  const orderedRows = peticionesTerritorial
+    ? rowsWithOtrosLast(rankedRows)
+    : rankedRows;
+  const entries = orderedRows.map(row => {
     const weekly = new Map<number, number>();
 
     for (const entry of row.values) {
@@ -304,6 +437,18 @@ function SemanalTable({
   );
   const cellClass =
     "truncate px-[0.1cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center";
+  const leadingColumnWidth = centerRowHeader
+    ? "12%"
+    : wideAverage
+      ? "12%"
+      : "13%";
+  // The weekly columns share whatever remains, so giving the average a firm
+  // readable width only tightens their unused gaps. Element comparisons need
+  // room for decimals; territorial pivots have an even narrower average in
+  // the source template, so they get the same minimum without touching the
+  // territorial name column.
+  const averageColumnWidth =
+    showGroupDividers || centerRowHeader || wideAverage ? "7.5%" : "4.5%";
 
   return (
     <div ref={containerRef} className="h-full max-h-full w-full overflow-auto">
@@ -315,17 +460,23 @@ function SemanalTable({
           <tr className="border-b border-border text-muted-foreground">
             <th
               scope="col"
-              className="w-[13%] truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-normal"
+              className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] ${centerRowHeader ? "text-center" : "text-left"} font-normal ${
+                showGroupDividers ? "border-r border-border" : ""
+              }`}
+              style={{ width: leadingColumnWidth }}
             >
               {rowHeader}
             </th>
             <th
               scope="col"
-              className="w-[4.5%] truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+              className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal ${
+                showGroupDividers ? "border-r border-border" : ""
+              }`}
+              style={{ width: averageColumnWidth }}
             >
               Media
             </th>
-            {ALL_WEEKS.map(week => (
+            {visibleWeeks.map(week => (
               <th
                 key={week}
                 scope="col"
@@ -341,13 +492,21 @@ function SemanalTable({
             <tr key={entry.label} className="border-b border-border/60">
               <th
                 scope="row"
-                className="truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-left font-normal"
+                className={`truncate py-[calc(var(--fit-scale,1)*0.25cqi)] ${centerRowHeader ? "text-center" : "text-left"} font-normal ${
+                  showGroupDividers ? "border-r border-border" : ""
+                }`}
                 title={entry.label}
               >
                 {entry.label}
               </th>
-              <td className={cellClass}>{decimal(entry.media)}</td>
-              {ALL_WEEKS.map(week => (
+              <td
+                className={`${cellClass} ${
+                  showGroupDividers ? "border-r border-border" : ""
+                }`}
+              >
+                {decimal(entry.media)}
+              </td>
+              {visibleWeeks.map(week => (
                 <td key={week} className={cellClass}>
                   {entry.weekly.get(week) ?? ""}
                 </td>
@@ -356,15 +515,29 @@ function SemanalTable({
           ))}
 
           {totalRow && (
-            <tr className="border-t border-border font-medium">
+            <tr
+              className={
+                highlightTotal
+                  ? "bg-[var(--informe-serie-4)] font-medium text-white"
+                  : "border-t border-border font-medium"
+              }
+            >
               <th
                 scope="row"
-                className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left"
+                className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] ${centerRowHeader ? "text-center" : "text-left"} ${
+                  showGroupDividers ? "border-r border-border" : ""
+                }`}
               >
                 Total general
               </th>
-              <td className={cellClass}>{decimal(totalMedia)}</td>
-              {ALL_WEEKS.map(week => {
+              <td
+                className={`${cellClass} ${
+                  showGroupDividers ? "border-r border-border" : ""
+                }`}
+              >
+                {decimal(totalMedia)}
+              </td>
+              {visibleWeeks.map(week => {
                 // A week no row reported stays blank, like the columns past the
                 // reported one on the printed slide.
                 const reported = entries.some(entry => entry.weekly.has(week));

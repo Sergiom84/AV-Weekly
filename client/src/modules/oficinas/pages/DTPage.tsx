@@ -3,11 +3,18 @@ import WeeklyBarChart, {
   type WeeklySeries,
 } from "@/components/deck/WeeklyBarChart";
 import ValueGrid from "@/components/deck/ValueGrid";
+import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import KpiRow from "@/components/deck/KpiRow";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
 import {
+  defaultWeekSelection,
+  resolveWeekSelection,
+  type WeekSelection,
+} from "@shared/deck/core";
+import {
   columnTotals,
   dtStats,
+  rowsWithOtrosLast,
   seriesWeeks,
   valueAt,
   yearOnYear,
@@ -48,6 +55,18 @@ export interface DTTableSpec {
    */
   aggregates?: boolean;
 }
+
+/**
+ * Visual contracts for the territorial family of slides.
+ *
+ * Data aggregation stays shared, but each named layout owns its visual rules.
+ * A new adjustment must be added to the family it belongs to instead of being
+ * inferred from the deck page kind, which could accidentally affect another
+ * territorial section.
+ */
+export type DTTerritorialLayout =
+  | "standard-territorial"
+  | "incidencias-territoriales";
 
 interface DTPageProps extends OficinasPageProps {
   /**
@@ -103,10 +122,13 @@ interface DTPageProps extends OficinasPageProps {
    * `yearSelector` wins when both are given.
    */
   yearSelector?: YearSelection;
+  /** Name of the current-week metric shown in the first headline card. */
+  metricLabel?: string;
+  /** Named visual family that owns the page-specific layout rules. */
+  layout?: DTTerritorialLayout;
+  /** Prioritises weekly readings over unused aggregate-column space. */
+  compactWeekPriority?: boolean;
 }
-
-/** Trailing weeks the table prints, as the published deck does. */
-const WINDOW = 6;
 
 /**
  * The `yearOnYear` headline computed off a flat weekly series instead of a
@@ -171,7 +193,11 @@ export default function DTPage({
   caption,
   comparison,
   yearSelector,
+  metricLabel = "Incidencias",
+  layout = "standard-territorial",
+  compactWeekPriority = false,
 }: DTPageProps) {
+  const isIncidenciasTerritoriales = layout === "incidencias-territoriales";
   const previousYear = year - 1;
   // The multi-year selector only ever draws from `comparison`, the past-year
   // series measured at the scope of the line on screen. `previousRows` keeps
@@ -191,6 +217,10 @@ export default function DTPage({
   const chartWeeks = Array.from(new Set([...currentWeeks, ...otherYearsWeeks]))
     .filter(week => weekLimit === null || week <= weekLimit)
     .sort((a, b) => a - b);
+  const weekSelection: WeekSelection =
+    page.weekSelection ??
+    defaultWeekSelection(chartWeeks[chartWeeks.length - 1] ?? 1);
+  const selectedChartWeeks = resolveWeekSelection(weekSelection, chartWeeks);
 
   const currentAt = (week: number) =>
     totals
@@ -201,105 +231,102 @@ export default function DTPage({
     previousRows.flatMap(row => seriesWeeks(row.values, previousYear))
   );
 
-  const seriesRows = yearSelector
-    ? [
-        {
-          label: "Año en curso",
-          key: "actual",
-          color: CURRENT_YEAR_COLOR,
-          cells: chartWeeks.map(week => {
-            const key = cellKey(TOTAL_ROW, weekColumn(week));
-
-            return {
-              key,
-              value: overriddenValue(page, key, currentAt(week)),
-              overridden: isOverridden(page, key),
-            };
-          }),
-        },
-        ...extraYears.map(y => {
-          const reportedWeeks = new Set(
-            comparison ? seriesWeeks(comparison, y) : []
-          );
-          const rowId = `y${y}`;
-
-          return {
-            label: String(y),
-            key: rowId,
-            color: yearColor(y, year),
+  const seriesRows = (
+    yearSelector
+      ? [
+          {
+            label: String(year),
+            key: "actual",
+            color: CURRENT_YEAR_COLOR,
             cells: chartWeeks.map(week => {
-              const key = cellKey(rowId, weekColumn(week));
-              // A week that year never reported (2023 only starts at week 22)
-              // is a gap, not a zero.
-              const imported =
-                comparison && reportedWeeks.has(week)
-                  ? valueAt(comparison, y, week)
-                  : null;
+              const key = cellKey(TOTAL_ROW, weekColumn(week));
 
               return {
                 key,
-                value: overriddenValue(page, key, imported),
+                value: overriddenValue(page, key, currentAt(week)),
                 overridden: isOverridden(page, key),
               };
             }),
-          };
-        }),
-      ]
-    : [
-        {
-          label: "Año en curso",
-          key: "actual",
-          color: CURRENT_YEAR_COLOR,
-          cells: chartWeeks.map(week => {
-            const key = cellKey(TOTAL_ROW, weekColumn(week));
+          },
+          ...extraYears.map(y => {
+            const reportedWeeks = new Set(
+              comparison ? seriesWeeks(comparison, y) : []
+            );
+            const rowId = `y${y}`;
 
             return {
-              key,
-              value: overriddenValue(page, key, currentAt(week)),
-              overridden: isOverridden(page, key),
-            };
-          }),
-        },
-        // A previous year the template never shipped is not drawn as a flat
-        // zero: the assigned and resolved sections have no year-on-year sheet
-        // at all.
-        ...(previousRows.length > 0
-          ? [
-              {
-                label: "Año anterior",
-                key: "previo",
-                color: PREVIOUS_YEAR_COLOR,
-                cells: chartWeeks.map(week => {
-                  const key = cellKey(PREVIOUS_ROW, weekColumn(week));
-                  // A week the previous year never reported is a gap, not a
-                  // zero: the recycler sheet jumps from week 1 to week 21.
-                  const imported = previousReported.has(week)
-                    ? previousRows.reduce(
-                        (sum, row) =>
-                          sum + valueAt(row.values, previousYear, week),
-                        0
-                      )
+              label: String(y),
+              key: rowId,
+              color: yearColor(y, year),
+              cells: chartWeeks.map(week => {
+                const key = cellKey(rowId, weekColumn(week));
+                // A week that year never reported (2023 only starts at week 22)
+                // is a gap, not a zero.
+                const imported =
+                  comparison && reportedWeeks.has(week)
+                    ? valueAt(comparison, y, week)
                     : null;
 
-                  return {
-                    key,
-                    value: overriddenValue(page, key, imported),
-                    overridden: isOverridden(page, key),
-                  };
-                }),
-              },
-            ]
-          : []),
-      ];
+                return {
+                  key,
+                  value: overriddenValue(page, key, imported),
+                  overridden: isOverridden(page, key),
+                };
+              }),
+            };
+          }),
+        ]
+      : [
+          {
+            label: String(year),
+            key: "actual",
+            color: CURRENT_YEAR_COLOR,
+            cells: chartWeeks.map(week => {
+              const key = cellKey(TOTAL_ROW, weekColumn(week));
+
+              return {
+                key,
+                value: overriddenValue(page, key, currentAt(week)),
+                overridden: isOverridden(page, key),
+              };
+            }),
+          },
+          // A previous year the template never shipped is not drawn as a flat
+          // zero: the assigned and resolved sections have no year-on-year sheet
+          // at all.
+          ...(previousRows.length > 0
+            ? [
+                {
+                  label: String(previousYear),
+                  key: "previo",
+                  color: PREVIOUS_YEAR_COLOR,
+                  cells: chartWeeks.map(week => {
+                    const key = cellKey(PREVIOUS_ROW, weekColumn(week));
+                    // A week the previous year never reported is a gap, not a
+                    // zero: the recycler sheet jumps from week 1 to week 21.
+                    const imported = previousReported.has(week)
+                      ? previousRows.reduce(
+                          (sum, row) =>
+                            sum + valueAt(row.values, previousYear, week),
+                          0
+                        )
+                      : null;
+
+                    return {
+                      key,
+                      value: overriddenValue(page, key, imported),
+                      overridden: isOverridden(page, key),
+                    };
+                  }),
+                },
+              ]
+            : []),
+        ]
+  ).sort((a, b) => Number(a.label) - Number(b.label));
 
   const series: WeeklySeries[] = seriesRows.map(entry => ({
     key: entry.key,
-    label:
-      entry.key === "actual"
-        ? `${entry.label} (${year})`
-        : entry.key === "previo"
-          ? `${entry.label} (${previousYear})`
-          : entry.label,
+    label: entry.label,
     color: entry.color,
   }));
 
@@ -314,13 +341,18 @@ export default function DTPage({
 
     return point;
   });
+  const chartData = data.filter((_, index) =>
+    selectedChartWeeks.includes(chartWeeks[index])
+  );
 
   const reported = currentWeeks.filter(
     week => weekLimit === null || week <= weekLimit
   );
-  const window = reported.slice(-WINDOW);
   const stats = dtStats(rows, year, masters, reported);
-  const totalsOverWindow = columnTotals(rows, year, window);
+  // The filter governs both the graph and the table. Aggregate figures remain
+  // based on the closed report period; only the columns shown are filtered.
+  const tableWeeks = selectedChartWeeks;
+  const totalsOverTableWeeks = columnTotals(rows, year, tableWeeks);
 
   const lastWeek = reported[reported.length - 1] ?? null;
   const compareYear = yearSelector
@@ -345,14 +377,14 @@ export default function DTPage({
       ? []
       : [
           {
-            label: `Semana ${headline.week}`,
+            label: `${metricLabel} S${headline.week}`,
             value: headline.current.toLocaleString("es-ES"),
           },
           ...(headline.previous === null || compareYear === null
             ? []
             : [
                 {
-                  label: `Semana ${headline.week} de ${compareYear}`,
+                  label: `${compareYear}`,
                   value: headline.previous.toLocaleString("es-ES"),
                 },
                 {
@@ -368,24 +400,44 @@ export default function DTPage({
 
       {editing && yearSelector && <YearSelector selection={yearSelector} />}
 
-      <KpiRow items={items} />
+      {editing && (
+        <WeekRangeSelector
+          selection={weekSelection}
+          available={chartWeeks}
+          onChange={next => onChange({ weekSelection: next })}
+        />
+      )}
 
-      <div className="flex min-h-0 flex-[3] flex-col">
+      <KpiRow items={items} compact={isIncidenciasTerritoriales} />
+
+      <div
+        className={`flex min-h-0 flex-col ${
+          isIncidenciasTerritoriales ? "flex-[3.45]" : "flex-[3]"
+        }`}
+      >
         <WeeklyBarChart
-          weeks={chartWeeks}
+          weeks={selectedChartWeeks}
           series={series}
-          data={data}
-          labels={false}
+          data={chartData}
+          labels={isIncidenciasTerritoriales}
         />
       </div>
 
       {caption && (
-        <p className="shrink-0 font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
+        <p
+          className={`shrink-0 font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground ${
+            isIncidenciasTerritoriales ? "text-center" : ""
+          }`}
+        >
           {caption}
         </p>
       )}
 
-      <div className="min-h-0 flex-[2]">
+      <div
+        className={`min-h-0 ${
+          isIncidenciasTerritoriales ? "flex-[1.95]" : "flex-[2]"
+        }`}
+      >
         {tables ? (
           <div className="flex h-full min-h-0 w-full items-stretch gap-[1.2cqi]">
             {tables.map(table => {
@@ -394,12 +446,16 @@ export default function DTPage({
               return (
                 <div
                   key={table.caption}
-                  className="flex min-h-0 min-w-0 flex-col gap-[0.3cqi]"
+                  className={`flex min-h-0 min-w-0 flex-col gap-[0.3cqi] ${
+                    isIncidenciasTerritoriales && !aggregates
+                      ? "pt-[0.12cqi]"
+                      : ""
+                  }`}
                   // The three tables share one box, so each takes the width its
                   // own column count needs: ten columns cannot live in the
                   // space seven do.
                   style={{
-                    flexGrow: window.length + (aggregates ? 4 : 1),
+                    flexGrow: tableWeeks.length + (aggregates ? 4 : 1),
                     flexBasis: 0,
                   }}
                 >
@@ -409,12 +465,14 @@ export default function DTPage({
                   <div className="min-h-0 flex-1">
                     <DTTable
                       stats={dtStats(table.rows, year, masters, reported)}
-                      weeks={window}
+                      weeks={tableWeeks}
                       rows={table.rows}
                       year={year}
-                      totals={columnTotals(table.rows, year, window)}
+                      totals={columnTotals(table.rows, year, tableWeeks)}
                       aggregates={aggregates}
                       compact
+                      expandedWeekColumns={isIncidenciasTerritoriales}
+                      compactWeekPriority={compactWeekPriority}
                     />
                   </div>
                 </div>
@@ -424,10 +482,10 @@ export default function DTPage({
         ) : (
           <DTTable
             stats={stats}
-            weeks={window}
+            weeks={tableWeeks}
             rows={rows}
             year={year}
-            totals={totalsOverWindow}
+            totals={totalsOverTableWeeks}
           />
         )}
       </div>
@@ -465,14 +523,31 @@ interface DTTableProps {
    * the source pivot's own wording rather than the deck's.
    */
   compact?: boolean;
+  /** Compact aggregate fields so weekly values remain readable. */
+  expandedWeekColumns?: boolean;
+  /** Uses spare aggregate width to make each weekly value easier to read. */
+  compactWeekPriority?: boolean;
 }
 
 /** Column widths of the compact table, as a share of its own box. */
-function compactWidths(weeks: number, aggregates: boolean): string[] {
+function compactWidths(
+  weeks: number,
+  aggregates: boolean,
+  expandedWeekColumns: boolean,
+  compactWeekPriority: boolean
+): string[] {
   // The aggregate columns hold six characters ("144,42") against the three a
   // week holds, so an even split truncates exactly the figures the slide is
   // read for.
-  const leading = aggregates ? [26, 8, 10, 12] : [34];
+  const leading = aggregates
+    ? expandedWeekColumns
+      ? compactWeekPriority
+        ? [10, 4.5, 5.5, 7]
+        : [15, 6, 8, 9]
+      : [26, 8, 10, 12]
+    : expandedWeekColumns
+      ? [22]
+      : [34];
   const rest = 100 - leading.reduce((sum, share) => sum + share, 0);
   const perWeek = weeks === 0 ? rest : rest / weeks;
 
@@ -496,6 +571,8 @@ function DTTable({
   totals,
   aggregates = true,
   compact = false,
+  expandedWeekColumns = false,
+  compactWeekPriority = false,
 }: DTTableProps) {
   const { containerRef, tableRef } = useFitTableScale<
     HTMLDivElement,
@@ -503,7 +580,15 @@ function DTTable({
   >({ deps: [stats.length, weeks.length, aggregates, compact] });
 
   const byLabel = new Map(rows.map(row => [row.label, row]));
-  const widths = compact ? compactWidths(weeks.length, aggregates) : null;
+  const orderedStats = rowsWithOtrosLast(stats);
+  const widths = compact
+    ? compactWidths(
+        weeks.length,
+        aggregates,
+        expandedWeekColumns,
+        compactWeekPriority
+      )
+    : null;
   const offices = stats.reduce((sum, entry) => sum + entry.offices, 0);
   const counted = stats.reduce((sum, entry) => sum + entry.total, 0);
 
@@ -513,7 +598,9 @@ function DTTable({
         ref={tableRef}
         className={`w-full min-w-full table-fixed border-collapse font-mono leading-none tabular-nums ${
           compact
-            ? "text-[length:calc(var(--fit-scale,1)*0.85cqi)]"
+            ? expandedWeekColumns
+              ? "text-[length:calc(var(--fit-scale,1)*0.7cqi)]"
+              : "text-[length:calc(var(--fit-scale,1)*0.85cqi)]"
             : "text-[length:calc(var(--fit-scale,1)*1.15cqi)]"
         }`}
       >
@@ -541,7 +628,7 @@ function DTTable({
           <tr className="border-b border-border text-muted-foreground">
             <th
               scope="col"
-              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-normal"
+              className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left ${compact && expandedWeekColumns ? "border-r border-border text-[length:calc(var(--fit-scale,1)*0.74cqi)] font-semibold" : "font-normal"}`}
             >
               {compact ? "Semana" : "Territorial"}
             </th>
@@ -561,7 +648,7 @@ function DTTable({
                 </th>
                 <th
                   scope="col"
-                  className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+                  className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal ${compact && expandedWeekColumns ? "border-r border-border" : ""}`}
                 >
                   Media
                 </th>
@@ -573,30 +660,48 @@ function DTTable({
                 scope="col"
                 className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
               >
-                {weekLabel(week)}
+                {compact && expandedWeekColumns ? week : weekLabel(week)}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {stats.map(entry => (
+          {orderedStats.map(entry => (
             <tr key={entry.dt} className="border-b border-border/60">
               <th
                 scope="row"
-                className="truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-left font-normal"
+                className={`truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-left ${compact && expandedWeekColumns ? "border-r border-border text-[length:calc(var(--fit-scale,1)*0.74cqi)] font-semibold" : "font-normal"}`}
                 title={entry.dt}
               >
                 {entry.dt}
               </th>
               {aggregates && (
                 <>
-                  <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                  <td
+                    className={`truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-center ${
+                      compact && expandedWeekColumns
+                        ? "px-[0.05cqi]"
+                        : "px-[0.2cqi]"
+                    }`}
+                  >
                     {entry.offices === 0 ? "" : entry.offices}
                   </td>
-                  <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                  <td
+                    className={`truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-center ${
+                      compact && expandedWeekColumns
+                        ? "px-[0.05cqi]"
+                        : "px-[0.2cqi]"
+                    }`}
+                  >
                     {entry.ratio === null ? "" : decimal(entry.ratio)}
                   </td>
-                  <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                  <td
+                    className={`truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-center ${
+                      compact && expandedWeekColumns
+                        ? "border-r border-border px-[0.05cqi]"
+                        : "px-[0.2cqi]"
+                    }`}
+                  >
                     {decimal(entry.average)}
                   </td>
                 </>
@@ -604,7 +709,11 @@ function DTTable({
               {weeks.map(week => (
                 <td
                   key={week}
-                  className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center"
+                  className={`py-[calc(var(--fit-scale,1)*0.25cqi)] text-center ${
+                    compact && expandedWeekColumns
+                      ? "whitespace-nowrap"
+                      : "truncate px-[0.2cqi]"
+                  }`}
                 >
                   {valueAt(byLabel.get(entry.dt)?.values, year, week)}
                 </td>
@@ -612,25 +721,49 @@ function DTTable({
             </tr>
           ))}
 
-          <tr className="border-t border-border font-medium">
+          <tr
+            className={
+              compact
+                ? "bg-[var(--informe-serie-4)] font-medium text-white"
+                : "border-t border-border font-medium"
+            }
+          >
             <th
               scope="row"
-              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left"
+              className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left ${compact && expandedWeekColumns ? "border-r border-border" : ""}`}
             >
               {compact ? "Total general" : "Total"}
             </th>
             {aggregates && (
               <>
-                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+                <td
+                  className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center ${
+                    compact && expandedWeekColumns
+                      ? "px-[0.05cqi]"
+                      : "px-[0.2cqi]"
+                  }`}
+                >
                   {offices || ""}
                 </td>
-                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+                <td
+                  className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center ${
+                    compact && expandedWeekColumns
+                      ? "px-[0.05cqi]"
+                      : "px-[0.2cqi]"
+                  }`}
+                >
                   {/* The published pivot totals the ratio too, over the whole
                       network. Blank while no office master is seeded, like the
                       rows above it. */}
                   {compact && offices > 0 ? decimal(counted / offices) : ""}
                 </td>
-                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+                <td
+                  className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center ${
+                    compact && expandedWeekColumns
+                      ? "border-r border-border px-[0.05cqi]"
+                      : "px-[0.2cqi]"
+                  }`}
+                >
                   {decimal(
                     stats.reduce((sum, entry) => sum + entry.average, 0)
                   )}
@@ -640,7 +773,11 @@ function DTTable({
             {weeks.map((week, index) => (
               <td
                 key={week}
-                className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center"
+                className={`py-[calc(var(--fit-scale,1)*0.3cqi)] text-center ${
+                  compact && expandedWeekColumns
+                    ? "whitespace-nowrap"
+                    : "truncate px-[0.2cqi]"
+                }`}
               >
                 {totals[index] ?? 0}
               </td>

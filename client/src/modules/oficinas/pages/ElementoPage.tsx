@@ -11,6 +11,8 @@ import type { OficinasDataPageProps } from "./PageShell";
 
 interface ElementoPageProps extends OficinasDataPageProps {
   section: OficinasIncidencias | undefined;
+  /** Applies the compact card-and-table treatment of the assigned slide. */
+  compactPresentation?: boolean;
 }
 
 /**
@@ -41,6 +43,7 @@ export default function ElementoPage({
   onChange,
   dataset,
   section,
+  compactPresentation = false,
 }: ElementoPageProps) {
   const rows = section?.byElement ?? [];
   const year =
@@ -73,6 +76,7 @@ export default function ElementoPage({
       seriesLabel="Elemento"
       topN={CHART_ROWS}
       total={total}
+      compactPresentation={compactPresentation}
       kpis={[
         { label: `Total ${year}`, value: total.toLocaleString("es-ES") },
         { label: "Elementos", value: String(ranked.length) },
