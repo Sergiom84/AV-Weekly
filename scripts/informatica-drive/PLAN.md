@@ -1341,6 +1341,8 @@ git commit -m "feat(informatica): marcadores de periodo y rodaje de la semana an
 
 `cerrarMes` tiene que ser **idempotente**: ejecutarlo dos veces en el mismo mes no puede duplicar la fila ni desplazar la ventana dos posiciones. La comprobación es leer la última fecha ya escrita y salir sin hacer nada si coincide con el mes que se va a cerrar.
 
+Las funciones reciben el **mes nuevo que se abre**, no el que se congela: al cerrar agosto de 2026 reciben `2026-09-01`. Así la última fila viva de agosto no hace saltar la guarda antes de tiempo.
+
 - [ ] **Step 1: Escribe la guarda de idempotencia**
 
 ```javascript
@@ -1352,18 +1354,17 @@ git commit -m "feat(informatica): marcadores de periodo y rodaje de la semana an
  */
 function mesYaCerrado(month) {
   var sheet = sheetByName(TAB.encuestasInforme, false);
-  var last = sheet.getLastRow();
-  var fechas = sheet.getRange(4, 2, Math.max(last - 3, 1), 1).getValues();
+  var viva = ultimaFilaFecha(sheet, 2, 4);
 
-  for (var i = fechas.length - 1; i >= 0; i--) {
-    var fecha = toDate(fechas[i][0]);
+  if (viva === 0) return false;
 
-    if (fecha) return fecha.getTime() >= month.getTime();
-  }
+  var fecha = toDate(sheet.getRange(viva, 2).getValue());
 
-  return false;
+  return fecha ? fecha.getTime() >= month.getTime() : false;
 }
 ```
+
+`getLastRow()` no sirve para localizar la fila viva: el libro limpio declara 1.001 filas usadas por fórmulas o formato, aunque el histórico real termina hoy en la 22. `ultimaFilaFecha(sheet, column, firstRow)` recorre la columna indicada y devuelve la última fila que contiene una fecha válida; todas las funciones de cierre usan este criterio o una cabecera de mes explícita, nunca el final físico de la hoja.
 
 - [ ] **Step 2: Escribe el cierre de encuestas**
 
@@ -1379,7 +1380,9 @@ Los cuatro pasos del apartado 7 de la spec, en este orden exacto:
  */
 function cerrarEncuestas(month, windowMonths) {
   var sheet = sheetByName(TAB.encuestasInforme, false);
-  var viva = sheet.getLastRow();
+  var viva = ultimaFilaFecha(sheet, 2, 4);
+
+  if (viva === 0) throw new Error('El histórico de encuestas no trae ninguna fecha válida.');
 
   // 1. Freeze: replace the two formulas by the values they currently show.
   var congelado = sheet.getRange(viva, 3, 1, 2).getValues();
@@ -1419,6 +1422,7 @@ function cerrarEncuestas(month, windowMonths) {
 - `Hoja 14`: la celda viva es la del mes en curso en la columna del año (hoy `D11`, agosto de 2026). La fórmula que se traslada es `='2.1.6 Work Orders (Informe)'!N43`.
 - `Hoja 15`: la fila viva es la última (hoy la 19). Se congelan `B` y `C`, y en la fila siguiente se escriben `A` con la fecha del mes nuevo, `B` con `='2.1.2 Top 5 incidencias (Datos)'!R27` y `C` con `='2.1.6 Work Orders (Informe)'!N43`. La columna `D` ya lleva su `SUM` arrastrado.
 - `Hoja 13`: se congela la última columna con fórmulas y se abre la siguiente repitiendo el patrón `=SUM(Xn+Xm)` de las filas 3 a 5 y los `VLOOKUP` contra `2.1.1` de las filas 6 a 11.
+- `Hoja 19`: se localiza el último par completo por las fechas de las filas 5 y 30, se insertan dos columnas antes del gutter y de la tabla lateral, se copia el patrón de fórmulas de filas 6:25 y 31:50 y se escriben también las cabeceras de año/mes de filas 3:4. En la muestra, agosto ocupa `AQ:AR`, `AS` es el gutter y la tabla comienza en `AT`; septiembre se abre en el nuevo `AS:AT` sin sobrescribir esa tabla.
 
 - [ ] **Step 4: Verifica la sintaxis**
 

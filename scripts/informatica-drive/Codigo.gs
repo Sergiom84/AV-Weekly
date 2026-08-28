@@ -700,6 +700,495 @@ function escribirMarcadores(extraction) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Monthly close                                                               */
+/* -------------------------------------------------------------------------- */
+
+/** First day of the month after `month`, at UTC midnight. */
+function mesSiguiente(month) {
+  return new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 1));
+}
+
+/** Whether two usable dates belong to the same UTC calendar month. */
+function mismoMes(left, right) {
+  var a = toDate(left);
+  var b = toDate(right);
+
+  return Boolean(
+    a &&
+      b &&
+      a.getUTCFullYear() === b.getUTCFullYear() &&
+      a.getUTCMonth() === b.getUTCMonth()
+  );
+}
+
+/** Last row whose selected column contains a valid date; physical rows do not count. */
+function ultimaFilaFecha(sheet, column, firstRow) {
+  var rowCount = sheet.getMaxRows() - firstRow + 1;
+
+  if (rowCount < 1) return 0;
+
+  var values = sheet.getRange(firstRow, column, rowCount, 1).getValues();
+  var last = 0;
+
+  for (var index = 0; index < values.length; index += 1) {
+    if (toDate(values[index][0])) last = firstRow + index;
+  }
+
+  return last;
+}
+
+/** Last column whose selected row contains a valid date; formatted columns do not count. */
+function ultimaColumnaFecha(sheet, row, firstColumn) {
+  var columnCount = sheet.getMaxColumns() - firstColumn + 1;
+
+  if (columnCount < 1) return 0;
+
+  var values = sheet.getRange(row, firstColumn, 1, columnCount).getValues()[0];
+  var last = 0;
+
+  for (var index = 0; index < values.length; index += 1) {
+    if (toDate(values[index])) last = firstColumn + index;
+  }
+
+  return last;
+}
+
+function asegurarFila(sheet, row) {
+  if (row > sheet.getMaxRows()) {
+    sheet.insertRowsAfter(sheet.getMaxRows(), row - sheet.getMaxRows());
+  }
+}
+
+function asegurarColumna(sheet, column) {
+  if (column > sheet.getMaxColumns()) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), column - sheet.getMaxColumns());
+  }
+}
+
+/** Whether a range carries a value or a formula. Formatting alone is ignored. */
+function rangoTieneContenido(range) {
+  var values = range.getValues();
+  var formulas = range.getFormulas();
+
+  for (var row = 0; row < values.length; row += 1) {
+    for (var column = 0; column < values[row].length; column += 1) {
+      if (text(values[row][column]) !== '' || text(formulas[row][column]) !== '') return true;
+    }
+  }
+
+  return false;
+}
+
+/** The survey live row is also the durable close marker. */
+function mesYaCerrado(month) {
+  var sheet = sheetByName(TAB.encuestasInforme, false);
+  var liveRow = ultimaFilaFecha(sheet, 2, 4);
+
+  if (liveRow === 0) return false;
+
+  var date = toDate(sheet.getRange(liveRow, 2).getValue());
+
+  return date ? date.getTime() >= month.getTime() : false;
+}
+
+/**
+ * Closes the extraction month and opens the following month exactly once.
+ *
+ * The guard compares the survey history with the NEW month. Closing August,
+ * for example, opens 01/09/2026; comparing with August would skip the first
+ * legitimate close because the live row already represents August.
+ */
+function cerrarMes() {
+  var config = readConfig();
+  var currentMonth = monthBounds(config.extraction).first;
+  var nextMonth = mesSiguiente(currentMonth);
+
+  if (mesYaCerrado(nextMonth)) return false;
+
+  cerrarVolumetria(nextMonth);
+  cerrarHistoricoIncidencias(nextMonth);
+  cerrarSeriesMensuales(nextMonth);
+  cerrarImacs(nextMonth);
+  cerrarBloqueTeclado(nextMonth);
+
+  // This is deliberately last: its new live row is the idempotency marker.
+  cerrarEncuestas(nextMonth, config.windowMonths);
+
+  return true;
+}
+
+/** Opens one empty dated row while preserving the preceding row's formatting. */
+function abrirFilaVolumetria(sheet, month, firstColumn) {
+  var liveRow = ultimaFilaFecha(sheet, firstColumn, 4);
+
+  if (liveRow === 0) {
+    throw new Error('La volumetría no trae ninguna fecha válida en la columna ' + firstColumn + '.');
+  }
+
+  var liveDate = toDate(sheet.getRange(liveRow, firstColumn).getValue());
+
+  if (liveDate.getTime() >= month.getTime()) return false;
+  if (!mismoMes(liveDate, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1)))) {
+    throw new Error('La volumetría no termina en el mes que se intenta cerrar.');
+  }
+
+  var newRow = liveRow + 1;
+
+  asegurarFila(sheet, newRow);
+  sheet.getRange(liveRow, firstColumn, 1, 4).copyTo(sheet.getRange(newRow, firstColumn, 1, 4));
+  sheet.getRange(newRow, firstColumn, 1, 4).clearContent();
+  sheet.getRange(newRow, firstColumn).setValue(month).setNumberFormat('dd/mm/yyyy');
+
+  return true;
+}
+
+/** Adds the new month to both independent blocks of 2.1.1. */
+function cerrarVolumetria(month) {
+  var sheet = sheetByName(TAB.volumetria, false);
+
+  abrirFilaVolumetria(sheet, month, 1);
+  abrirFilaVolumetria(sheet, month, 6);
+}
+
+/** Freezes Hoja 13's live column and opens the next column from its real pattern. */
+function cerrarHistoricoIncidencias(month) {
+  var sheet = sheetByName(TAB.volumetriaHistorico, false);
+  var liveColumn = ultimaColumnaFecha(sheet, 2, 3);
+
+  if (liveColumn === 0) throw new Error('Hoja 13 no trae ninguna cabecera mensual válida.');
+
+  var liveDate = toDate(sheet.getRange(2, liveColumn).getValue());
+
+  if (liveDate.getTime() >= month.getTime()) return false;
+  if (!mismoMes(liveDate, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1)))) {
+    throw new Error('Hoja 13 no termina en el mes que se intenta cerrar.');
+  }
+
+  var newColumn = liveColumn + 1;
+
+  asegurarColumna(sheet, newColumn);
+
+  // A side table may eventually reach the next history column. Move it instead
+  // of overwriting it; formulas elsewhere follow the inserted column.
+  if (rangoTieneContenido(sheet.getRange(2, newColumn, 10, 1))) {
+    sheet.insertColumnBefore(newColumn);
+  }
+
+  sheet.getRange(2, liveColumn, 10, 1).copyTo(sheet.getRange(2, newColumn, 10, 1));
+  sheet.getRange(2, newColumn).setValue(month).setNumberFormat('dd/mm/yyyy');
+
+  var frozen = sheet.getRange(3, liveColumn, 9, 1).getValues();
+  sheet.getRange(3, liveColumn, 9, 1).setValues(frozen);
+
+  return true;
+}
+
+function columnaAnual(sheet, year) {
+  var values = sheet.getRange(3, 1, 1, sheet.getMaxColumns()).getValues()[0];
+
+  for (var index = 0; index < values.length; index += 1) {
+    if (Number(values[index]) === year) return index + 1;
+  }
+
+  return 0;
+}
+
+/** Creates a year column in Hoja 14 only when January crosses the boundary. */
+function asegurarColumnaAnual(sheet, year, sourceColumn) {
+  var existing = columnaAnual(sheet, year);
+
+  if (existing !== 0) return existing;
+
+  var targetColumn = sourceColumn + 1;
+
+  asegurarColumna(sheet, targetColumn);
+  if (rangoTieneContenido(sheet.getRange(3, targetColumn, 14, 1))) {
+    sheet.insertColumnBefore(targetColumn);
+  }
+
+  var annualFormula = sheet.getRange(16, sourceColumn).getFormulaR1C1();
+
+  sheet.getRange(3, sourceColumn, 14, 1).copyTo(sheet.getRange(3, targetColumn, 14, 1));
+  sheet.getRange(3, targetColumn, 14, 1).clearContent();
+  sheet.getRange(3, targetColumn).setValue(year);
+
+  if (annualFormula !== '') sheet.getRange(16, targetColumn).setFormulaR1C1(annualFormula);
+
+  return targetColumn;
+}
+
+/** Freezes Hoja 14's current cell and opens the following month. */
+function cerrarWorkOrdersMensual(month) {
+  var sheet = sheetByName(TAB.workOrdersMensual, false);
+  var closedMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1));
+  var sourceColumn = columnaAnual(sheet, closedMonth.getUTCFullYear());
+
+  if (sourceColumn === 0) throw new Error('Hoja 14 no trae la columna del año que se cierra.');
+
+  var targetColumn = asegurarColumnaAnual(sheet, month.getUTCFullYear(), sourceColumn);
+  var sourceRow = 4 + closedMonth.getUTCMonth();
+  var targetRow = 4 + month.getUTCMonth();
+  var target = sheet.getRange(targetRow, targetColumn);
+
+  if (text(target.getFormula()) !== '') return false;
+
+  var source = sheet.getRange(sourceRow, sourceColumn);
+  var formula = source.getFormulaR1C1();
+
+  if (formula === '') throw new Error('Hoja 14 no trae fórmula viva para abrir el mes siguiente.');
+
+  target.setFormulaR1C1(formula);
+  source.setValue(source.getValue());
+
+  return true;
+}
+
+/** Freezes Hoja 15's live sources and copies its exact formula pattern below. */
+function cerrarTotalMensual(month) {
+  var sheet = sheetByName(TAB.totalMensual, false);
+  var liveRow = ultimaFilaFecha(sheet, 1, 2);
+
+  if (liveRow === 0) throw new Error('Hoja 15 no trae ninguna fecha mensual válida.');
+
+  var liveDate = toDate(sheet.getRange(liveRow, 1).getValue());
+
+  if (liveDate.getTime() >= month.getTime()) return false;
+  if (!mismoMes(liveDate, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1)))) {
+    throw new Error('Hoja 15 no termina en el mes que se intenta cerrar.');
+  }
+
+  var source = sheet.getRange(liveRow, 1, 1, 4);
+  var newRow = liveRow + 1;
+
+  asegurarFila(sheet, newRow);
+  source.copyTo(sheet.getRange(newRow, 1, 1, 4));
+  sheet.getRange(newRow, 1).setValue(month).setNumberFormat('dd/mm/yyyy');
+
+  var frozen = sheet.getRange(liveRow, 2, 1, 2).getValues();
+  sheet.getRange(liveRow, 2, 1, 2).setValues(frozen);
+
+  return true;
+}
+
+/** Monthly series kept in rows: Hoja 14 and Hoja 15. */
+function cerrarSeriesMensuales(month) {
+  cerrarWorkOrdersMensual(month);
+  cerrarTotalMensual(month);
+}
+
+/** Last complete two-column month in Hoja 19, based only on its date bounds. */
+function ultimaParejaImacs(sheet) {
+  var lastStart = 0;
+
+  for (var column = 3; column < sheet.getMaxColumns(); column += 2) {
+    var first = toDate(sheet.getRange(5, column).getValue());
+    var last = toDate(sheet.getRange(5, column + 1).getValue());
+
+    if (!first || !last) break;
+    lastStart = column;
+  }
+
+  return lastStart;
+}
+
+/**
+ * Extends both IMAC blocks by one month without overwriting the table at AT.
+ *
+ * In the reference book August occupies AQ:AR, AS is the gutter and the side
+ * table begins at AT. Two columns are inserted before AS, so the copied pair
+ * becomes AS:AT and the original gutter/table move together to AU/AV.
+ */
+function cerrarImacs(month) {
+  var sheet = sheetByName(TAB.imacsInforme, false);
+  var liveStart = ultimaParejaImacs(sheet);
+
+  if (liveStart === 0) throw new Error('Hoja 19 no trae ningún par mensual válido.');
+
+  var liveDate = toDate(sheet.getRange(5, liveStart).getValue());
+
+  if (liveDate.getTime() >= month.getTime()) return false;
+  if (!mismoMes(liveDate, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1)))) {
+    throw new Error('Hoja 19 no termina en el mes que se intenta cerrar.');
+  }
+
+  var newStart = liveStart + 2;
+
+  asegurarColumna(sheet, newStart + 1);
+
+  if (rangoTieneContenido(sheet.getRange(1, newStart, 50, 2))) {
+    sheet.insertColumnsBefore(newStart, 2);
+  }
+
+  sheet.getRange(5, liveStart, 46, 2).copyTo(sheet.getRange(5, newStart, 46, 2));
+
+  // Headers are data, not part of the copied formula blocks. A new year is
+  // labelled only on its first pair; the second cell of each pair stays empty.
+  sheet.getRange(3, newStart, 2, 2).clearContent();
+  if (month.getUTCMonth() === 0) sheet.getRange(3, newStart).setValue(month.getUTCFullYear());
+  sheet.getRange(4, newStart).setValue(nombreMesEspanol(month));
+
+  var bounds = monthBounds(month);
+
+  sheet
+    .getRange(5, newStart, 1, 2)
+    .setValues([[bounds.first, bounds.last]])
+    .setNumberFormat('dd/mm/yyyy');
+  sheet
+    .getRange(30, newStart, 1, 2)
+    .setValues([[bounds.first, bounds.last]])
+    .setNumberFormat('dd/mm/yyyy');
+
+  return true;
+}
+
+function dosDigitos(value) {
+  return value < 10 ? '0' + value : String(value);
+}
+
+function literalFecha(date) {
+  return (
+    dosDigitos(date.getUTCDate()) +
+    '/' +
+    dosDigitos(date.getUTCMonth() + 1) +
+    '/' +
+    date.getUTCFullYear()
+  );
+}
+
+function numeroMesEspanol(value) {
+  var months = {
+    ENERO: 1,
+    FEBRERO: 2,
+    MARZO: 3,
+    ABRIL: 4,
+    MAYO: 5,
+    JUNIO: 6,
+    JULIO: 7,
+    AGOSTO: 8,
+    SEPTIEMBRE: 9,
+    OCTUBRE: 10,
+    NOVIEMBRE: 11,
+    DICIEMBRE: 12
+  };
+
+  return months[normalize(value)] || 0;
+}
+
+function nombreMesEspanol(date) {
+  var months = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre'
+  ];
+
+  return months[date.getUTCMonth()];
+}
+
+/** Repairs the merged year headers and derives every date literal from its month header. */
+function cerrarBloqueTeclado(month) {
+  var sheet = sheetByName(TAB.workOrdersInforme, false);
+  var year = month.getUTCFullYear();
+
+  // C45:D45 and E45:N45 are merged independently; both anchors need the real year.
+  sheet.getRange('C45').setValue(year);
+  sheet.getRange('E45').setValue(year);
+
+  for (var column = 3; column <= 14; column += 1) {
+    var monthNumber = numeroMesEspanol(sheet.getRange(46, column).getValue());
+
+    if (monthNumber === 0) {
+      throw new Error('El bloque de teclado trae una cabecera de mes desconocida.');
+    }
+
+    var bounds = monthBounds(new Date(Date.UTC(year, monthNumber - 1, 1)));
+    var firstLiteral = '">=' + literalFecha(bounds.first) + '"';
+    var lastLiteral = '"<=' + literalFecha(bounds.last) + '"';
+
+    for (var row = 47; row <= 49; row += 1) {
+      var cell = sheet.getRange(row, column);
+      var formula = cell.getFormula();
+
+      if (formula === '') throw new Error('Falta una fórmula del bloque de teclado.');
+
+      var updated = formula
+        .replace(/">=\d{2}\/\d{2}\/\d{4}"/g, firstLiteral)
+        .replace(/"<=\d{2}\/\d{2}\/\d{4}"/g, lastLiteral);
+
+      if (updated === formula && formula.indexOf(firstLiteral) < 0 && formula.indexOf(lastLiteral) < 0) {
+        throw new Error('No se pudieron derivar los límites de una fórmula del bloque de teclado.');
+      }
+
+      cell.setFormula(updated);
+    }
+  }
+}
+
+/** Freezes the live survey row, opens the next one and slides the configured window. */
+function cerrarEncuestas(month, windowMonths) {
+  var sheet = sheetByName(TAB.encuestasInforme, false);
+  var liveRow = ultimaFilaFecha(sheet, 2, 4);
+
+  if (liveRow === 0) throw new Error('El histórico de encuestas no trae ninguna fecha válida.');
+
+  var liveDate = toDate(sheet.getRange(liveRow, 2).getValue());
+
+  if (liveDate.getTime() >= month.getTime()) return false;
+  if (!mismoMes(liveDate, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1)))) {
+    throw new Error('El histórico de encuestas no termina en el mes que se intenta cerrar.');
+  }
+
+  var width = Number(windowMonths);
+
+  if (!isFinite(width) || width < 1) width = DEFAULT_WINDOW_MONTHS;
+  width = Math.round(width);
+
+  var newRow = liveRow + 1;
+  var firstWindowRow = newRow - width + 1;
+
+  if (firstWindowRow < 4) {
+    throw new Error('La ventana de encuestas es mayor que el histórico disponible.');
+  }
+
+  asegurarFila(sheet, newRow);
+  asegurarColumna(sheet, 6 + width);
+
+  var frozen = sheet.getRange(liveRow, 3, 1, 2).getValues();
+
+  sheet.getRange(liveRow, 3, 1, 2).setValues(frozen);
+  sheet.getRange(liveRow, 5).setValue('Histórico');
+
+  sheet.getRange(liveRow, 2, 1, 4).copyTo(sheet.getRange(newRow, 2, 1, 4));
+  sheet.getRange(newRow, 2).setValue(month).setNumberFormat('dd/mm/yyyy');
+  sheet.getRange(newRow, 3).setFormula('=C31');
+  sheet.getRange(newRow, 4).setFormula('=J33');
+  sheet.getRange(newRow, 5).setValue('Vivo (C31 y J33)');
+  sheet.getRange('L24').setValue(month).setNumberFormat('dd/mm/yyyy');
+
+  var dates = [];
+  var averages = [];
+
+  for (var index = 0; index < width; index += 1) {
+    dates.push('=B' + (firstWindowRow + index));
+    averages.push('=D' + (firstWindowRow + index));
+  }
+
+  sheet.getRange(2, 7, 1, width).setFormulas([dates]);
+  sheet.getRange(3, 7, 1, width).setFormulas([averages]);
+  sheet.getRange('F1').setValue(width + ' meses');
+
+  return true;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Data-tab writes                                                             */
 /* -------------------------------------------------------------------------- */
 
