@@ -101,6 +101,7 @@ var CREATABLE_TABS = {
 
 var CONFIG_KEYS = {
   folder: 'Carpeta Drive',
+  outputFolder: 'Carpeta salida PLANO',
   extraction: 'Fecha de extracción',
   windowMonths: 'Meses en la ventana de encuestas'
 };
@@ -111,6 +112,9 @@ var CONFIG_KEYS = {
  * que pegarla a mano; esa celda manda siempre, esto es solo la semilla.
  */
 var DEFAULT_FOLDER_ID = '17O7dORS6oIDN0hyLP1AXQEN7tR6k3ZbH';
+
+/** Folder where the generated TXT is kept, separate from the raw uploads. */
+var DEFAULT_OUTPUT_FOLDER_ID = '1b1yyWSoWIj3cNwuCn-1Co1jtqgdGK2_A';
 
 /**
  * Width of the survey window, in months.
@@ -633,6 +637,7 @@ function readConfig() {
   }
 
   var folderId = text(config[CONFIG_KEYS.folder]);
+  var outputFolderId = text(config[CONFIG_KEYS.outputFolder]) || DEFAULT_OUTPUT_FOLDER_ID;
   var extraction = configDate(config[CONFIG_KEYS.extraction]);
   var windowMonths = Number(config[CONFIG_KEYS.windowMonths]);
 
@@ -649,6 +654,7 @@ function readConfig() {
 
   return {
     folderId: folderId,
+    outputFolderId: outputFolderId,
     extraction: extraction,
     windowMonths: isFinite(windowMonths) && windowMonths > 0 ? Math.round(windowMonths) : DEFAULT_WINDOW_MONTHS
   };
@@ -2796,7 +2802,7 @@ function procesarSemana() {
   }
 }
 
-/** The PLANO tab as a text file in the configured weekly folder. */
+/** The PLANO tab as a text file in its configured output folder. */
 function guardarPlanoTxt() {
   var ui = SpreadsheetApp.getUi();
   var sheet = sheetByName(TAB.plano, false);
@@ -2815,14 +2821,23 @@ function guardarPlanoTxt() {
   }
 
   var name = 'Informatica ' + isoDate(config.extraction) + '.txt';
-  var folder = DriveApp.getFolderById(config.folderId);
+  var folder = DriveApp.getFolderById(config.outputFolderId);
   var existing = folder.getFilesByName(name);
 
   while (existing.hasNext()) existing.next().setTrashed(true);
 
   var file = folder.createFile(name, lines.join('\n'), MimeType.PLAIN_TEXT);
 
-  ui.alert('Informática Weekly', 'Guardado "' + name + '" en la carpeta.', ui.ButtonSet.OK);
+  // Versions created by the previous script lived beside the raw uploads.
+  // Remove that misplaced copy only after the correct file exists.
+  if (config.outputFolderId !== config.folderId) {
+    var rawFolder = DriveApp.getFolderById(config.folderId);
+    var misplaced = rawFolder.getFilesByName(name);
+
+    while (misplaced.hasNext()) misplaced.next().setTrashed(true);
+  }
+
+  ui.alert('Informática Weekly', 'Guardado "' + name + '" en la carpeta de salida PLANO.', ui.ButtonSet.OK);
 
   return file.getId();
 }
@@ -2834,16 +2849,37 @@ function inicializarHoja() {
   if (!sheetByName(TAB.config, false)) {
     var config = sheetByName(TAB.config, true);
 
-    config.getRange(1, 1, 3, 2).setValues([
+    config.getRange(1, 1, 4, 2).setValues([
       [CONFIG_KEYS.folder, DEFAULT_FOLDER_ID],
+      [CONFIG_KEYS.outputFolder, DEFAULT_OUTPUT_FOLDER_ID],
       [CONFIG_KEYS.extraction, ''],
       [CONFIG_KEYS.windowMonths, DEFAULT_WINDOW_MONTHS]
     ]);
-    config.getRange(1, 1, 3, 1).setFontWeight('bold');
-    config.getRange(2, 2).setNumberFormat('dd/mm/yyyy');
+    config.getRange(1, 1, 4, 1).setFontWeight('bold');
+    config.getRange(3, 2).setNumberFormat('dd/mm/yyyy');
     config.setColumnWidth(1, 300);
     config.setColumnWidth(2, 340);
     created.push(TAB.config);
+  }
+
+  var liveConfig = sheetByName(TAB.config, false);
+  var configValues = liveConfig.getRange(1, 1, Math.max(liveConfig.getLastRow(), 1), 1).getValues();
+  var hasOutputFolder = false;
+
+  for (var configRow = 0; configRow < configValues.length; configRow += 1) {
+    if (text(configValues[configRow][0]) === CONFIG_KEYS.outputFolder) {
+      hasOutputFolder = true;
+      break;
+    }
+  }
+
+  if (!hasOutputFolder) {
+    var outputRow = liveConfig.getLastRow() + 1;
+
+    liveConfig.getRange(outputRow, 1, 1, 2).setValues([
+      [CONFIG_KEYS.outputFolder, DEFAULT_OUTPUT_FOLDER_ID]
+    ]);
+    liveConfig.getRange(outputRow, 1).setFontWeight('bold');
   }
 
   if (!sheetByName(TAB.check, false)) {

@@ -22,7 +22,7 @@ tres puntos deben cambiar juntos si se modifica una sección de `PLANO`.
 2. Entrar en `Extensiones > Apps Script`, sustituir el contenido por
    `Codigo.gs`, guardar y volver a cargar la hoja.
 3. Ejecutar `⭐ Informática Weekly > Inicializar hoja`.
-4. Revisar en `Configuración` el ID de la carpeta y la ventana de encuestas.
+4. Revisar en `Configuración` las carpetas de entrada y salida y la ventana de encuestas.
 5. Autorizar la lectura de Drive y la escritura en la hoja cuando Google lo
    solicite. Los permisos corresponden a la cuenta que ejecuta el script.
 
@@ -41,7 +41,8 @@ por el equipo.
    modificación, filas leídas y escritas, desconocidos y celdas actualizadas.
 5. Copiar la pestaña `PLANO` completa y subirla en
    `Informática > Texto plano (Drive)` de AV Weekly. Como alternativa, usar
-   `Guardar PLANO como .txt en la carpeta` y subir ese fichero.
+   `Guardar PLANO como .txt en la carpeta` y subir ese fichero. El TXT se guarda
+   en `Carpeta salida PLANO`, nunca junto a los Excel de `Carpeta Drive`.
 
 Los ficheros se reconocen por cabeceras. Solo backlog, liberadas y gestionadas
 se distinguen por nombre porque comparten exactamente el mismo formato. Si

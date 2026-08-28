@@ -77,6 +77,7 @@ Pestaña `Configuración`:
 | Clave | Valor |
 |---|---|
 | `Carpeta Drive` | `17O7dORS6oIDN0hyLP1AXQEN7tR6k3ZbH` |
+| `Carpeta salida PLANO` | `1b1yyWSoWIj3cNwuCn-1Co1jtqgdGK2_A` |
 | `Fecha de extracción` | Lunes de la semana que se informa |
 | `Meses en la ventana de encuestas` | `19` |
 
