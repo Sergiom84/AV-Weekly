@@ -416,22 +416,21 @@ function classifyFolder(folderId) {
   var nombres = [];
   var modificados = [];
 
-  while (files.hasNext()) {
-    var file = files.next();
-    var mime = file.getMimeType();
+  try {
+    while (files.hasNext()) {
+      var file = files.next();
+      var mime = file.getMimeType();
 
-    if (mime !== XLSX_MIME && mime !== SHEETS_MIME && mime !== MimeType.MICROSOFT_EXCEL) {
-      continue;
-    }
+      if (mime !== XLSX_MIME && mime !== SHEETS_MIME && mime !== MimeType.MICROSOFT_EXCEL) {
+        continue;
+      }
 
-    if (file.getName().indexOf(TEMPORARY_PREFIX) === 0 || file.getId() === book().getId()) {
-      continue;
-    }
+      if (file.getName().indexOf(TEMPORARY_PREFIX) === 0 || file.getId() === book().getId()) {
+        continue;
+      }
 
-    var handle = null;
+      var handle = openAsSpreadsheet(file);
 
-    try {
-      handle = openAsSpreadsheet(file);
       handles.push(handle);
 
       nombres.push(file.getName());
@@ -485,10 +484,16 @@ function classifyFolder(folderId) {
       if (!matched) {
         skipped.push(file.getName());
       }
-    } catch (error) {
-      discardTemporary(handle);
-      throw error;
     }
+  } catch (error) {
+    // classifyFolder has no caller-owned result yet when it throws. Clean every
+    // conversion accumulated so far here, including files opened before the
+    // one that failed.
+    for (var cleanup = 0; cleanup < handles.length; cleanup += 1) {
+      discardTemporary(handles[cleanup]);
+    }
+
+    throw error;
   }
 
   return {
@@ -803,7 +808,12 @@ function cerrarMes() {
   var currentMonth = monthBounds(config.extraction).first;
   var nextMonth = mesSiguiente(currentMonth);
 
-  if (mesYaCerrado(nextMonth)) return false;
+  if (mesYaCerrado(nextMonth)) {
+    actualizarComprobacionCierre('Sin cambios', 'El mes ' + fechaLegible(nextMonth) + ' ya estaba abierto.');
+    return false;
+  }
+
+  var frozenCells = describirCeldasCierre(nextMonth);
 
   cerrarVolumetria(nextMonth);
   cerrarHistoricoIncidencias(nextMonth);
@@ -814,7 +824,49 @@ function cerrarMes() {
   // This is deliberately last: its new live row is the idempotency marker.
   cerrarEncuestas(nextMonth, config.windowMonths);
 
+  actualizarComprobacionCierre('OK', frozenCells.join('; '));
+
   return true;
+}
+
+function columnLetters(column) {
+  var value = column;
+  var out = '';
+
+  while (value > 0) {
+    var remainder = (value - 1) % 26;
+    out = String.fromCharCode(65 + remainder) + out;
+    value = Math.floor((value - 1) / 26);
+  }
+
+  return out;
+}
+
+/** Exact live cells that the close turns into values before opening the new month. */
+function describirCeldasCierre(month) {
+  var incidenceSheet = sheetByName(TAB.volumetriaHistorico, false);
+  var incidenceColumn = ultimaColumnaFecha(incidenceSheet, 2, 3);
+  var closedMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1));
+  var workSheet = sheetByName(TAB.workOrdersMensual, false);
+  var workColumn = columnaAnual(workSheet, closedMonth.getUTCFullYear());
+  var workRow = 4 + closedMonth.getUTCMonth();
+  var totalSheet = sheetByName(TAB.totalMensual, false);
+  var totalRow = ultimaFilaFecha(totalSheet, 1, 2);
+  var surveySheet = sheetByName(TAB.encuestasInforme, false);
+  var surveyRow = ultimaFilaFecha(surveySheet, 2, 4);
+  var cells = [];
+
+  if (incidenceColumn > 0) {
+    cells.push(
+      TAB.volumetriaHistorico + '!' + columnLetters(incidenceColumn) + '3:' +
+        columnLetters(incidenceColumn) + '11'
+    );
+  }
+  if (workColumn > 0) cells.push(TAB.workOrdersMensual + '!' + columnLetters(workColumn) + workRow);
+  if (totalRow > 0) cells.push(TAB.totalMensual + '!B' + totalRow + ':C' + totalRow);
+  if (surveyRow > 0) cells.push(TAB.encuestasInforme + '!C' + surveyRow + ':D' + surveyRow);
+
+  return cells;
 }
 
 /** Opens one empty dated row while preserving the preceding row's formatting. */
@@ -1440,6 +1492,24 @@ function yearSource(entry, extraction) {
   throw new Error('El fichero IMAC no trae la pestaña del año ' + year + '.');
 }
 
+/** Counts occupied source-width rows without reading or reporting their contents. */
+function contarFilasDestino(tabName, firstRow, firstColumn, width) {
+  var sheet = sheetByName(tabName, false);
+
+  if (!sheet || sheet.getLastRow() < firstRow) return 0;
+
+  var values = sheet
+    .getRange(firstRow, firstColumn, sheet.getLastRow() - firstRow + 1, width)
+    .getValues();
+  var count = 0;
+
+  for (var row = 0; row < values.length; row += 1) {
+    if (rowHasValue(values[row])) count += 1;
+  }
+
+  return count;
+}
+
 /**
  * Replaces the weekly data tabs while preserving all hand-kept master ranges.
  * `clasificacion` accepts the object returned by classifyFolder; accepting its
@@ -1448,6 +1518,7 @@ function yearSource(entry, extraction) {
 function escribirDatos(clasificacion, informe) {
   var found = clasificacion.found || clasificacion;
   var written = informe.escritas || {};
+  var read = informe.leidas || {};
   var unknownWorkOrders = [];
   var unknownAddresses = [];
   var grids = templateGrids(found);
@@ -1458,6 +1529,10 @@ function escribirDatos(clasificacion, informe) {
   var backlog = rowsBelowHeader(firstSource(found.backlog, 'Backlog'), 19);
   var released = rowsBelowHeader(firstSource(found.liberadas, 'Liberadas'), 19);
   var managed = rowsBelowHeader(firstSource(found.gestionadas, 'Gestionadas'), 19);
+
+  read[TAB.peticionesDatos] = backlog.length;
+  read[TAB.liberadas] = released.length;
+  read[TAB.gestionadas] = managed.length;
 
   written[TAB.peticionesDatos] = writeGrid(TAB.peticionesDatos, backlog, 2, 1, 19);
   written[TAB.liberadas] = writeGrid(TAB.liberadas, released, 2, 1, 19);
@@ -1507,6 +1582,8 @@ function escribirDatos(clasificacion, informe) {
     surveys.push(safeSurvey);
   }
 
+  read[TAB.encuestasDatos] = surveys.length;
+
   written[TAB.encuestasDatos] = writeGrid(TAB.encuestasDatos, surveys, 4, 1, 13);
   setDateFormat(TAB.encuestasDatos, 4, 3, surveys.length);
 
@@ -1519,6 +1596,8 @@ function escribirDatos(clasificacion, informe) {
     }
   }
 
+  read[TAB.topCincoDatos] = topRows.length;
+
   written[TAB.topCincoDatos] = writeGrid(TAB.topCincoDatos, topRows, 3, 1, 19);
 
   var bbva = latestMonthlyRow(monthlySource(grids, '3-3'));
@@ -1526,7 +1605,8 @@ function escribirDatos(clasificacion, informe) {
 
   writeMonthlyRow(TAB.volumetria, bbva, 4, 1);
   writeMonthlyRow(TAB.volumetria, bbvaTech, 4, 6);
-  written[TAB.volumetria] = 1;
+  read[TAB.volumetria] = 2;
+  written[TAB.volumetria] = 2;
 
   var workSource = firstSource(found.workOrders, 'Work Orders');
   var workOrders = rowsBelowHeader(workSource, 15);
@@ -1537,6 +1617,8 @@ function escribirDatos(clasificacion, informe) {
     workOrders[workRow][1] = toDate(workOrders[workRow][1]) || '';
     territorials.push([lookup(technicianLookup, workOrders[workRow][5], 0, unknownWorkOrders)]);
   }
+
+  read[TAB.workOrdersDatos] = workOrders.length;
 
   written[TAB.workOrdersDatos] = writeGrid(TAB.workOrdersDatos, workOrders, 2, 1, 15);
   writeGrid(TAB.workOrdersDatos, territorials, 2, 16, 1);
@@ -1552,6 +1634,8 @@ function escribirDatos(clasificacion, informe) {
     bookingDates.push([toDate(appointments[appointmentRow][2]) || '']);
   }
 
+  read[TAB.citasDatos] = appointments.length;
+
   written[TAB.citasDatos] = writeGrid(TAB.citasDatos, appointments, 2, 1, 8);
   writeGrid(TAB.citasDatos, [], 2, 11, 7);
   writeGrid(TAB.citasDatos, walkupDates, 2, 10, 1);
@@ -1562,6 +1646,10 @@ function escribirDatos(clasificacion, informe) {
   var imacSource = yearSource(found.imac, extraction);
   var imacs = rowsBelowHeader(imacSource, 7);
 
+  informe.imacAnterior = contarFilasDestino(TAB.imacsDatos, 2, 1, 7);
+  informe.imacActual = imacs.length;
+  read[TAB.imacsDatos] = imacs.length;
+
   for (var imacRow = 0; imacRow < imacs.length; imacRow += 1) {
     imacs[imacRow][0] = toDate(imacs[imacRow][0]) || '';
     imacs[imacRow][5] = toNumber(imacs[imacRow][5]);
@@ -1570,6 +1658,7 @@ function escribirDatos(clasificacion, informe) {
   written[TAB.imacsDatos] = writeGrid(TAB.imacsDatos, imacs, 2, 1, 7);
   setDateFormat(TAB.imacsDatos, 2, 1, imacs.length);
 
+  informe.leidas = read;
   informe.escritas = written;
   informe.desconocidos = informe.desconocidos || [];
 
@@ -2045,4 +2134,368 @@ function escribirPlano(textoPlano) {
 
   sheet.clear();
   sheet.getRange(1, 1, values.length, 1).setValues(values);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Weekly orchestration and audit output                                       */
+/* -------------------------------------------------------------------------- */
+
+var REQUIRED_KINDS = [
+  'backlog',
+  'liberadas',
+  'gestionadas',
+  'encuestas',
+  'workOrders',
+  'citas',
+  'imac'
+];
+
+function fechaLegible(value) {
+  var date = value instanceof Date ? value : toDate(value);
+
+  return date && !isNaN(date.getTime())
+    ? pad2(date.getUTCDate()) + '/' + pad2(date.getUTCMonth() + 1) + '/' + date.getUTCFullYear()
+    : '';
+}
+
+function fechaHoraLegible(value) {
+  var date = value instanceof Date ? value : toDate(value);
+
+  if (!date || isNaN(date.getTime())) return '';
+
+  return (
+    fechaLegible(date) + ' ' + pad2(date.getUTCHours()) + ':' + pad2(date.getUTCMinutes()) + ':' +
+    pad2(date.getUTCSeconds())
+  );
+}
+
+function sourceRecord(entry, rowsRead) {
+  return {
+    name: entry.file.getName(),
+    modified: entry.updated,
+    rows: rowsRead
+  };
+}
+
+/** The five physical inputs, without any cell contents from their raw rows. */
+function registrarArchivosLeidos(clasificacion, informe) {
+  var found = clasificacion.found;
+  var read = informe.leidas;
+  var templateRows =
+    read[TAB.encuestasDatos] +
+    read[TAB.topCincoDatos] +
+    read[TAB.volumetria] +
+    read[TAB.workOrdersDatos] +
+    read[TAB.citasDatos];
+
+  informe.archivos = [
+    sourceRecord(found.backlog, read[TAB.peticionesDatos]),
+    sourceRecord(found.liberadas, read[TAB.liberadas]),
+    sourceRecord(found.gestionadas, read[TAB.gestionadas]),
+    sourceRecord(found.encuestas, templateRows),
+    sourceRecord(found.imac, read[TAB.imacsDatos])
+  ];
+  informe.duplicados = clasificacion.duplicated || [];
+  informe.ignorados = clasificacion.skipped || [];
+}
+
+function sumarFilas(rowsValue, predicate) {
+  var total = 0;
+
+  for (var index = 0; index < rowsValue.length; index += 1) {
+    if (predicate(rowsValue[index])) total += toNumber(rowsValue[index][rowsValue[index].length - 1]);
+  }
+
+  return total;
+}
+
+/** Key figures from aggregate tuples only; no raw identifiers or descriptions. */
+function totalesComprobacion(agregado, extraction) {
+  var month = monthLabel(extraction);
+
+  function requestState(state) {
+    return sumarFilas(agregado.peticiones || [], function (row) {
+      return row[4] === state && row[5] === 'Peticiones';
+    });
+  }
+
+  return {
+    vuelo: requestState('En vuelo'),
+    liberadas: requestState('Liberadas'),
+    gestionadas: requestState('Gestionadas'),
+    workOrders: sumarFilas(agregado.workOrders || [], function (row) {
+      return row[1] === month;
+    }),
+    citas: sumarFilas(agregado.citas || [], function () {
+      return true;
+    }),
+    incidenciasResueltas: sumarFilas(agregado.incidencias || [], function (row) {
+      return row[1] === month && / - Resueltas$/.test(row[5]);
+    })
+  };
+}
+
+function detalleArchivos(informe) {
+  var details = [];
+  var files = informe.archivos || [];
+
+  for (var index = 0; index < files.length; index += 1) {
+    details.push(
+      files[index].name + ' | modificado ' + fechaHoraLegible(files[index].modified) + ' | ' +
+        files[index].rows + ' filas'
+    );
+  }
+
+  if ((informe.duplicados || []).length > 0) {
+    details.push('Duplicados descartados: ' + informe.duplicados.join(', '));
+  }
+  if ((informe.ignorados || []).length > 0) {
+    details.push('Cabecera no reconocida: ' + informe.ignorados.join(', '));
+  }
+
+  return details.length > 0 ? details.join('; ') : 'Sin datos de archivos en esta ejecución.';
+}
+
+function detalleComparacion(informe) {
+  var read = informe.leidas || {};
+  var written = informe.escritas || {};
+  var tabs = Object.keys(read).sort();
+  var details = [];
+
+  for (var index = 0; index < tabs.length; index += 1) {
+    details.push(tabs[index] + ': ' + read[tabs[index]] + ' leídas / ' + written[tabs[index]] + ' escritas');
+  }
+
+  return details.length > 0 ? details.join('; ') : 'Sin escritura de datos en esta ejecución.';
+}
+
+function comparacionCorrecta(informe) {
+  var read = informe.leidas || {};
+  var tabs = Object.keys(read);
+
+  for (var index = 0; index < tabs.length; index += 1) {
+    if (read[tabs[index]] !== (informe.escritas || {})[tabs[index]]) return false;
+  }
+
+  return tabs.length > 0;
+}
+
+function detalleMarcadores(informe) {
+  if (!informe.marcadores) return 'No aplicados en esta ejecución.';
+
+  return (
+    TAB.workOrdersInforme + '!H1:I1 ' + fechaLegible(informe.marcadores.monthFirst) + '–' +
+    fechaLegible(informe.marcadores.monthLast) + '; ' + TAB.citasInforme + '!J2:K2 ' +
+    fechaLegible(informe.marcadores.weekMonday) + '–' + fechaLegible(informe.marcadores.weekSunday) + '; ' +
+    TAB.encuestasInforme + '!L24 ' + fechaLegible(informe.marcadores.monthFirst)
+  );
+}
+
+function detalleTotales(informe) {
+  var totals = informe.totales;
+
+  if (!totals) return 'No calculados en esta ejecución.';
+
+  return (
+    'Peticiones en vuelo ' + totals.vuelo + '; liberadas ' + totals.liberadas + '; gestionadas ' +
+    totals.gestionadas + '; work orders del mes ' + totals.workOrders + '; citas de la semana ' +
+    totals.citas + '; incidencias resueltas del mes ' + totals.incidenciasResueltas
+  );
+}
+
+/** Exactly the seven audit groups required by section 9 of SPEC.md. */
+function filasComprobacion(informe) {
+  var runAt = new Date();
+  var unknown = informe.desconocidos || [];
+  var imacStatus = 'Sin referencia';
+  var imacDetail = 'No se comparó con una carga anterior.';
+  var filesStatus = (informe.duplicados || []).length > 0 || (informe.ignorados || []).length > 0 ? 'AVISO' : 'OK';
+
+  if (typeof informe.imacActual === 'number' && typeof informe.imacAnterior === 'number') {
+    imacStatus = informe.imacActual < informe.imacAnterior ? 'AVISO' : 'OK';
+    imacDetail = informe.imacAnterior + ' filas anteriores / ' + informe.imacActual + ' filas actuales';
+  }
+
+  return [
+    [runAt, 'Archivos, fechas y filas leídas', filesStatus, detalleArchivos(informe)],
+    [runAt, 'Filas escritas frente a leídas', comparacionCorrecta(informe) ? 'OK' : 'AVISO', detalleComparacion(informe)],
+    [runAt, 'Desconocidos', unknown.length > 0 ? 'AVISO' : 'OK', unknown.length > 0 ? unknown.join('; ') : 'Ninguno'],
+    [runAt, 'Caída IMAC', imacStatus, imacDetail],
+    [runAt, 'Marcadores de periodo', informe.marcadores ? 'OK' : 'Sin cambios', detalleMarcadores(informe)],
+    [runAt, 'Cierre mensual', informe.cierreStatus || 'No ejecutado', informe.cierre || 'No ejecutado en esta ejecución.'],
+    [runAt, 'Totales clave', informe.totales ? 'OK' : 'Sin datos', detalleTotales(informe)]
+  ];
+}
+
+function escribirComprobacion(informe) {
+  var sheet = sheetByName(TAB.check, true);
+  var rowsValue = [['Ejecución', 'Grupo', 'Estado', 'Detalle']].concat(filasComprobacion(informe));
+
+  sheet.clear();
+  sheet.getRange(1, 1, rowsValue.length, 4).setValues(rowsValue);
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, 4).setFontWeight('bold');
+  sheet.getRange(2, 1, 7, 1).setNumberFormat('dd/mm/yyyy hh:mm:ss');
+  sheet.setColumnWidth(1, 170);
+  sheet.setColumnWidth(2, 260);
+  sheet.setColumnWidth(3, 110);
+  sheet.setColumnWidth(4, 900);
+  sheet.getRange(1, 1, rowsValue.length, 4).setWrap(true);
+}
+
+/** Updates only the close row, preserving the latest weekly evidence. */
+function actualizarComprobacionCierre(status, detail) {
+  var sheet = sheetByName(TAB.check, true);
+
+  if (sheet.getLastRow() < 8) {
+    escribirComprobacion({ cierreStatus: status, cierre: detail });
+    return;
+  }
+
+  var groups = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1).getValues();
+
+  for (var index = 0; index < groups.length; index += 1) {
+    if (text(groups[index][0]) === 'Cierre mensual') {
+      sheet.getRange(index + 2, 1, 1, 4).setValues([[new Date(), 'Cierre mensual', status, detail]]);
+      sheet.getRange(index + 2, 1).setNumberFormat('dd/mm/yyyy hh:mm:ss');
+      return;
+    }
+  }
+
+  escribirComprobacion({ cierreStatus: status, cierre: detail });
+}
+
+function procesarSemana() {
+  var config = null;
+  var clasificacion = null;
+
+  try {
+    config = readConfig();
+    clasificacion = classifyFolder(config.folderId);
+
+    var informe = {
+      extraction: config.extraction,
+      faltan: [],
+      leidas: {},
+      escritas: {},
+      desconocidos: []
+    };
+
+    for (var required = 0; required < REQUIRED_KINDS.length; required += 1) {
+      if (!clasificacion.found[REQUIRED_KINDS[required]]) informe.faltan.push(REQUIRED_KINDS[required]);
+    }
+
+    // Deliberately before rodarSemanaAnterior or any sheet output: a partial
+    // week is less visible, and therefore more dangerous, than a hard stop.
+    if (informe.faltan.length > 0) {
+      throw new Error('Faltan ficheros o pestañas requeridos: ' + informe.faltan.join(', '));
+    }
+
+    rodarSemanaAnterior();
+    escribirDatos(clasificacion.found, informe);
+    escribirMarcadores(config.extraction);
+
+    var week = weekBounds(config.extraction);
+    var month = monthBounds(config.extraction);
+
+    informe.marcadores = {
+      weekMonday: week.monday,
+      weekSunday: week.sunday,
+      monthFirst: month.first,
+      monthLast: month.last
+    };
+
+    var agregado = agregar(clasificacion.found, config.extraction);
+    var textoPlano = serializarPlano(agregado, {
+      week: isoDate(config.extraction),
+      generated: new Date().toISOString(),
+      source: clasificacion.nombres.join('; ')
+    });
+
+    escribirPlano(textoPlano);
+    registrarArchivosLeidos(clasificacion, informe);
+    informe.totales = totalesComprobacion(agregado, config.extraction);
+    escribirComprobacion(informe);
+
+    return informe;
+  } finally {
+    if (clasificacion && clasificacion.handles) {
+      for (var handle = 0; handle < clasificacion.handles.length; handle += 1) {
+        discardTemporary(clasificacion.handles[handle]);
+      }
+    }
+  }
+}
+
+/** The PLANO tab as a text file in the configured weekly folder. */
+function guardarPlanoTxt() {
+  var ui = SpreadsheetApp.getUi();
+  var sheet = sheetByName(TAB.plano, false);
+
+  if (!sheet || sheet.getLastRow() < 1) {
+    ui.alert('Informática Weekly', 'La pestaña "' + TAB.plano + '" está vacía. Ejecuta antes "Procesar semana".', ui.ButtonSet.OK);
+    return null;
+  }
+
+  var config = readConfig();
+  var values = sheet.getRange(1, 1, sheet.getLastRow(), 1).getValues();
+  var lines = [];
+
+  for (var index = 0; index < values.length; index += 1) {
+    lines.push(values[index][0] == null ? '' : String(values[index][0]));
+  }
+
+  var name = 'Informatica ' + isoDate(config.extraction) + '.txt';
+  var folder = DriveApp.getFolderById(config.folderId);
+  var existing = folder.getFilesByName(name);
+
+  while (existing.hasNext()) existing.next().setTrashed(true);
+
+  var file = folder.createFile(name, lines.join('\n'), MimeType.PLAIN_TEXT);
+
+  ui.alert('Informática Weekly', 'Guardado "' + name + '" en la carpeta.', ui.ButtonSet.OK);
+
+  return file.getId();
+}
+
+/** Creates only the three script-owned tabs; existing workbook content is kept. */
+function inicializarHoja() {
+  var created = [];
+
+  if (!book().getSheetByName(TAB.config)) {
+    var config = sheetByName(TAB.config, true);
+
+    config.getRange(1, 1, 3, 2).setValues([
+      [CONFIG_KEYS.folder, DEFAULT_FOLDER_ID],
+      [CONFIG_KEYS.extraction, ''],
+      [CONFIG_KEYS.windowMonths, DEFAULT_WINDOW_MONTHS]
+    ]);
+    config.getRange(1, 1, 3, 1).setFontWeight('bold');
+    config.getRange(2, 2).setNumberFormat('dd/mm/yyyy');
+    config.setColumnWidth(1, 300);
+    config.setColumnWidth(2, 340);
+    created.push(TAB.config);
+  }
+
+  if (!book().getSheetByName(TAB.check)) {
+    escribirComprobacion({});
+    created.push(TAB.check);
+  }
+
+  if (!book().getSheetByName(TAB.plano)) {
+    var plano = sheetByName(TAB.plano, true);
+
+    plano.setColumnWidth(1, 900);
+    created.push(TAB.plano);
+  }
+
+  SpreadsheetApp.getUi().alert(
+    'Informática Weekly',
+    created.length === 0
+      ? 'Las pestañas necesarias ya existían. No se ha cambiado su contenido.'
+      : 'Pestañas creadas: ' + created.join(', ') + '.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+
+  return created;
 }
