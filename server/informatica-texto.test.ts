@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import type { Server } from "node:http";
 import express from "express";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -238,6 +239,67 @@ describe("parseInformaticaTexto", () => {
     expect(round.citas).toEqual(dataset.citas);
     expect(round.edificios).toEqual(dataset.edificios);
   });
+});
+
+describe("texto generado por el script de Drive", () => {
+  const sampleFolder = "C:/Users/sergi/Desktop/MIX/AV weekly/Informática SSCC";
+  const verifier = path.resolve("scripts/informatica-drive/verificar-local.mjs");
+  const requiredFiles = [
+    "Backlog20260824.xlsx",
+    "Gestionadas20260824.xlsx",
+    "Liberadas20260824.xlsx",
+    "Peticiones IMAC Onsite SSCC.xlsx",
+    "SSCC- Informe Semanal limpio.xlsx",
+    "Templates SSCC para presentación - Email semanal.xlsx",
+  ];
+  const run = requiredFiles.every((file) => fs.existsSync(path.join(sampleFolder, file)))
+    ? it
+    : it.skip;
+
+  run("genera las ocho secciones y el parser no descarta ninguna fila", () => {
+    const texto = execFileSync(
+      process.execPath,
+      [verifier, sampleFolder, "2026-08-24"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+    const { dataset, meta } = parseInformaticaTexto(texto);
+    const sectionRows = new Map<string, number>();
+    let section = "";
+
+    for (const line of texto.split(/\r?\n/)) {
+      const match = /^\[([^\]]+)\]$/.exec(line);
+
+      if (match) {
+        section = match[1];
+        sectionRows.set(section, 0);
+      } else if (section && line !== "") {
+        sectionRows.set(section, (sectionRows.get(section) ?? 0) + 1);
+      }
+    }
+
+    expect(meta).toMatchObject({
+      week: "2026-08-24",
+      generated: "2026-08-24T00:00:00.000Z",
+    });
+    expect(dataset.sheetsFound).toEqual([
+      "edificios",
+      "incidencias",
+      "encuestas",
+      "workOrders",
+      "peticiones",
+      "peticionesProducto",
+      "citas",
+      "imacs",
+    ]);
+
+    for (const [key, sectionName] of Object.entries(INFORMATICA_TEXTO_SECTIONS)) {
+      const parsed = dataset[key as keyof InformaticaDataset];
+
+      expect(Array.isArray(parsed), key).toBe(true);
+      expect((parsed as unknown[]).length, key).toBe(sectionRows.get(sectionName));
+      expect((parsed as unknown[]).length, key).toBeGreaterThan(0);
+    }
+  }, 30_000);
 });
 
 describe("punto de entrada del deck", () => {
