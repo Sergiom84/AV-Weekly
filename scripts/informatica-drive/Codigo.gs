@@ -36,13 +36,13 @@
 /**
  * Tab names exactly as the workbook spells them.
  *
- * Two of them look wrong and are not: 2.2.1 Volum de peticiones (Info has no
- * closing parenthesis and 2.3.1 Volum de Citas SmartTech  ends in a space,
- * both because Sheets truncates a tab name at 31 characters. Repairing either
- * string means getSheetByName stops finding the tab.
+ * Three of them look wrong and are not: the two 2.2.1 tabs lose their final
+ * letters/parenthesis and 2.3.1 Volum de Citas SmartTech  ends in a space,
+ * because Sheets truncates every tab name at 31 characters. Repairing any of
+ * those strings means getSheetByName stops finding the tab.
  */
 var TAB = {
-  peticionesDatos: '2.2.1 Volum de peticiones (Datos)',
+  peticionesDatos: '2.2.1 Volum de peticiones (Dato',
   liberadas: 'Hoja 16',
   gestionadas: 'Hoja 17',
   encuestasDatos: '2.1.5 Encuestas (datos)',
@@ -364,7 +364,7 @@ function encuestasSheets(grids) {
  * folder is how last week's figures get presented as this week's, and it is
  * invisible unless somebody says it out loud.
  */
-function keepNewest(found, duplicated, kind, file, sheets) {
+function keepNewest(found, duplicated, kind, file, sheets, grids) {
   var updated = file.getLastUpdated();
 
   if (found[kind] && found[kind].updated >= updated) {
@@ -376,7 +376,7 @@ function keepNewest(found, duplicated, kind, file, sheets) {
     duplicated.push(found[kind].file.getName());
   }
 
-  found[kind] = { file: file, sheets: sheets, updated: updated };
+  found[kind] = { file: file, sheets: sheets, grids: grids, updated: updated };
 }
 
 /**
@@ -449,7 +449,7 @@ function classifyFolder(folderId) {
         var kind = requestKind(file.getName());
 
         if (kind !== null) {
-          keepNewest(found, duplicated, kind, file, requests);
+          keepNewest(found, duplicated, kind, file, requests, grids);
           matched = true;
         }
       }
@@ -457,28 +457,28 @@ function classifyFolder(folderId) {
       var templates = encuestasSheets(grids);
 
       if (templates.length > 0) {
-        keepNewest(found, duplicated, 'encuestas', file, templates);
+        keepNewest(found, duplicated, 'encuestas', file, templates, grids);
         matched = true;
       }
 
       var orders = findDataSheets(grids, REQUIRED.workOrders);
 
       if (orders.length > 0) {
-        keepNewest(found, duplicated, 'workOrders', file, orders);
+        keepNewest(found, duplicated, 'workOrders', file, orders, grids);
         matched = true;
       }
 
       var appointments = findDataSheets(grids, REQUIRED.citas);
 
       if (appointments.length > 0) {
-        keepNewest(found, duplicated, 'citas', file, appointments);
+        keepNewest(found, duplicated, 'citas', file, appointments, grids);
         matched = true;
       }
 
       var imacs = findDataSheets(grids, REQUIRED.imac);
 
       if (imacs.length > 0) {
-        keepNewest(found, duplicated, 'imac', file, imacs);
+        keepNewest(found, duplicated, 'imac', file, imacs, grids);
         matched = true;
       }
 
@@ -572,4 +572,465 @@ function configDate(value) {
   }
 
   return null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Date and number conversion                                                  */
+/* -------------------------------------------------------------------------- */
+
+var EXCEL_EPOCH = Date.UTC(1899, 11, 30);
+var US_DATETIME = /^(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{2}):(\d{2}):(\d{2})\s*(AM|PM)$/i;
+var MONTH_TEXT = /^(\d{4})\/(\d{2})$/;
+
+/** A real UTC calendar date, or null when JavaScript would roll its parts. */
+function utcDate(year, month, day) {
+  var date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+/**
+ * Any of the three date shapes the exports use, as a UTC midnight date.
+ *
+ * The American form is the one the annotation in '2.1.6 Work Orders (Informe)'
+ * K3 complains about. The time of day is dropped on purpose: a timestamp at
+ * 00:40 shifts the day when the sheet renders it in another timezone, and with
+ * the day goes the week the row is counted in.
+ */
+function toDate(value) {
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+
+    return utcDate(value.getFullYear(), value.getMonth() + 1, value.getDate());
+  }
+
+  if (typeof value === 'number' && isFinite(value)) {
+    return new Date(EXCEL_EPOCH + Math.floor(value) * 86400000);
+  }
+
+  var raw = String(value == null ? '' : value).trim();
+  var us = US_DATETIME.exec(raw);
+
+  if (us) {
+    return utcDate(Number(us[3]), Number(us[1]), Number(us[2]));
+  }
+
+  var month = MONTH_TEXT.exec(raw);
+
+  if (month) {
+    return utcDate(Number(month[1]), Number(month[2]), 1);
+  }
+
+  return null;
+}
+
+/** '6,380' and '6.380' are the same number: the template writes separators. */
+function toNumber(value) {
+  if (typeof value === 'number') return value;
+
+  var parsed = Number(String(value == null ? '' : value).replace(/[.,\s]/g, ''));
+
+  return isFinite(parsed) ? parsed : 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Data-tab writes                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** A row with exactly width cells, padding missing cells and dropping extras. */
+function fixedWidth(row, width) {
+  var fixed = [];
+
+  for (var column = 0; column < width; column += 1) {
+    fixed.push(column < row.length && row[column] != null ? row[column] : '');
+  }
+
+  return fixed;
+}
+
+function rowHasValue(row) {
+  for (var column = 0; column < row.length; column += 1) {
+    if (row[column] !== null && row[column] !== undefined && text(row[column]) !== '') return true;
+  }
+
+  return false;
+}
+
+/** Data below a detected header, without blank trailing rows. */
+function rowsBelowHeader(source, width) {
+  var rows = [];
+
+  for (var row = source.headerRow + 1; row < source.grid.length; row += 1) {
+    var fixed = fixedWidth(source.grid[row] || [], width);
+
+    if (rowHasValue(fixed)) rows.push(fixed);
+  }
+
+  return rows;
+}
+
+/**
+ * Writes a block and clears whatever the previous run left below it.
+ *
+ * Not clearing is the failure that does not announce itself: a week with fewer
+ * rows than the last one leaves the old tail in place, and every COUNTIFS over
+ * the tab counts it as if it were this week.
+ */
+function writeGrid(tabName, rows, firstRow, firstColumn, columnCount) {
+  var sheet = sheetByName(tabName, false);
+  var width = columnCount || (rows.length > 0 ? rows[0].length : 0);
+
+  if (!sheet) throw new Error('Falta la pestaña de destino "' + tabName + '".');
+  if (width === 0) return 0;
+
+  var neededLastRow = firstRow + rows.length - 1;
+  var lastRow = sheet.getMaxRows();
+
+  if (neededLastRow > lastRow) {
+    sheet.insertRowsAfter(lastRow, neededLastRow - lastRow);
+    lastRow = neededLastRow;
+  }
+
+  if (lastRow >= firstRow) {
+    sheet.getRange(firstRow, firstColumn, lastRow - firstRow + 1, width).clearContent();
+  }
+
+  if (rows.length > 0) {
+    var values = [];
+
+    for (var row = 0; row < rows.length; row += 1) {
+      values.push(fixedWidth(rows[row], width));
+    }
+
+    sheet.getRange(firstRow, firstColumn, values.length, width).setValues(values);
+  }
+
+  return rows.length;
+}
+
+/** Resolves a lookup table into a plain object, so the sheet keeps no VLOOKUP. */
+function readLookup(tabName, keyColumn, valueColumn, firstRow) {
+  var sheet = sheetByName(tabName, false);
+
+  if (!sheet) throw new Error('Falta la pestaña del maestro "' + tabName + '".');
+
+  var last = sheet.getLastRow();
+  var map = {};
+
+  if (last < firstRow) return map;
+
+  var width = valueColumn - keyColumn + 1;
+  var values = sheet.getRange(firstRow, keyColumn, last - firstRow + 1, width).getValues();
+
+  for (var row = 0; row < values.length; row += 1) {
+    var key = normalize(values[row][0]);
+
+    if (key !== '') map[key] = values[row].slice(1);
+  }
+
+  return map;
+}
+
+/** '#N/A' literal, like the VLOOKUP wrote, plus the unknown value for the report. */
+function lookup(map, key, index, unknown) {
+  var found = map[normalize(key)];
+
+  if (!found) {
+    if (text(key) !== '' && unknown.indexOf(String(key)) < 0) unknown.push(String(key));
+    return '#N/A';
+  }
+
+  return found[index];
+}
+
+function firstSource(entry, label) {
+  if (!entry || !entry.sheets || entry.sheets.length === 0) {
+    throw new Error('No se encontró el origen de ' + label + '.');
+  }
+
+  return entry.sheets[0];
+}
+
+/** The complete weekly-template grids retained while the folder was classified. */
+function templateGrids(found) {
+  var kinds = ['encuestas', 'workOrders', 'citas'];
+
+  for (var index = 0; index < kinds.length; index += 1) {
+    var entry = found[kinds[index]];
+
+    if (entry && entry.grids && entry.grids.length > 0) return entry.grids;
+  }
+
+  throw new Error('No se conservaron las pestañas del template semanal.');
+}
+
+function monthCellCount(row) {
+  var count = 0;
+
+  for (var column = 0; column < row.length; column += 1) {
+    if (MONTH_TEXT.test(text(row[column]))) count += 1;
+  }
+
+  return count;
+}
+
+/** The two-row monthly pivot used by the Top 5 data tab. */
+function topFiveSource(grids) {
+  for (var index = 0; index < grids.length; index += 1) {
+    var grid = grids[index].grid;
+    var first = grid[0] || [];
+    var second = grid[1] || [];
+
+    if (monthCellCount(first) >= 2 && normalize(second[0]) === 'CATEGORIZATION TIER 1') {
+      return { name: grids[index].name, grid: grid, headerRow: 1, columns: headerIndex(second) };
+    }
+  }
+
+  throw new Error('No se encontró el bloque 2-2 del template semanal.');
+}
+
+/**
+ * The 3-3 and 4-4 tabs have the same four-column header and no data marker that
+ * says BBVA or BBVA TECH. Their documented numeric prefix is the only honest
+ * discriminator; if it changes, stop instead of swapping the two series.
+ */
+function monthlySource(grids, prefix) {
+  var required = ['Fecha', 'Incidencias resueltas', 'Asignadas', 'Asignaciones'];
+
+  for (var index = 0; index < grids.length; index += 1) {
+    var grid = grids[index].grid;
+    var columns = headerIndex(grid[0] || []);
+
+    if (hasColumns(columns, required) && text(grids[index].name).indexOf(prefix) === 0) {
+      return { name: grids[index].name, grid: grid, headerRow: 0, columns: columns };
+    }
+  }
+
+  throw new Error('No se encontró el bloque ' + prefix + ' del template semanal.');
+}
+
+function columnLikeIndex(row, fragment) {
+  var needle = normalize(fragment);
+
+  for (var column = 0; column < row.length; column += 1) {
+    if (normalize(row[column]).indexOf(needle) >= 0) return column;
+  }
+
+  return -1;
+}
+
+function setDateFormat(tabName, firstRow, column, rowCount) {
+  if (rowCount < 1) return;
+
+  sheetByName(tabName, false)
+    .getRange(firstRow, column, rowCount, 1)
+    .setNumberFormat('dd/mm/yyyy');
+}
+
+/** Latest usable monthly row, converted to date plus three numbers. */
+function latestMonthlyRow(source) {
+  var latest = null;
+
+  for (var row = source.headerRow + 1; row < source.grid.length; row += 1) {
+    var current = source.grid[row] || [];
+    var date = toDate(current[0]);
+
+    if (!date) continue;
+
+    if (!latest || date.getTime() > latest[0].getTime()) {
+      latest = [date, toNumber(current[1]), toNumber(current[2]), toNumber(current[3])];
+    }
+  }
+
+  if (!latest) throw new Error('El bloque "' + source.name + '" no trae ningún mes válido.');
+
+  return latest;
+}
+
+/** Update the current month or append it into the first free history row. */
+function writeMonthlyRow(tabName, row, firstRow, firstColumn) {
+  var sheet = sheetByName(tabName, false);
+  var last = Math.max(sheet.getLastRow(), firstRow);
+  var dates = sheet.getRange(firstRow, firstColumn, last - firstRow + 1, 1).getValues();
+  var target = 0;
+  var firstBlank = 0;
+
+  for (var index = 0; index < dates.length; index += 1) {
+    var current = toDate(dates[index][0]);
+
+    if (current && current.getTime() === row[0].getTime()) {
+      target = firstRow + index;
+      break;
+    }
+
+    if (!current && firstBlank === 0) firstBlank = firstRow + index;
+  }
+
+  if (target === 0) target = firstBlank || last + 1;
+  if (target > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), target - sheet.getMaxRows());
+
+  sheet.getRange(target, firstColumn, 1, 4).setValues([row]);
+  sheet.getRange(target, firstColumn).setNumberFormat('dd/mm/yyyy');
+
+  return 1;
+}
+
+function yearSource(entry, extraction) {
+  var year = String(extraction.getUTCFullYear());
+
+  for (var index = 0; index < entry.sheets.length; index += 1) {
+    if (text(entry.sheets[index].name) === year) return entry.sheets[index];
+  }
+
+  throw new Error('El fichero IMAC no trae la pestaña del año ' + year + '.');
+}
+
+/**
+ * Replaces the weekly data tabs while preserving all hand-kept master ranges.
+ * `clasificacion` accepts the object returned by classifyFolder; accepting its
+ * `found` member too keeps the function convenient for the local verifier.
+ */
+function escribirDatos(clasificacion, informe) {
+  var found = clasificacion.found || clasificacion;
+  var written = informe.escritas || {};
+  var unknownWorkOrders = [];
+  var unknownAddresses = [];
+  var grids = templateGrids(found);
+  var extraction = informe.extraction ? toDate(informe.extraction) : readConfig().extraction;
+
+  if (!extraction) throw new Error('No hay una fecha de extracción válida para seleccionar los IMAC.');
+
+  var backlog = rowsBelowHeader(firstSource(found.backlog, 'Backlog'), 19);
+  var released = rowsBelowHeader(firstSource(found.liberadas, 'Liberadas'), 19);
+  var managed = rowsBelowHeader(firstSource(found.gestionadas, 'Gestionadas'), 19);
+
+  written[TAB.peticionesDatos] = writeGrid(TAB.peticionesDatos, backlog, 2, 1, 19);
+  written[TAB.liberadas] = writeGrid(TAB.liberadas, released, 2, 1, 19);
+  written[TAB.gestionadas] = writeGrid(TAB.gestionadas, managed, 2, 1, 19);
+
+  var addressLookup = readLookup(TAB.gestionadas, 24, 26, 2);
+  var managedDt = [];
+  var managedBuilding = [];
+
+  for (var managedRow = 0; managedRow < managed.length; managedRow += 1) {
+    managedDt.push([lookup(addressLookup, managed[managedRow][8], 0, unknownAddresses)]);
+    managedBuilding.push([lookup(addressLookup, managed[managedRow][8], 1, unknownAddresses)]);
+  }
+
+  writeGrid(TAB.gestionadas, managedDt, 2, 20, 1);
+  writeGrid(TAB.gestionadas, managedBuilding, 2, 21, 1);
+
+  var surveySource = firstSource(found.encuestas, 'Encuestas');
+  var surveyHeader = surveySource.grid[surveySource.headerRow] || [];
+  var surveyColumns = headerIndex(surveyHeader);
+  var surveyMonth = surveyColumns[normalize('Fecha')];
+  var surveyScore = columnLikeIndex(surveyHeader, 'Nivel de satis');
+  var surveyEase = columnLikeIndex(surveyHeader, 'fácil el proceso de apertura');
+  var surveySolution = columnLikeIndex(surveyHeader, 'satisfecho con la solución');
+
+  if (
+    surveyMonth === undefined ||
+    surveyScore < 0 ||
+    surveyEase < 0 ||
+    surveySolution < 0
+  ) {
+    throw new Error('El template de encuestas no trae las cuatro columnas de cálculo esperadas.');
+  }
+
+  var surveys = [];
+
+  for (var surveyRow = surveySource.headerRow + 1; surveyRow < surveySource.grid.length; surveyRow += 1) {
+    var rawSurvey = surveySource.grid[surveyRow] || [];
+    var month = toDate(rawSurvey[surveyMonth]);
+
+    if (!month && text(rawSurvey[surveyScore]) === '') continue;
+
+    var safeSurvey = ['', '', month || '', '', '', '', '', '', '', '', '', '', ''];
+    safeSurvey[7] = rawSurvey[surveyScore] == null ? '' : rawSurvey[surveyScore];
+    safeSurvey[8] = rawSurvey[surveyEase] == null ? '' : rawSurvey[surveyEase];
+    safeSurvey[10] = rawSurvey[surveySolution] == null ? '' : rawSurvey[surveySolution];
+    surveys.push(safeSurvey);
+  }
+
+  written[TAB.encuestasDatos] = writeGrid(TAB.encuestasDatos, surveys, 4, 1, 13);
+  setDateFormat(TAB.encuestasDatos, 4, 3, surveys.length);
+
+  var topSource = topFiveSource(grids);
+  var topRows = rowsBelowHeader(topSource, 19);
+
+  for (var topRow = 0; topRow < topRows.length; topRow += 1) {
+    for (var topColumn = 2; topColumn < 19; topColumn += 1) {
+      topRows[topRow][topColumn] = toNumber(topRows[topRow][topColumn]);
+    }
+  }
+
+  written[TAB.topCincoDatos] = writeGrid(TAB.topCincoDatos, topRows, 3, 1, 19);
+
+  var bbva = latestMonthlyRow(monthlySource(grids, '3-3'));
+  var bbvaTech = latestMonthlyRow(monthlySource(grids, '4-4'));
+
+  writeMonthlyRow(TAB.volumetria, bbva, 4, 1);
+  writeMonthlyRow(TAB.volumetria, bbvaTech, 4, 6);
+  written[TAB.volumetria] = 1;
+
+  var workSource = firstSource(found.workOrders, 'Work Orders');
+  var workOrders = rowsBelowHeader(workSource, 15);
+  var technicianLookup = readLookup(TAB.workOrdersDatos, 25, 26, 2);
+  var territorials = [];
+
+  for (var workRow = 0; workRow < workOrders.length; workRow += 1) {
+    workOrders[workRow][1] = toDate(workOrders[workRow][1]) || '';
+    territorials.push([lookup(technicianLookup, workOrders[workRow][5], 0, unknownWorkOrders)]);
+  }
+
+  written[TAB.workOrdersDatos] = writeGrid(TAB.workOrdersDatos, workOrders, 2, 1, 15);
+  writeGrid(TAB.workOrdersDatos, territorials, 2, 16, 1);
+  setDateFormat(TAB.workOrdersDatos, 2, 2, workOrders.length);
+
+  var appointmentSource = firstSource(found.citas, 'Citas SmartTech');
+  var appointments = rowsBelowHeader(appointmentSource, 8);
+  var walkupDates = [];
+  var bookingDates = [];
+
+  for (var appointmentRow = 0; appointmentRow < appointments.length; appointmentRow += 1) {
+    walkupDates.push([toDate(appointments[appointmentRow][1]) || '']);
+    bookingDates.push([toDate(appointments[appointmentRow][2]) || '']);
+  }
+
+  written[TAB.citasDatos] = writeGrid(TAB.citasDatos, appointments, 2, 1, 8);
+  writeGrid(TAB.citasDatos, [], 2, 11, 7);
+  writeGrid(TAB.citasDatos, walkupDates, 2, 10, 1);
+  writeGrid(TAB.citasDatos, bookingDates, 2, 14, 1);
+  setDateFormat(TAB.citasDatos, 2, 10, appointments.length);
+  setDateFormat(TAB.citasDatos, 2, 14, appointments.length);
+
+  var imacSource = yearSource(found.imac, extraction);
+  var imacs = rowsBelowHeader(imacSource, 7);
+
+  for (var imacRow = 0; imacRow < imacs.length; imacRow += 1) {
+    imacs[imacRow][0] = toDate(imacs[imacRow][0]) || '';
+    imacs[imacRow][5] = toNumber(imacs[imacRow][5]);
+  }
+
+  written[TAB.imacsDatos] = writeGrid(TAB.imacsDatos, imacs, 2, 1, 7);
+  setDateFormat(TAB.imacsDatos, 2, 1, imacs.length);
+
+  informe.escritas = written;
+  informe.desconocidos = informe.desconocidos || [];
+
+  for (var unknownWork = 0; unknownWork < unknownWorkOrders.length; unknownWork += 1) {
+    informe.desconocidos.push('Técnico sin territorial: ' + unknownWorkOrders[unknownWork]);
+  }
+
+  for (var unknownAddress = 0; unknownAddress < unknownAddresses.length; unknownAddress += 1) {
+    informe.desconocidos.push('Dirección sin DT/edificio: ' + unknownAddresses[unknownAddress]);
+  }
 }
