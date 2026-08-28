@@ -34,12 +34,10 @@
 /* -------------------------------------------------------------------------- */
 
 /**
- * Tab names exactly as the workbook spells them.
- *
- * Three of them look wrong and are not: the two 2.2.1 tabs lose their final
- * letters/parenthesis and 2.3.1 Volum de Citas SmartTech  ends in a space,
- * because Sheets truncates every tab name at 31 characters. Repairing any of
- * those strings means getSheetByName stops finding the tab.
+ * Tab aliases exposed by the local XLSX export. Google Sheets keeps the full
+ * native names, while Excel rewrites names over 31 characters and replaces
+ * several collisions with Hoja 13...19. TAB_NATIVE below is the source of
+ * truth in the live spreadsheet; sheetByName resolves both representations.
  */
 var TAB = {
   peticionesDatos: '2.2.1 Volum de peticiones (Dato',
@@ -48,11 +46,14 @@ var TAB = {
   encuestasDatos: '2.1.5 Encuestas (datos)',
   encuestasInforme: '2.1.5. Encuestas (Informe)',
   topCincoDatos: '2.1.2 Top 5 incidencias (Datos)',
+  topCincoInforme: '2.1.2 Top 5 incidencias (Inform',
   volumetria: '2.1.1 Volumetria de Incidencias',
   volumetriaHistorico: 'Hoja 13',
   workOrdersDatos: '2.1.6 Work Orders (Datos)',
   workOrdersInforme: '2.1.6 Work Orders (Informe)',
+  workOrdersAnualDatos: '2.1.7 Volumetria de WO anuales ',
   workOrdersMensual: 'Hoja 14',
+  totalMensualDatos: '2.1.8 Volumetria de incidencias',
   totalMensual: 'Hoja 15',
   peticionesInforme: '2.2.1 Volum de peticiones (Info',
   citasDatos: '2.3.1 Volum de Citas SmartTech ',
@@ -62,6 +63,40 @@ var TAB = {
   config: 'Configuración',
   check: 'Comprobación',
   plano: 'PLANO'
+};
+
+/** Full names in the native Google Sheet, in the same logical slots as TAB. */
+var TAB_NATIVE = {
+  volumetria: '2.1.1 Volumetria de Incidencias (Datos)',
+  volumetriaHistorico: '2.1.1 Volumetria de Incidencias (Informe)',
+  topCincoDatos: '2.1.2 Top 5 incidencias (Datos)',
+  topCincoInforme: '2.1.2 Top 5 incidencias (Informe)',
+  encuestasDatos: '2.1.5 Encuestas (datos)',
+  encuestasInforme: '2.1.5. Encuestas (Informe)',
+  workOrdersDatos: '2.1.6 Work Orders (Datos)',
+  workOrdersInforme: '2.1.6 Work Orders (Informe)',
+  workOrdersAnualDatos: '2.1.7 Volumetria de WO anuales (Datos)',
+  workOrdersMensual: '2.1.7 Volumetria de WO anuales (Informe)',
+  totalMensualDatos: '2.1.8 Volumetria de incidencias y WO(Datos)',
+  totalMensual: '2.1.8 Volumetria de incidencias y WO(Informe)',
+  peticionesDatos: '2.2.1 Volum de peticiones (Datos Backlog)',
+  liberadas: '2.2.1 Volum de peticiones (Datos Liberadas)',
+  gestionadas: '2.2.1 Volum de peticiones (Datos Gestionadas)',
+  peticionesInforme: '2.2.1 Volum de peticiones (Informe)',
+  citasDatos: '2.3.1 Volum de Citas SmartTech Semanal  (Datos)',
+  citasInforme: '2.3.1 Volum de Citas SmartTech Semanal  (Informe)',
+  imacsDatos: '2.4.1 Vol Imacs resuelos OnSite (Datos)',
+  imacsInforme: '2.4.1 Vol Imacs resuelos OnSite (Informe)',
+  config: 'Configuración',
+  check: 'Comprobación',
+  plano: 'PLANO'
+};
+
+/** Only operational tabs may be created; report/data tabs must already exist. */
+var CREATABLE_TABS = {
+  'Configuración': true,
+  'Comprobación': true,
+  PLANO: true
 };
 
 var CONFIG_KEYS = {
@@ -143,14 +178,67 @@ function book() {
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
+/** Logical key shared by the native and XLSX representation of a tab. */
+function tabKey(name) {
+  var keys = Object.keys(TAB_NATIVE);
+
+  for (var index = 0; index < keys.length; index += 1) {
+    var key = keys[index];
+
+    if (TAB_NATIVE[key] === name || TAB[key] === name) return key;
+  }
+
+  return '';
+}
+
+/** Native name first, then its local XLSX alias, without duplicates. */
+function sheetNameCandidates(name) {
+  var key = tabKey(name);
+
+  if (key === '') return [name];
+
+  var candidates = [TAB_NATIVE[key]];
+
+  if (TAB[key] && TAB[key] !== TAB_NATIVE[key]) candidates.push(TAB[key]);
+
+  return candidates;
+}
+
 function sheetByName(name, createIfMissing) {
-  var target = book().getSheetByName(name);
+  var spreadsheet = book();
+  var candidates = sheetNameCandidates(name);
+  var target = null;
+
+  for (var index = 0; index < candidates.length; index += 1) {
+    target = spreadsheet.getSheetByName(candidates[index]);
+
+    if (target) break;
+  }
 
   if (!target && createIfMissing) {
-    target = book().insertSheet(name);
+    if (!CREATABLE_TABS[name]) {
+      throw new Error('No se puede crear automáticamente la pestaña funcional "' + name + '".');
+    }
+
+    target = spreadsheet.insertSheet(name);
   }
 
   return target;
+}
+
+/** Physical tab selected in the active workbook, for formulas and diagnostics. */
+function physicalSheetName(name) {
+  var sheet = sheetByName(name, false);
+
+  if (!sheet) return name;
+  if (typeof sheet.getName === 'function') return sheet.getName();
+
+  return name;
+}
+
+/** Quotes and escapes a physical tab name for use inside an A1 formula. */
+function formulaSheetPrefix(name) {
+  return "'" + physicalSheetName(name).replace(/'/g, "''") + "'!";
 }
 
 /** Column name to index, from a header row. First occurrence wins. */
@@ -858,13 +946,19 @@ function describirCeldasCierre(month) {
 
   if (incidenceColumn > 0) {
     cells.push(
-      TAB.volumetriaHistorico + '!' + columnLetters(incidenceColumn) + '3:' +
+      physicalSheetName(TAB.volumetriaHistorico) + '!' + columnLetters(incidenceColumn) + '3:' +
         columnLetters(incidenceColumn) + '11'
     );
   }
-  if (workColumn > 0) cells.push(TAB.workOrdersMensual + '!' + columnLetters(workColumn) + workRow);
-  if (totalRow > 0) cells.push(TAB.totalMensual + '!B' + totalRow + ':C' + totalRow);
-  if (surveyRow > 0) cells.push(TAB.encuestasInforme + '!C' + surveyRow + ':D' + surveyRow);
+  if (workColumn > 0) {
+    cells.push(physicalSheetName(TAB.workOrdersMensual) + '!' + columnLetters(workColumn) + workRow);
+  }
+  if (totalRow > 0) {
+    cells.push(physicalSheetName(TAB.totalMensual) + '!B' + totalRow + ':C' + totalRow);
+  }
+  if (surveyRow > 0) {
+    cells.push(physicalSheetName(TAB.encuestasInforme) + '!C' + surveyRow + ':D' + surveyRow);
+  }
 
   return cells;
 }
@@ -1676,7 +1770,7 @@ function escribirDatos(clasificacion, informe) {
 /* -------------------------------------------------------------------------- */
 
 function escapeRegex(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(value).replace(/[.*+?^{}$()|[\]\\]/g, '\\$&');
 }
 
 /** Last row occupied by the latest write, or by the current data as fallback. */
@@ -1709,7 +1803,8 @@ function ultimaFilaEscrita(informe, tabName, firstRow, firstColumn, width) {
 /** Replaces only same-column ranges that belong to the named data tab. */
 function acotarRangosFormula(formula, dataTab, firstRow, lastRow) {
   var pattern = new RegExp(
-    "('" + escapeRegex(dataTab) + "'!)\\$?([A-Z]+)(?:\\$?\\d+)?:\\$?([A-Z]+)(?:\\$?\\d+)?",
+    '(' + escapeRegex(formulaSheetPrefix(dataTab)) +
+      ')\\$?([A-Z]+)(?:\\$?\\d+)?:\\$?([A-Z]+)(?:\\$?\\d+)?',
     'g'
   );
 
@@ -1796,7 +1891,7 @@ function acotarFormulasAgregacion(reportTab, dataTab, firstRow, lastRow) {
 /** Changes a same-column range while retaining its absolute markers and rows. */
 function cambiarColumnaRango(formula, dataTab, currentColumn, newColumn) {
   var pattern = new RegExp(
-    "('" + escapeRegex(dataTab) + "'!)(\\$?)" + currentColumn +
+    '(' + escapeRegex(formulaSheetPrefix(dataTab)) + ')(\\$?)' + currentColumn +
       '(\\$?\\d*)?:(\\$?)' + currentColumn + '(\\$?\\d*)?',
     'g'
   );
@@ -2547,10 +2642,10 @@ function detalleMarcadores(informe) {
   if (!informe.marcadores) return 'No aplicados en esta ejecución.';
 
   return (
-    TAB.workOrdersInforme + '!H1:I1 ' + fechaLegible(informe.marcadores.monthFirst) + '–' +
-    fechaLegible(informe.marcadores.monthLast) + '; ' + TAB.citasInforme + '!J2:K2 ' +
+    physicalSheetName(TAB.workOrdersInforme) + '!H1:I1 ' + fechaLegible(informe.marcadores.monthFirst) + '–' +
+    fechaLegible(informe.marcadores.monthLast) + '; ' + physicalSheetName(TAB.citasInforme) + '!J2:K2 ' +
     fechaLegible(informe.marcadores.weekMonday) + '–' + fechaLegible(informe.marcadores.weekSunday) + '; ' +
-    TAB.encuestasInforme + '!L24 ' + fechaLegible(informe.marcadores.monthFirst)
+    physicalSheetName(TAB.encuestasInforme) + '!L24 ' + fechaLegible(informe.marcadores.monthFirst)
   );
 }
 
@@ -2726,7 +2821,7 @@ function guardarPlanoTxt() {
 function inicializarHoja() {
   var created = [];
 
-  if (!book().getSheetByName(TAB.config)) {
+  if (!sheetByName(TAB.config, false)) {
     var config = sheetByName(TAB.config, true);
 
     config.getRange(1, 1, 3, 2).setValues([
@@ -2741,12 +2836,12 @@ function inicializarHoja() {
     created.push(TAB.config);
   }
 
-  if (!book().getSheetByName(TAB.check)) {
+  if (!sheetByName(TAB.check, false)) {
     escribirComprobacion({});
     created.push(TAB.check);
   }
 
-  if (!book().getSheetByName(TAB.plano)) {
+  if (!sheetByName(TAB.plano, false)) {
     var plano = sheetByName(TAB.plano, true);
 
     plano.setColumnWidth(1, 900);

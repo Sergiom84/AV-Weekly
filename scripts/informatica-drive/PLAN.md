@@ -1013,7 +1013,7 @@ function onOpen() {
 }
 ```
 
-Los nombres de pestaña llevan los espacios y los recortes a 31 caracteres tal cual están en el libro: `'2.2.1 Volum de peticiones (Info'` sin cerrar el paréntesis y `'2.3.1 Volum de Citas SmartTech '` con espacio final. No los "arregles": son los nombres reales y el script no encontraría la hoja.
+Los nombres recortados a 31 caracteres y `Hoja 13`…`Hoja 19` pertenecen solo al XLSX exportado. El Google Sheet conserva los nombres completos. `sheetByName` debe resolver primero el nombre nativo y después el alias local; cualquier fórmula reparada debe reconocer y conservar el nombre físico resuelto. Solo `Configuración`, `Comprobación` y `PLANO` pueden crearse si faltan.
 
 - [ ] **Step 2: Escribe la clasificación de la carpeta**
 

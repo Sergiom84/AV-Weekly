@@ -54,6 +54,9 @@ function spreadsheetFromGrids(grids) {
       if (!grid) return null;
 
       return {
+        getName() {
+          return name;
+        },
         getLastRow() {
           return grid.length;
         },
@@ -82,9 +85,8 @@ function spreadsheetFromGrids(grids) {
   };
 }
 
-function loadScript(cleanGrids) {
+function loadScriptWithSpreadsheet(spreadsheet) {
   const source = readFileSync(join(HERE, "Codigo.gs"), "utf8");
-  const spreadsheet = spreadsheetFromGrids(cleanGrids);
   const context = createContext({
     console,
     Date,
@@ -102,6 +104,102 @@ function loadScript(cleanGrids) {
   runInContext(source, context, { filename: "Codigo.gs" });
 
   return context;
+}
+
+function loadScript(cleanGrids) {
+  return loadScriptWithSpreadsheet(spreadsheetFromGrids(cleanGrids));
+}
+
+function nameOnlySpreadsheet(names) {
+  const available = new Set(names);
+  const inserted = [];
+
+  return {
+    inserted,
+    getSheetByName(name) {
+      if (!available.has(name)) return null;
+
+      return {
+        getName() {
+          return name;
+        },
+      };
+    },
+    insertSheet(name) {
+      inserted.push(name);
+      available.add(name);
+
+      return {
+        getName() {
+          return name;
+        },
+      };
+    },
+  };
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(`Fallo del arnés de alias: ${message}`);
+}
+
+/** Proves native Sheets names and XLSX aliases resolve without duplicate tabs. */
+function verifyDualTabNames() {
+  const nativeProbe = loadScriptWithSpreadsheet(nameOnlySpreadsheet([]));
+  const keys = Object.keys(nativeProbe.TAB_NATIVE);
+  const representations = [
+    { label: "Google Sheets", names: keys.map((key) => nativeProbe.TAB_NATIVE[key]) },
+    { label: "XLSX", names: keys.map((key) => nativeProbe.TAB[key]) },
+  ];
+
+  for (const representation of representations) {
+    const spreadsheet = nameOnlySpreadsheet(representation.names);
+    const script = loadScriptWithSpreadsheet(spreadsheet);
+
+    for (const key of keys) {
+      const expected = representation.label === "Google Sheets" ? script.TAB_NATIVE[key] : script.TAB[key];
+      const fromAlias = script.sheetByName(script.TAB[key], false);
+      const fromNative = script.sheetByName(script.TAB_NATIVE[key], false);
+
+      assert(fromAlias && fromAlias.getName() === expected, `${representation.label}: alias ${key}`);
+      assert(fromNative && fromNative.getName() === expected, `${representation.label}: nativo ${key}`);
+    }
+
+    const physical = representation.label === "Google Sheets"
+      ? script.TAB_NATIVE.peticionesDatos
+      : script.TAB.peticionesDatos;
+    const prefix = `'${physical.replaceAll("'", "''")}'!`;
+    const bounded = script.acotarRangosFormula(
+      `=COUNTIFS(${prefix}A:A;"x")`,
+      script.TAB.peticionesDatos,
+      2,
+      734
+    );
+    const positions = script.cambiarColumnaRango(
+      `=SUMIFS(${prefix}P:P;${prefix}A:A;"x")`,
+      script.TAB.peticionesDatos,
+      "P",
+      "S"
+    );
+
+    assert(bounded.includes(`${prefix}$A$2:$A$734`), `${representation.label}: rango físico acotado`);
+    assert(positions.includes(`${prefix}S:S`), `${representation.label}: columna física reparada`);
+    assert(bounded.includes(';"x"'), `${representation.label}: separador de fórmula preservado`);
+    assert(spreadsheet.inserted.length === 0, `${representation.label}: creó pestañas duplicadas`);
+  }
+
+  const missingSpreadsheet = nameOnlySpreadsheet([]);
+  const missingScript = loadScriptWithSpreadsheet(missingSpreadsheet);
+  let refused = false;
+
+  try {
+    missingScript.sheetByName(missingScript.TAB.peticionesDatos, true);
+  } catch (error) {
+    refused = /No se puede crear automáticamente/.test(String(error && error.message));
+  }
+
+  assert(refused, "no bloqueó la creación de una pestaña funcional ausente");
+  assert(missingSpreadsheet.inserted.length === 0, "insertó una pestaña funcional ausente");
+  assert(missingScript.formulaSheetPrefix("O'Brien") === "'O''Brien'!", "no escapó una comilla simple");
 }
 
 function entry(file, grids, sheets) {
@@ -193,6 +291,8 @@ if (!existsSync(cleanPath)) {
   process.exit(1);
 }
 
+verifyDualTabNames();
+
 const script = loadScript(readWorkbook(cleanPath));
 const classification = classify(script, folder, cleanPath);
 const extraction = new Date(`${extractionArg}T00:00:00.000Z`);
@@ -207,6 +307,7 @@ const plain = script.serializarPlano(aggregated, {
 process.stdout.write(`${plain}\n`);
 
 const diagnostics = [
+  "alias de pestañas: Google Sheets y XLSX verificados sin duplicados",
   ...script.SECTION_ORDER.map((key) => `${script.SECTION[key]}: ${aggregated[key].length} filas`),
   `orígenes: ${source}`,
   classification.skipped.length > 0

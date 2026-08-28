@@ -72,9 +72,10 @@ respuestas anonimizadas del template, no se reconstruye a partir de una media.
 
 ## Verificación local
 
-El arnés carga el mismo `Codigo.gs`, clasifica los cinco orígenes por cabecera,
-lee los maestros del libro limpio y genera el texto sin acceder a Drive ni
-modificar ningún XLSX:
+El arnés carga el mismo `Codigo.gs`, comprueba primero la resolución dual de
+los 20 nombres nativos de Google Sheets y sus alias del XLSX sin crear pestañas
+duplicadas, clasifica los cinco orígenes por cabecera, lee los maestros del
+libro limpio y genera el texto sin acceder a Drive ni modificar ningún XLSX:
 
 ```bash
 node scripts/informatica-drive/verificar-local.mjs "C:/ruta/Informática SSCC" 2026-08-24 > tmp/plano-20260824.txt
