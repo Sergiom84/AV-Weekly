@@ -109,7 +109,7 @@ columna. **Todas las pestañas de datos son copia exacta de su origen: ninguna a
 
 | Origen | Filas | Destino | Rango | Política |
 |---|---|---|---|---|
-| `Backlog` | 734 | `2.2.1 Volum de peticiones (Datos)` | `A1:S` | reemplazo |
+| `Backlog` | 734 | `2.2.1 Volum de peticiones (Dato` | `A1:S` | reemplazo |
 | `Liberadas` | 73 | `Hoja 16` | `A1:S` | reemplazo |
 | `Gestionadas` | 47 | `Hoja 17` | `A1:S` | reemplazo |
 | Templates `1-1` | 3.263 | `2.1.5 Encuestas (datos)` | `A3:M` | reemplazo, solo columnas no personales |
@@ -118,7 +118,7 @@ columna. **Todas las pestañas de datos son copia exacta de su origen: ninguna a
 | Templates `4-4` | 19 | `2.1.1 Volumetria de Incidencias` | `F3:I` | añade la fila del mes nuevo |
 | Templates `5-5` | 24.316 | `2.1.6 Work Orders (Datos)` | `A1:O` | reemplazo |
 | Templates `6-6` | 45.584 | `2.3.1 Volum de Citas SmartTech` | `A1:H`, más `J` y `N` | reemplazo |
-| IMAC, pestaña del año | 253 | `2.4.1 Vol Imacs resuelos OnSite` | `A1:G` | reemplazo |
+| IMAC, pestaña del año | dinámico (259 en la muestra 2026) | `2.4.1 Vol Imacs resuelos OnSite` | `A1:G` | reemplazo |
 
 Las filas de origen y de destino coinciden exactamente en las cuatro pestañas grandes, lo
 que confirma que no hay acumulación en ninguna. Las cifras que parecían indicar lo

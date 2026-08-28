@@ -970,7 +970,7 @@ Crea `scripts/informatica-drive/Codigo.gs` con este arranque:
  */
 
 var TAB = {
-  peticionesDatos: '2.2.1 Volum de peticiones (Datos)',
+  peticionesDatos: '2.2.1 Volum de peticiones (Dato',
   liberadas: 'Hoja 16',
   gestionadas: 'Hoja 17',
   encuestasDatos: '2.1.5 Encuestas (datos)',
@@ -1034,7 +1034,7 @@ var ENCUESTAS_FRAGMENT = 'NIVEL DE SATIS';
 
 Las cinco cabeceras salen de `server/convertInformaticaRaw.ts`, que ya detecta estos mismos formatos: `RAW_PETICIONES_REQUIRED` (línea 56), `RAW_IMACS_COLUMNS`, `RAW_WORKORDERS_COLUMNS`, `RAW_CITAS_COLUMNS` y `TEMPLATE_ENCUESTAS_COLUMNS` (línea 888). No las reconstruyas leyendo la descripción de columnas del SPEC: la pregunta de satisfacción de las encuestas cambia de redacción, y por eso el fichero de referencia la casa **por subcadena** en la línea 1006 (`normalize(cell).includes("NIVEL DE SATIS")`) en vez de por nombre completo. `hasColumns` compara el nombre entero, así que un signo de interrogación de más clasificaría mal en silencio. Necesitas un ayudante aparte de coincidencia por fragmento para esa única columna.
 
-`classifyFolder` **no puede cortar en el primer acierto**, a diferencia de la de AGA. El libro de Templates lleva encuestas (`1-1`), work orders (`5-5`) y citas (`6-6`) en pestañas distintas del mismo fichero: con un `break` se perderían dos de los tres.
+`classifyFolder` **no puede cortar en el primer acierto**, a diferencia de la de AGA. El libro de Templates lleva encuestas (`1-1`), work orders (`5-5`) y citas (`6-6`) en pestañas distintas del mismo fichero: con un `break` se perderían dos de los tres. Además, cada coincidencia del template conserva las rejillas completas del libro; la tarea 6 necesita así recuperar `2-2`, `3-3` y `4-4`, que no tienen una entrada propia en `REQUIRED`.
 
 /** Which of the three request exports a file is, by name. They share a header. */
 function requestKind(fileName) {
@@ -1594,33 +1594,38 @@ function procesarSemana() {
   var config = readConfig();
   var clasificacion = classifyFolder(config.folderId);
   var informe = { faltan: [], leidas: {}, escritas: {}, desconocidos: [] };
+  var requiredKinds = ['backlog', 'liberadas', 'gestionadas', 'encuestas', 'workOrders', 'citas', 'imac'];
 
-  for (var key in REQUIRED) {
-    if (Object.prototype.hasOwnProperty.call(REQUIRED, key) && !clasificacion[key]) {
-      informe.faltan.push(key);
+  try {
+    for (var index = 0; index < requiredKinds.length; index += 1) {
+      if (!clasificacion.found[requiredKinds[index]]) informe.faltan.push(requiredKinds[index]);
+    }
+
+    if (informe.faltan.length > 0) {
+      escribirComprobacion(informe);
+      throw new Error('Faltan ficheros en la carpeta: ' + informe.faltan.join(', '));
+    }
+
+    rodarSemanaAnterior();
+    escribirDatos(clasificacion, informe);
+    escribirMarcadores(config.extraction);
+
+    var agregado = agregar(clasificacion, config.extraction);
+
+    escribirPlano(
+      serializarPlano(agregado, {
+        week: isoDate(config.extraction),
+        generated: new Date().toISOString(),
+        source: clasificacion.nombres.join('; ')
+      })
+    );
+
+    escribirComprobacion(informe);
+  } finally {
+    for (var handle = 0; handle < clasificacion.handles.length; handle += 1) {
+      discardTemporary(clasificacion.handles[handle]);
     }
   }
-
-  if (informe.faltan.length > 0) {
-    escribirComprobacion(informe);
-    throw new Error('Faltan ficheros en la carpeta: ' + informe.faltan.join(', '));
-  }
-
-  rodarSemanaAnterior();
-  escribirDatos(clasificacion, informe);
-  escribirMarcadores(config.extraction);
-
-  var agregado = agregar(clasificacion, config.extraction);
-
-  escribirPlano(
-    serializarPlano(agregado, {
-      week: isoDate(config.extraction),
-      generated: new Date().toISOString(),
-      source: clasificacion.nombres.join('; ')
-    })
-  );
-
-  escribirComprobacion(informe);
 }
 ```
 
@@ -1718,7 +1723,7 @@ Van al final a propósito: hasta que la tarea 11 no confirma que el script repro
 - Modify: `scripts/informatica-drive/Codigo.gs` (función nueva `repararFormulas()`)
 
 **Interfaces:**
-- Produces: `repararFormulas()`, invocada desde `inicializarHoja()` y no desde `procesarSemana()`. Es una migración, no un paso semanal.
+- Produces: `repararFormulas()`, invocada desde `inicializarHoja()` y también después de `escribirDatos()` en `procesarSemana()`. La reparación de `#REF!` es una migración idempotente; la fórmula Total de `2.1.2` sí debe reponerse semanalmente porque la tarea 6 reemplaza esa fila con el valor del template.
 
 - [ ] **Step 1: Repara el `#REF!`**
 
