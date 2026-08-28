@@ -17,6 +17,8 @@ Especificación: [`SPEC.md`](./SPEC.md). Léela entera antes de la tarea 1.
 - Sin emojis ni microcopy explicativo en UI. Tipografía limitada a Cormorant Garamond y JetBrains Mono.
 - Separación `client/` · `server/` · `shared/`. El contrato canónico vive en `shared/`.
 - `Codigo.gs` corre en Apps Script: **ES5**, sin `const`, `let`, arrow functions, template literals, `Map`, `Set` ni módulos. Usa `var` y `function`, como el `scripts/aga-drive/Codigo.gs` existente.
+- **`node --check` no acepta la extensión `.gs`** en Node 24: falla con `ERR_UNKNOWN_FILE_EXTENSION` igual sobre el script de AGA que sobre este, así que no dice nada del código. Se comprueba copiando a `.js` primero, que es lo que hacen los pasos de verificación de las tareas 5 a 12.
+- El grep de sintaxis moderna **no puede incluir el backtick suelto**: los comentarios de `scripts/aga-drive/Codigo.gs` usan backticks para citar identificadores, y prohibirlos separaría el estilo de documentación de los dos scripts hermanos. Busca `\$\{` para detectar template literals de verdad.
 - Ningún dato personal sale hacia la pestaña `PLANO`: solo recuentos.
 - Los maestros del libro (`Hoja 17!X:Z`, `2.1.6 Datos!Y:Z`, `2.1.6 Datos!AB`, `Hoja 18!BC:BE`) no se escriben nunca.
 - Verificación al cerrar cada tarea: `pnpm run check` y `pnpm test`.
@@ -344,10 +346,10 @@ describe("parseInformaticaTexto", () => {
       "# esto es un comentario",
       "",
       "[PETICIONES]",
-      "2026/08\t34\tOn Site\tEn vuelo\tPeticiones\t306",
+      "2026-08-17\t2026/08\t34\tOn Site\tEn vuelo\tPeticiones\t306",
       "",
       "[IMACS]",
-      "2026/08\tMadrid SEDE\tSolicitudes\t218",
+      "2026-08-01\t2026/08\tMadrid SEDE\tSolicitudes\t218",
     ].join("\n");
 
     const { dataset, meta } = parseInformaticaTexto(texto);
@@ -355,7 +357,7 @@ describe("parseInformaticaTexto", () => {
     expect(meta.week).toBe("2026-08-24");
     expect(dataset.peticiones).toEqual([
       {
-        fecha: null,
+        fecha: "2026-08-17",
         semana: 34,
         mes: "2026/08",
         origen: "On Site",
@@ -365,7 +367,13 @@ describe("parseInformaticaTexto", () => {
       },
     ]);
     expect(dataset.imacs).toEqual([
-      { fecha: null, mes: "2026/08", ciudad: "Madrid SEDE", metrica: "Solicitudes", total: 218 },
+      {
+        fecha: "2026-08-01",
+        mes: "2026/08",
+        ciudad: "Madrid SEDE",
+        metrica: "Solicitudes",
+        total: 218,
+      },
     ]);
     expect(dataset.sheetsFound).toEqual(["peticiones", "imacs"]);
   });
@@ -374,8 +382,8 @@ describe("parseInformaticaTexto", () => {
     const texto = [
       INFORMATICA_TEXTO_HEADER,
       "[ENCUESTAS]",
-      "2026/08\t5\t412",
-      "2026/08\t4",
+      "2026-08-01\t2026/08\t5\t412",
+      "2026-08-01\t2026/08\t4",
     ].join("\n");
 
     expect(parseInformaticaTexto(texto).dataset.encuestas).toHaveLength(1);
@@ -385,7 +393,14 @@ describe("parseInformaticaTexto", () => {
     const dataset: InformaticaDataset = {
       source,
       citas: [
-        { fecha: null, semana: 34, mes: "2026/08", edificio: "Sede - Principal", tipo: "Con Cita", citas: 96 },
+        {
+          fecha: "2026-08-17",
+          semana: 34,
+          mes: "2026/08",
+          edificio: "Sede - Principal",
+          tipo: "Con Cita",
+          citas: 96,
+        },
       ],
       edificios: [
         {
@@ -542,9 +557,14 @@ const SECTIONS: Record<
 /**
  * The `fecha` cell, or `null` when the section left it empty.
  *
- * `null` and `""` are not the same to the client: `isoDay` in
- * `client/src/modules/informatica/aggregate.ts` treats an empty string as a
- * date it cannot read, and `lastClosedWeek` then resolves no window at all.
+ * Not for the client's sake: `isoDay` in
+ * `client/src/modules/informatica/aggregate.ts` already reads `""` and `null`
+ * the same way, since neither matches its date pattern. The reason is the
+ * contract. `InformaticaDateCell` is `number | string | null`, and `""` is a
+ * string that means "no date" — a second spelling of absence that every
+ * consumer would have to know about. It also breaks the round trip: the
+ * serialiser writes `null` as an empty cell, so reading that cell back as `""`
+ * would make serialise-then-parse stop being the identity.
  */
 function day(value: string): string | null {
   const trimmed = String(value ?? "").trim();
@@ -627,7 +647,7 @@ export function parseInformaticaTexto(texto: string): {
 - [ ] **Step 4: Ejecuta los tests y comprueba que pasan**
 
 Run: `pnpm exec vitest run server/informatica-texto.test.ts`
-Expected: PASS, 6 tests.
+Expected: PASS, 9 tests — los 3 de la Tarea 1 más los 6 de esta, contando los dos que fijan la celda vacía y el desplazamiento de columnas.
 
 - [ ] **Step 5: Commit**
 
@@ -1003,10 +1023,18 @@ Añade a `Codigo.gs`:
 var REQUIRED = {
   peticiones: ['Denominación Producto', 'Estatus de la Posición'],
   imac: ['Fecha limite', 'nº trabajos'],
-  encuestas: ['Incident Number', '¿Te ha resultado fácil el proceso de apertura?'],
+  encuestas: ['Incident Number', 'Fecha'],
   workOrders: ['DWP_SRID', 'Ubicacion_asociada'],
   citas: ['Incidencia', 'Cita_Previa', 'Smart_Tech']
 };
+
+/** Fragment match of the satisfaction question, which is worded differently over time. */
+var ENCUESTAS_FRAGMENT = 'NIVEL DE SATIS';
+```
+
+Las cinco cabeceras salen de `server/convertInformaticaRaw.ts`, que ya detecta estos mismos formatos: `RAW_PETICIONES_REQUIRED` (línea 56), `RAW_IMACS_COLUMNS`, `RAW_WORKORDERS_COLUMNS`, `RAW_CITAS_COLUMNS` y `TEMPLATE_ENCUESTAS_COLUMNS` (línea 888). No las reconstruyas leyendo la descripción de columnas del SPEC: la pregunta de satisfacción de las encuestas cambia de redacción, y por eso el fichero de referencia la casa **por subcadena** en la línea 1006 (`normalize(cell).includes("NIVEL DE SATIS")`) en vez de por nombre completo. `hasColumns` compara el nombre entero, así que un signo de interrogación de más clasificaría mal en silencio. Necesitas un ayudante aparte de coincidencia por fragmento para esa única columna.
+
+`classifyFolder` **no puede cortar en el primer acierto**, a diferencia de la de AGA. El libro de Templates lleva encuestas (`1-1`), work orders (`5-5`) y citas (`6-6`) en pestañas distintas del mismo fichero: con un `break` se perderían dos de los tres.
 
 /** Which of the three request exports a file is, by name. They share a header. */
 function requestKind(fileName) {
@@ -1024,7 +1052,7 @@ function requestKind(fileName) {
 
 - [ ] **Step 3: Verifica que el fichero es ES5 válido**
 
-Run: `node --check scripts/informatica-drive/Codigo.gs`
+Run: `cp scripts/informatica-drive/Codigo.gs tmp/ck.js && node --check tmp/ck.js && rm tmp/ck.js`
 Expected: sin salida. Si falla, hay sintaxis que Apps Script tampoco aceptaría.
 
 - [ ] **Step 4: Verifica que no se ha colado sintaxis moderna**
@@ -1196,7 +1224,7 @@ function lookup(map, key, index, unknown) {
 
 - [ ] **Step 4: Verifica la sintaxis**
 
-Run: `node --check scripts/informatica-drive/Codigo.gs && grep -nE "=>|\bconst \b|\blet \b" scripts/informatica-drive/Codigo.gs`
+Run: `cp scripts/informatica-drive/Codigo.gs tmp/ck.js && node --check tmp/ck.js && rm tmp/ck.js && grep -nE "=>|\bconst \b|\blet \b" scripts/informatica-drive/Codigo.gs`
 Expected: sin salida en ninguno de los dos.
 
 - [ ] **Step 5: Commit**
@@ -1286,7 +1314,7 @@ function escribirMarcadores(extraction) {
 
 - [ ] **Step 4: Verifica la sintaxis**
 
-Run: `node --check scripts/informatica-drive/Codigo.gs`
+Run: `cp scripts/informatica-drive/Codigo.gs tmp/ck.js && node --check tmp/ck.js && rm tmp/ck.js`
 Expected: sin salida.
 
 - [ ] **Step 5: Commit**
@@ -1394,7 +1422,7 @@ function cerrarEncuestas(month, windowMonths) {
 
 - [ ] **Step 4: Verifica la sintaxis**
 
-Run: `node --check scripts/informatica-drive/Codigo.gs`
+Run: `cp scripts/informatica-drive/Codigo.gs tmp/ck.js && node --check tmp/ck.js && rm tmp/ck.js`
 Expected: sin salida.
 
 - [ ] **Step 5: Commit**
@@ -1526,7 +1554,7 @@ function escribirPlano(texto) {
 
 - [ ] **Step 5: Verifica la sintaxis**
 
-Run: `node --check scripts/informatica-drive/Codigo.gs`
+Run: `cp scripts/informatica-drive/Codigo.gs tmp/ck.js && node --check tmp/ck.js && rm tmp/ck.js`
 Expected: sin salida.
 
 - [ ] **Step 6: Commit**
@@ -1604,7 +1632,7 @@ Las siete filas que enumera el apartado 9 de la spec, cada una como fila de la h
 
 - [ ] **Step 3: Verifica la sintaxis**
 
-Run: `node --check scripts/informatica-drive/Codigo.gs && grep -nE "=>|\bconst \b|\blet \b" scripts/informatica-drive/Codigo.gs`
+Run: `cp scripts/informatica-drive/Codigo.gs tmp/ck.js && node --check tmp/ck.js && rm tmp/ck.js && grep -nE "=>|\bconst \b|\blet \b" scripts/informatica-drive/Codigo.gs`
 Expected: sin salida en ninguno de los dos.
 
 - [ ] **Step 4: Commit**
@@ -1722,7 +1750,7 @@ En `2.1.6 (Informe)`, `Hoja 18` y `Hoja 19`, sustituye los rangos de columna ent
 
 - [ ] **Step 4: Verifica**
 
-Run: `node --check scripts/informatica-drive/Codigo.gs && pnpm run check && pnpm test`
+Run: `cp scripts/informatica-drive/Codigo.gs tmp/ck.js && node --check tmp/ck.js && rm tmp/ck.js && pnpm run check && pnpm test`
 Expected: todo limpio.
 
 Después, vuelve a ejecutar `verificar-local.mjs` y comprueba que las cifras siguen coincidiendo salvo la de DAAS APPLE en gestionadas, que ahora debe ser la correcta.
