@@ -185,7 +185,7 @@ function section(name: string, rows: string[]): string[] {
   return rows.length === 0 ? [] : ["", "[" + name + "]", ...rows];
 }
 
-/** `true`/`false` of `Visible` as the sheet writes it, so a round trip is stable. */
+/** `Si`/`No` of `Visible` as the sheet writes it, so a round trip is stable. */
 function flag(value: boolean): string {
   return value ? "Si" : "No";
 }
@@ -294,7 +294,34 @@ git commit -m "feat(informatica): contrato del formato de texto plano"
   - `parseInformaticaTexto(texto: string): { dataset: InformaticaDataset; meta: InformaticaTextoMeta }`
   - Lanza `Error` con mensaje en español cuando la cabecera no coincide.
 
-`fecha` se rellena siempre con `null`: el formato lleva `mes` y `semana` explícitos, que es lo único que el deck agrega. `InformaticaDateCell` admite `null`, así que el tipo no se fuerza.
+**Corrección sobre la primera versión de este plan.** Decía que `fecha` se rellenaba siempre con `null` porque el formato ya lleva `mes` y `semana`. Es falso, y el defecto se detectó revisando la Tarea 3: tres puntos del cliente resuelven la ventana temporal por `fecha`, no por `mes`/`semana`.
+
+- `client/src/modules/informatica/aggregate.ts:111-113` — `coverageEnd(dataset)` deriva el corte de cobertura de `incidencias`, `workOrders` y `peticiones`.
+- `client/src/modules/informatica/pages/PeticionesPage.tsx:43` y `:63`
+- `client/src/modules/informatica/pages/CitasSemanalPage.tsx:38-39`
+
+Los tres llaman a `lastClosedWeek(rows, (row) => row.fecha, cutoff)` y filtran con `inWeek(row.fecha, window)`. `lastClosedWeek` resuelve con `isoDay(row.fecha)`: con `fecha: null` en todas las filas devuelve `null` y el filtro no deja pasar nada, así que las páginas de Peticiones y de Citas Semanal saldrían vacías. El comentario de `PeticionesPage` explica por qué se resuelve por fecha y no por el mayor `Semana`: sobre una hoja de más de un año, el mayor `Semana` cae en el diciembre anterior.
+
+Por tanto **`fecha` es la primera celda de toda sección con periodo**, en ISO `YYYY-MM-DD`, y una celda vacía se lee como `null`. `EDIFICIOS` no la lleva: es tabla de dimensiones. El orden de celdas de cada sección queda:
+
+| Sección | Celdas |
+|---|---|
+| `EDIFICIOS` | `edificio` `dt` `aliasSmartTech` `aliasWorkOrder` `aliasImacs` `aliasPeticiones` `visible` `orden` |
+| `INCIDENCIAS` | `fecha` `mes` `semana` `categoria` `subcategoria` `metrica` `edificio` `tickets` |
+| `ENCUESTAS` | `fecha` `mes` `valoracion` `respuestas` |
+| `WORKORDERS` | `fecha` `mes` `semana` `edificio` `tipo` `ordenes` |
+| `PETICIONES` | `fecha` `mes` `semana` `origen` `estado` `entidad` `total` |
+| `PETICIONESPRODUCTO` | `fecha` `mes` `semana` `producto` `estado` `total` |
+| `CITAS` | `fecha` `mes` `semana` `edificio` `tipo` `citas` |
+| `IMACS` | `fecha` `mes` `ciudad` `metrica` `total` |
+
+El código del parser que viene abajo lleva ya esta corrección: cada `build` toma `fecha` de `c[0]` y desplaza el resto una posición. La Tarea 9 tiene que emitir esa fecha, no dejarla vacía: el lunes de la semana en las secciones semanales y el día 1 en las mensuales.
+
+Además, `semana` debe derivarse de esa misma `fecha`. Si el `Codigo.gs` escribiera una `semana` que no case con la `fecha` de su fila —en el cambio de año ISO, por ejemplo— la página mostraría una semana y el merge poseería otra. Es un requisito de las tareas 6, 7 y 9.
+
+Y una segunda condición sobre la Tarea 9, por la misma razón: **las filas de la semana en curso de `incidencias`, `workOrders` y `peticiones` tienen que llevar fecha real, nunca vacía**. `coverageEnd` toma el máximo de esas tres secciones. Las filas del histórico mensual pueden ir con fecha en blanco sin consecuencia, porque el máximo lo fijan las semanales; pero si las semanales llegaran sin fecha, el corte de cobertura sería `null` y las páginas semanales volverían a salir vacías por otro camino.
+
+`PeticionesPage` resuelve **dos** ventanas, no una: la de `peticiones` en la línea 43 y otra distinta para `peticionesProducto` en la 63. Las dos secciones necesitan `fecha`.
 
 - [ ] **Step 1: Escribe los tests que fallan**
 
@@ -433,78 +460,97 @@ const SECTIONS: Record<
   },
   [INFORMATICA_TEXTO_SECTIONS.incidencias]: {
     key: "incidencias",
-    cells: 7,
+    cells: 8,
     build: (c) => ({
-      fecha: null,
-      mes: c[0],
-      semana: num(c[1]),
-      categoria: c[2],
-      subcategoria: c[3],
-      metrica: c[4],
-      edificio: c[5],
-      tickets: num(c[6]),
+      fecha: day(c[0]),
+      mes: c[1],
+      semana: num(c[2]),
+      categoria: c[3],
+      subcategoria: c[4],
+      metrica: c[5],
+      edificio: c[6],
+      tickets: num(c[7]),
     }),
   },
   [INFORMATICA_TEXTO_SECTIONS.encuestas]: {
     key: "encuestas",
-    cells: 3,
-    build: (c) => ({ fecha: null, mes: c[0], valoracion: c[1], respuestas: num(c[2]) }),
+    cells: 4,
+    build: (c) => ({ fecha: day(c[0]), mes: c[1], valoracion: c[2], respuestas: num(c[3]) }),
   },
   [INFORMATICA_TEXTO_SECTIONS.workOrders]: {
     key: "workOrders",
-    cells: 5,
+    cells: 6,
     build: (c) => ({
-      fecha: null,
-      mes: c[0],
-      semana: num(c[1]),
-      edificio: c[2],
-      tipo: c[3],
-      ordenes: num(c[4]),
+      fecha: day(c[0]),
+      mes: c[1],
+      semana: num(c[2]),
+      edificio: c[3],
+      tipo: c[4],
+      ordenes: num(c[5]),
     }),
   },
   [INFORMATICA_TEXTO_SECTIONS.peticiones]: {
     key: "peticiones",
-    cells: 6,
+    cells: 7,
     build: (c) => ({
-      fecha: null,
-      mes: c[0],
-      semana: num(c[1]),
-      origen: c[2],
-      estado: c[3],
-      entidad: c[4],
-      total: num(c[5]),
+      fecha: day(c[0]),
+      mes: c[1],
+      semana: num(c[2]),
+      origen: c[3],
+      estado: c[4],
+      entidad: c[5],
+      total: num(c[6]),
     }),
   },
   [INFORMATICA_TEXTO_SECTIONS.peticionesProducto]: {
     key: "peticionesProducto",
-    cells: 5,
+    cells: 6,
     build: (c) => ({
-      fecha: null,
-      mes: c[0],
-      semana: num(c[1]),
-      producto: c[2],
-      estado: c[3],
-      total: num(c[4]),
+      fecha: day(c[0]),
+      mes: c[1],
+      semana: num(c[2]),
+      producto: c[3],
+      estado: c[4],
+      total: num(c[5]),
     }),
   },
   [INFORMATICA_TEXTO_SECTIONS.citas]: {
     key: "citas",
-    cells: 5,
+    cells: 6,
     build: (c) => ({
-      fecha: null,
-      mes: c[0],
-      semana: num(c[1]),
-      edificio: c[2],
-      tipo: c[3],
-      citas: num(c[4]),
+      fecha: day(c[0]),
+      mes: c[1],
+      semana: num(c[2]),
+      edificio: c[3],
+      tipo: c[4],
+      citas: num(c[5]),
     }),
   },
   [INFORMATICA_TEXTO_SECTIONS.imacs]: {
     key: "imacs",
-    cells: 4,
-    build: (c) => ({ fecha: null, mes: c[0], ciudad: c[1], metrica: c[2], total: num(c[3]) }),
+    cells: 5,
+    build: (c) => ({
+      fecha: day(c[0]),
+      mes: c[1],
+      ciudad: c[2],
+      metrica: c[3],
+      total: num(c[4]),
+    }),
   },
 };
+
+/**
+ * The `fecha` cell, or `null` when the section left it empty.
+ *
+ * `null` and `""` are not the same to the client: `isoDay` in
+ * `client/src/modules/informatica/aggregate.ts` treats an empty string as a
+ * date it cannot read, and `lastClosedWeek` then resolves no window at all.
+ */
+function day(value: string): string | null {
+  const trimmed = String(value ?? "").trim();
+
+  return trimmed === "" ? null : trimmed;
+}
 
 const META_BY_LABEL: Record<string, keyof InformaticaTextoMeta> = {
   [INFORMATICA_TEXTO_META.week]: "week",
