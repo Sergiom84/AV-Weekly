@@ -331,7 +331,17 @@ function openAsSpreadsheet(file) {
     );
   }
 
-  return { id: JSON.parse(response.getContentText()).id, temporary: true };
+  var convertedId = JSON.parse(response.getContentText()).id;
+
+  // A Drive conversion creates a new spreadsheet with its own default time
+  // zone. If it differs from the report, getValues() returns Date objects whose
+  // evening timestamps can fall on the following calendar day. Align the
+  // temporary book before reading it so the Excel day survives unchanged.
+  SpreadsheetApp.openById(convertedId).setSpreadsheetTimeZone(
+    book().getSpreadsheetTimeZone()
+  );
+
+  return { id: convertedId, temporary: true };
 }
 
 function discardTemporary(handle) {
