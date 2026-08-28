@@ -642,6 +642,64 @@ function toNumber(value) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Weekly period markers                                                       */
+/* -------------------------------------------------------------------------- */
+
+/** Monday and Sunday of the ISO week the extraction date falls in. */
+function weekBounds(extraction) {
+  var day = (extraction.getUTCDay() + 6) % 7;
+  var monday = new Date(extraction.getTime() - day * 86400000);
+
+  return { monday: monday, sunday: new Date(monday.getTime() + 6 * 86400000) };
+}
+
+/** First and last day of the month the extraction date falls in. */
+function monthBounds(extraction) {
+  var year = extraction.getUTCFullYear();
+  var month = extraction.getUTCMonth();
+
+  return {
+    first: new Date(Date.UTC(year, month, 1)),
+    last: new Date(Date.UTC(year, month + 1, 0))
+  };
+}
+
+/**
+ * This week's totals become next week's "Semana anterior".
+ *
+ * Must run BEFORE the data tabs are rewritten: H4:H6 are COUNTIF formulas, so
+ * the moment the new rows land they recalculate and the old figure is gone.
+ * The percentage in column J divides by these three cells.
+ */
+function rodarSemanaAnterior() {
+  var sheet = sheetByName(TAB.peticionesInforme, false);
+  var actual = sheet.getRange('H4:H6').getValues();
+
+  sheet.getRange('I4:I6').setValues(actual);
+}
+
+/** Writes every marker that changes as part of the weekly processing. */
+function escribirMarcadores(extraction) {
+  var week = weekBounds(extraction);
+  var month = monthBounds(extraction);
+
+  sheetByName(TAB.workOrdersInforme, false)
+    .getRange('H1:I1')
+    .setValues([[month.first, month.last]])
+    .setNumberFormat('dd/mm/yyyy');
+
+  sheetByName(TAB.citasInforme, false)
+    .getRange('J2:K2')
+    .setValues([[week.monday, week.sunday]])
+    .setNumberFormat('dd/mm/yyyy');
+
+  sheetByName(TAB.encuestasInforme, false)
+    .getRange('L24')
+    .setValue(month.first)
+    .setNumberFormat('dd/mm/yyyy');
+}
+
+/* -------------------------------------------------------------------------- */
 /* Data-tab writes                                                             */
 /* -------------------------------------------------------------------------- */
 
