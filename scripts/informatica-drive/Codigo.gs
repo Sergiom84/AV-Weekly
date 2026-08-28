@@ -1672,6 +1672,269 @@ function escribirDatos(clasificacion, informe) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Formula repairs                                                             */
+/* -------------------------------------------------------------------------- */
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Last row occupied by the latest write, or by the current data as fallback. */
+function ultimaFilaEscrita(informe, tabName, firstRow, firstColumn, width) {
+  var written = informe && informe.escritas ? informe.escritas[tabName] : null;
+
+  if (typeof written === 'number') {
+    // Sheets cannot express an empty A2:A1 range. A single blank row still makes
+    // every aggregate used here return zero when the source has no records.
+    return Math.max(firstRow, firstRow + written - 1);
+  }
+
+  var sheet = sheetByName(tabName, false);
+  var physicalLast = sheet.getLastRow();
+
+  if (physicalLast < firstRow) return firstRow;
+
+  var values = sheet
+    .getRange(firstRow, firstColumn, physicalLast - firstRow + 1, width)
+    .getValues();
+
+  // Count is not enough here: a blank internal row must not shorten the bound.
+  for (var row = values.length - 1; row >= 0; row -= 1) {
+    if (rowHasValue(values[row])) return firstRow + row;
+  }
+
+  return firstRow;
+}
+
+/** Replaces only same-column ranges that belong to the named data tab. */
+function acotarRangosFormula(formula, dataTab, firstRow, lastRow) {
+  var pattern = new RegExp(
+    "('" + escapeRegex(dataTab) + "'!)\\$?([A-Z]+)(?:\\$?\\d+)?:\\$?([A-Z]+)(?:\\$?\\d+)?",
+    'g'
+  );
+
+  return formula.replace(pattern, function (match, prefix, firstColumn, lastColumn) {
+    if (firstColumn !== lastColumn) return match;
+
+    return prefix + '$' + firstColumn + '$' + firstRow + ':$' + lastColumn + '$' + lastRow;
+  });
+}
+
+/**
+ * Bounds aggregate formulas without touching values or the masters that share
+ * those report tabs. Existing bounded ranges are refreshed to the new last row,
+ * so the operation is both idempotent and valid after a shorter/larger import.
+ */
+function acotarFormulasAgregacion(reportTab, dataTab, firstRow, lastRow) {
+  var sheet = sheetByName(reportTab, false);
+  var range = sheet.getDataRange();
+  var formulas = range.getFormulas();
+  var values = range.getValues();
+  var changedCells = [];
+  var changed = 0;
+
+  for (var row = 0; row < formulas.length; row += 1) {
+    changedCells[row] = [];
+
+    for (var column = 0; column < formulas[row].length; column += 1) {
+      var formula = formulas[row][column];
+
+      if (!/(?:COUNTIFS|SUMIFS)\s*\(/i.test(formula)) continue;
+
+      var repaired = acotarRangosFormula(formula, dataTab, firstRow, lastRow);
+
+      if (repaired !== formula) {
+        formulas[row][column] = repaired;
+        changedCells[row].push(column);
+        changed += 1;
+      }
+    }
+  }
+
+  // One write per safe row segment instead of one remote call per formula.
+  // Adjacent repairs may span cells only when those gaps are genuinely blank;
+  // report values and hand-kept masters are therefore never rewritten.
+  for (var writeRow = 0; writeRow < changedCells.length; writeRow += 1) {
+    var columns = changedCells[writeRow];
+    var start = 0;
+
+    while (start < columns.length) {
+      var firstColumn = columns[start];
+      var lastColumn = firstColumn;
+      var next = start + 1;
+
+      while (next < columns.length) {
+        var candidate = columns[next];
+        var safeGap = true;
+
+        for (var gap = lastColumn + 1; gap < candidate; gap += 1) {
+          if (
+            formulas[writeRow][gap] !== '' ||
+            (values[writeRow][gap] !== '' && values[writeRow][gap] !== null)
+          ) {
+            safeGap = false;
+            break;
+          }
+        }
+
+        if (!safeGap) break;
+
+        lastColumn = candidate;
+        next += 1;
+      }
+
+      sheet
+        .getRange(writeRow + 1, firstColumn + 1, 1, lastColumn - firstColumn + 1)
+        .setFormulas([formulas[writeRow].slice(firstColumn, lastColumn + 1)]);
+      start = next;
+    }
+  }
+
+  return changed;
+}
+
+/** Changes a same-column range while retaining its absolute markers and rows. */
+function cambiarColumnaRango(formula, dataTab, currentColumn, newColumn) {
+  var pattern = new RegExp(
+    "('" + escapeRegex(dataTab) + "'!)(\\$?)" + currentColumn +
+      '(\\$?\\d*)?:(\\$?)' + currentColumn + '(\\$?\\d*)?',
+    'g'
+  );
+
+  return formula.replace(pattern, function (match, prefix, firstDollar, firstRow, lastDollar, lastRow) {
+    return prefix + firstDollar + newColumn + (firstRow || '') + ':' +
+      lastDollar + newColumn + (lastRow || '');
+  });
+}
+
+function filaSemantica(sheet, column, label, firstRow) {
+  var start = firstRow || 1;
+  var last = sheet.getLastRow();
+
+  if (last < start) return 0;
+
+  var values = sheet.getRange(start, column, last - start + 1, 1).getValues();
+
+  for (var row = 0; row < values.length; row += 1) {
+    if (normalize(values[row][0]) === normalize(label)) return start + row;
+  }
+
+  return 0;
+}
+
+/** Repairs the positions block from its labels instead of relying on rows 11-13. */
+function repararPosiciones(sheet) {
+  var positionsRow = filaSemantica(sheet, 3, 'Posiciones', 1);
+  var originsRow = positionsRow > 0 ? filaSemantica(sheet, 3, 'Origen', positionsRow + 1) : 0;
+  var dataTabs = {
+    'EN VUELO': TAB.peticionesDatos,
+    'LIBERADAS DURANTE LA SEMANA': TAB.liberadas,
+    'GESTIONADAS DURANTE LA SEMANA': TAB.gestionadas
+  };
+  var changed = 0;
+
+  if (originsRow === 0) throw new Error('No se encontró el bloque semántico de Posiciones.');
+
+  for (var row = originsRow + 1; row <= sheet.getLastRow(); row += 1) {
+    var state = normalize(sheet.getRange(row, 3).getValue());
+    var dataTab = dataTabs[state];
+
+    if (!dataTab) continue;
+
+    for (var column = 4; column <= 7; column += 1) {
+      var cell = sheet.getRange(row, column);
+      var formula = cell.getFormula();
+      var repaired = cambiarColumnaRango(formula, dataTab, 'P', 'S');
+
+      if (repaired !== formula) {
+        cell.setFormula(repaired);
+        changed += 1;
+      }
+    }
+  }
+
+  return changed;
+}
+
+/** Restores the semantic Total row after the weekly template overwrites it. */
+function repararTotalTopCinco(sheet) {
+  var headerRow = filaSemantica(sheet, 1, 'Categorization Tier 1', 1);
+  var totalRow = headerRow > 0 ? filaSemantica(sheet, 1, 'Total', headerRow + 1) : 0;
+
+  if (headerRow === 0 || totalRow <= headerRow + 1) {
+    throw new Error('No se encontró la fila Total del Top 5 tras sus categorías.');
+  }
+
+  var formulas = [];
+
+  for (var column = 3; column <= 19; column += 1) {
+    var letter = columnLetters(column);
+    formulas.push('=SUM(' + letter + (headerRow + 1) + ':' + letter + (totalRow - 1) + ')');
+  }
+
+  var target = sheet.getRange(totalRow, 3, 1, formulas.length);
+  var current = target.getFormulas()[0];
+
+  if (current.join('\u0000') === formulas.join('\u0000')) return 0;
+
+  target.setFormulas([formulas]);
+  return formulas.length;
+}
+
+/**
+ * Idempotent repairs for formula defects proven against the clean workbook.
+ * It is called after every data write because that write restores the numeric
+ * Total row from the template, and from initialization as a safe migration.
+ */
+function repararFormulas(informe) {
+  var changes = 0;
+  var requests = sheetByName(TAB.peticionesInforme, false);
+  var g6 = requests.getRange('G6');
+  var g6Formula = g6.getFormula();
+  var fixedG6 = g6Formula.replace(/#REF!/g, '$G$1');
+
+  if (fixedG6 !== g6Formula) {
+    g6.setFormula(fixedG6);
+    changes += 1;
+  }
+
+  var d4 = requests.getRange('D4');
+  var d4Formula = d4.getFormula();
+  var fixedD4 = d4Formula.replace(/-E5-F5-G5/g, '-E4-F4-G4');
+
+  if (fixedD4 !== d4Formula) {
+    d4.setFormula(fixedD4);
+    changes += 1;
+  }
+
+  changes += repararPosiciones(requests);
+  changes += repararTotalTopCinco(sheetByName(TAB.topCincoDatos, false));
+
+  changes += acotarFormulasAgregacion(
+    TAB.workOrdersInforme,
+    TAB.workOrdersDatos,
+    2,
+    ultimaFilaEscrita(informe, TAB.workOrdersDatos, 2, 1, 15)
+  );
+  changes += acotarFormulasAgregacion(
+    TAB.citasInforme,
+    TAB.citasDatos,
+    2,
+    ultimaFilaEscrita(informe, TAB.citasDatos, 2, 1, 8)
+  );
+  // Hoja 19 uses SUMIFS rather than COUNTIFS, but has the same full-column
+  // defect and is deliberately handled by the same source-scoped transform.
+  changes += acotarFormulasAgregacion(
+    TAB.imacsInforme,
+    TAB.imacsDatos,
+    2,
+    ultimaFilaEscrita(informe, TAB.imacsDatos, 2, 1, 7)
+  );
+
+  return changes;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Aggregation and PLANO                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -2393,6 +2656,7 @@ function procesarSemana() {
 
     rodarSemanaAnterior();
     escribirDatos(clasificacion.found, informe);
+    repararFormulas(informe);
     escribirMarcadores(config.extraction);
 
     var week = weekBounds(config.extraction);
@@ -2489,11 +2753,13 @@ function inicializarHoja() {
     created.push(TAB.plano);
   }
 
+  repararFormulas();
+
   SpreadsheetApp.getUi().alert(
     'Informática Weekly',
     created.length === 0
-      ? 'Las pestañas necesarias ya existían. No se ha cambiado su contenido.'
-      : 'Pestañas creadas: ' + created.join(', ') + '.',
+      ? 'Las pestañas necesarias ya existían. Fórmulas verificadas.'
+      : 'Pestañas creadas: ' + created.join(', ') + '. Fórmulas verificadas.',
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 

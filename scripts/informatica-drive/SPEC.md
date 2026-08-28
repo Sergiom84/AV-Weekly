@@ -396,14 +396,18 @@ Dentro de este trabajo, porque son defectos que producen cifras mal:
 2. **`2.1.2 (Datos)` fila `Total`.** Hoy es un número pegado. Pasa a ser `SUM` de las
    categorías, de modo que un desajuste entre el template y las filas cargadas se vea en
    vez de quedar tapado.
-3. **`COUNTIFS` sobre columnas enteras.** Todas las de `2.1.6 (Informe)`, `Hoja 18` y
-   `Hoja 19` barren `$P:$P`, `$I:$I`, `$B:$B` completas. Se acotan al número de filas
-   realmente escrito, que el script conoce.
+3. **Agregaciones sobre columnas enteras.** Las `COUNTIFS` de `2.1.6 (Informe)` y
+   `Hoja 18`, y las `SUMIFS` de `Hoja 19`, barren columnas completas. Se acotan al
+   número de filas realmente escrito, que el script conoce, y solo cuando la referencia
+   pertenece a la pestaña de datos correspondiente.
 4. **`Posiciones` mezcla días y cantidades.** El bloque de `2.2.1 (Informe)` suma hoy
    `Días Reales` para On Site/BBVA Technology y `Cantidad` para RENOVE/DAAS, llegando a
    mostrar 38.558 supuestas posiciones en el backlog de la muestra. El `PLANO` usa siempre
    la columna semántica `Cantidad`; la reparación del libro debe alinear sus fórmulas con
    esa misma regla.
+5. **`Peticiones en vuelo` resta otra fila.** `2.2.1 (Informe)!D4` resta hoy `E5:G5`,
+   que pertenecen a Liberadas. Debe restar los otros orígenes de su propia fila,
+   `E4:G4`, antes de calcular `H4`.
 
 ---
 

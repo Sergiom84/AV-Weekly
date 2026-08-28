@@ -1731,7 +1731,11 @@ Van al final a propósito: hasta que la tarea 11 no confirma que el script repro
 **Interfaces:**
 - Produces: `repararFormulas()`, invocada desde `inicializarHoja()` y también después de `escribirDatos()` en `procesarSemana()`. La reparación de `#REF!` es una migración idempotente; la fórmula Total de `2.1.2` sí debe reponerse semanalmente porque la tarea 6 reemplaza esa fila con el valor del template.
 
-- [ ] **Step 1: Repara el `#REF!`**
+- [ ] **Step 1: Repara el `#REF!` y la resta de peticiones en vuelo**
+
+Además de sustituir los cinco `#REF!` de `G6` por `$G$1`, corrige `D4`: la fórmula
+probada en el libro resta por error `E5:G5`; debe restar `E4:G4`, los orígenes de su
+propia fila.
 
 ```javascript
 /**
@@ -1755,9 +1759,16 @@ function repararFormulas() {
 
 La fila 27 de `2.1.2 (Datos)` es hoy un número pegado. Escribe `=SUM(C3:C26)` y equivalentes en cada columna, de forma que un desajuste entre el template y las filas cargadas se vea en vez de quedar tapado.
 
-- [ ] **Step 3: Acota las `COUNTIFS`**
+Localiza esa fila por la etiqueta `Total`, no solo por el número 27, y alinea el bloque
+semántico `Posiciones` para que todos sus orígenes sumen `Cantidad` (`S`) en lugar de
+`Días Reales` (`P`).
 
-En `2.1.6 (Informe)`, `Hoja 18` y `Hoja 19`, sustituye los rangos de columna entera (`$P:$P`, `$I:$I`, `$B:$B`) por rangos hasta el número de filas escrito, que `escribirDatos` conoce y deja en `informe.escritas`.
+- [ ] **Step 3: Acota las fórmulas de agregación**
+
+En `2.1.6 (Informe)` y `Hoja 18`, acota las `COUNTIFS`; en `Hoja 19`, que realmente usa
+`SUMIFS`, aplica la misma regla. Sustituye solo referencias a la pestaña de datos de ese
+informe por rangos hasta el número de filas escrito que deja `informe.escritas`; no toques
+maestros ni tablas auxiliares de la propia pestaña de informe.
 
 - [ ] **Step 4: Verifica**
 
