@@ -15,20 +15,22 @@ del informe.
 
 ## 1. Objetivo
 
-Hoy el libro se rellena a mano: se pegan seis volcados en sus pestañas, se corrigen las
-fechas americanas, se mueven los marcadores de semana y de mes, y se arrastran las cifras
-de la semana anterior. Cada uno de esos pasos es una oportunidad de error y ninguno aporta
-criterio.
+Hoy el libro se rellena a mano: se pegan cinco volcados en sus pestañas, se corrigen las
+fechas americanas, se mueven los marcadores de semana y de mes, se congelan las celdas
+vivas al cerrar el mes y se arrastran las cifras de la semana anterior. Cada uno de esos
+pasos es una oportunidad de error y ninguno aporta criterio.
 
-El script automatiza el pegado y los marcadores. **No** sustituye las fórmulas del libro:
-las pestañas `(Informe)` siguen calculando solas, porque son la parte que los compañeros
-entienden, auditan y ajustan.
+El script automatiza el pegado, los marcadores y el cierre de mes. **No** sustituye las
+fórmulas del libro: las pestañas `(Informe)` siguen calculando solas, porque son la parte
+que los compañeros entienden, auditan y ajustan.
 
-Dos salidas:
+Tres salidas:
 
 1. El libro `SSCC- Informe Semanal limpio` actualizado, con el mismo aspecto de siempre.
 2. Una pestaña `PLANO` con recuentos agregados en texto, que se copia y se pega en AV
-   Weekly para generar la presentación.
+   Weekly.
+3. El histórico mensual completo dentro de ese `PLANO`, para que la aplicación lo persista
+   y pueda generar informes de meses anteriores sin depender del libro.
 
 ---
 
@@ -66,6 +68,8 @@ Menú `⭐ Informática Weekly` en la hoja:
 
 - **Inicializar hoja** — crea `Configuración`, `Comprobación` y `PLANO` si no existen.
 - **Procesar semana** — el paso semanal.
+- **Cerrar mes** — el paso mensual del apartado 6. Se ofrece por separado porque no se
+  hace todas las semanas y conviene que sea una decisión consciente.
 - **Guardar PLANO como .txt en la carpeta** — alternativa a copiar y pegar.
 
 Pestaña `Configuración`:
@@ -74,8 +78,9 @@ Pestaña `Configuración`:
 |---|---|
 | `Carpeta Drive` | `17O7dORS6oIDN0hyLP1AXQEN7tR6k3ZbH` |
 | `Fecha de extracción` | Lunes de la semana que se informa |
+| `Meses en la ventana de encuestas` | `19` |
 
-De la fecha de extracción se derivan todos los marcadores de periodo del apartado 5. No se
+De la fecha de extracción se derivan todos los marcadores de periodo del apartado 6. No se
 introduce ninguna fecha más a mano.
 
 ### Identificación de los ficheros
@@ -99,79 +104,72 @@ más reciente y se avisa en `Comprobación`.
 
 ## 3. Destinos y política de escritura
 
-Mapeo verificado contra el libro actual, por número de filas y por las fórmulas que cada
-pestaña `(Informe)` lanza sobre ella.
+Mapeo verificado contra el libro actual, contando las filas de datos reales de cada
+columna. **Todas las pestañas de datos son copia exacta de su origen: ninguna acumula.**
 
-| Origen | Destino | Rango de escritura | Política |
-|---|---|---|---|
-| `Backlog` | `2.2.1 Volum de peticiones (Datos)` | `A1:S` | reemplazo |
-| `Liberadas` | `Hoja 16` | `A1:S` | reemplazo |
-| `Gestionadas` | `Hoja 17` | `A1:S` | acumula, dedup por `Nº Petición de sistemas` + `Posición` |
-| Templates `1-1` | `2.1.5 Encuestas (datos)` | `A3:M` | reemplazo, solo columnas no personales |
-| Templates `2-2` | `2.1.2 Top 5 incidencias (Datos)` | `A1:S` | reemplazo |
-| Templates `3-3` | `2.1.1 Volumetria de Incidencias` | `A3:D` | reemplazo |
-| Templates `4-4` | `2.1.1 Volumetria de Incidencias` | `F3:I` | reemplazo |
-| Templates `5-5` | `2.1.6 Work Orders (Datos)` | `A1:O` | reemplazo |
-| Templates `6-6` | `2.3.1 Volum de Citas SmartTech` | `A1:H`, más `J` y `N` | acumula, dedup por `Incidencia` |
-| IMAC, pestaña del año en curso | `2.4.1 Vol Imacs resuelos OnSite` | `A1:G` | fusiona, dedup por `Número` |
+| Origen | Filas | Destino | Rango | Política |
+|---|---|---|---|---|
+| `Backlog` | 734 | `2.2.1 Volum de peticiones (Datos)` | `A1:S` | reemplazo |
+| `Liberadas` | 73 | `Hoja 16` | `A1:S` | reemplazo |
+| `Gestionadas` | 47 | `Hoja 17` | `A1:S` | reemplazo |
+| Templates `1-1` | 3.263 | `2.1.5 Encuestas (datos)` | `A3:M` | reemplazo, solo columnas no personales |
+| Templates `2-2` | 27 | `2.1.2 Top 5 incidencias (Datos)` | `A1:S` | reemplazo |
+| Templates `3-3` | 17 | `2.1.1 Volumetria de Incidencias` | `A3:D` | añade la fila del mes nuevo |
+| Templates `4-4` | 19 | `2.1.1 Volumetria de Incidencias` | `F3:I` | añade la fila del mes nuevo |
+| Templates `5-5` | 24.316 | `2.1.6 Work Orders (Datos)` | `A1:O` | reemplazo |
+| Templates `6-6` | 45.584 | `2.3.1 Volum de Citas SmartTech` | `A1:H`, más `J` y `N` | reemplazo |
+| IMAC, pestaña del año | 253 | `2.4.1 Vol Imacs resuelos OnSite` | `A1:G` | reemplazo |
+
+Las filas de origen y de destino coinciden exactamente en las cuatro pestañas grandes, lo
+que confirma que no hay acumulación en ninguna. Las cifras que parecían indicar lo
+contrario eran otra cosa: las 1.174 filas de `Hoja 17` son el maestro de direcciones de
+`X:Z` (756 filas), y las 81.466 de `2.3.1` son fórmulas arrastradas muy por debajo del
+dato.
+
+### IMACS que entran por correo
+
+`2.4.1!I1` advierte que muchos IMACS no vienen del documento, sino por correo. Como la
+pestaña es copia exacta del fichero IMAC, esos IMACS se están añadiendo **al fichero
+`Peticiones IMAC Onsite SSCC.xlsx` de Drive**, no al libro. Por tanto reemplazar la pestaña
+es seguro y no pierde nada.
+
+`Comprobación` avisa igualmente si el fichero IMAC de una semana trae menos filas que la
+anterior, que es la señal de que alguien ha subido un fichero incompleto.
 
 ### Zonas intocables
 
 El script no escribe nunca en:
 
-- `Hoja 17!X:Z` — maestro ubicación postal → DT → edificio.
-- `2.1.6 Work Orders (Datos)!Y:Z` — maestro ID de técnico → territorial.
-- `2.1.6 Work Orders (Datos)!AB` — catálogo de edificios.
-- Ninguna pestaña `(Informe)`, ni `Hoja 13`, `14`, `15`, `18`, `19`, salvo los marcadores
-  de periodo del apartado 5.
+- `Hoja 17!X:Z` — maestro dirección postal → DT → edificio, 756 filas.
+- `2.1.6 Work Orders (Datos)!Y:Z` — maestro ID de técnico → territorial, 35 filas.
+- `2.1.6 Work Orders (Datos)!AB` — catálogo de 18 edificios.
+- `Hoja 18!BC:BE` — totales anuales 2022 a 2026, histórico previo que no está en ningún
+  fichero y que no se puede recalcular.
+- Ninguna pestaña `(Informe)`, salvo los marcadores y el cierre de mes del apartado 6.
 
 Son tablas mantenidas a mano. Borrarlas deja el libro sin poder resolver ningún `VLOOKUP`.
 
 ### Columnas calculadas que sí se ajustan
 
-Tres columnas de fórmula tienen que cubrir exactamente el número de filas escritas, ni una
-más ni una menos:
+Tres columnas de fórmula tienen que cubrir exactamente el número de filas escritas:
 
 - `2.1.6 Work Orders (Datos)!P` = `VLOOKUP(F, Y:Z, 2, FALSE)` — 24.315 fórmulas hoy.
-- `Hoja 17!T` = `VLOOKUP(I, X:Z, 2, FALSE)` y `Hoja 17!U` = `VLOOKUP(I, X:Z, 3, FALSE)` —
-  2.346 fórmulas hoy.
+- `Hoja 17!T` = `VLOOKUP(I, X:Z, 2, FALSE)` y `!U` = `VLOOKUP(I, X:Z, 3, FALSE)` — 2.346
+  fórmulas hoy.
 
 El script las sustituye por **el valor ya resuelto**, calculado en JavaScript contra la
 misma tabla maestra. El resultado es idéntico y el libro deja de recalcular 26.661
-búsquedas en cada apertura. Si un valor no se encuentra en el maestro, se escribe `#N/A`
-literal, igual que hoy, y se cuenta en `Comprobación`: un `#N/A` nuevo significa que ha
-aparecido una ubicación o un técnico que falta en el maestro, y eso hay que verlo.
+búsquedas en cada apertura.
 
-### Acumulación: asunción declarada
-
-Las dos políticas de acumulación están deducidas de los conteos actuales, no confirmadas
-por escrito:
-
-- `Hoja 17` tiene 1.174 filas frente a las 47 del fichero `Gestionadas` de la semana.
-- `2.3.1` tiene 81.466 filas frente a las 45.584 del template.
-
-En ambos casos el destino es mayor que el origen, lo que solo se explica acumulando. **Hay
-que confirmarlo con quien mantiene el libro antes de la primera ejecución real**, y
-confirmar también desde qué fecha arranca cada acumulado. Mientras no se confirme, el
-script escribe en una copia de la hoja, no sobre la original.
-
-### `2.4.1` fusiona, no reemplaza
-
-El propio libro lo advierte en `2.4.1!I1`:
-
-> Muchos de los IMACS que figuran en ésta pestaña no provienen del documento. Entran por
-> correo.
-
-Reemplazar la pestaña borraría los que se introducen a mano. El script fusiona por
-`Número`: actualiza las filas que vienen en el fichero IMAC y deja intactas las demás. Las
-filas que solo existen en la hoja se cuentan aparte en `Comprobación`, para que se vea
-cuántos IMACS de esa semana entraron por correo.
+De la columna `P` lo que importa es el territorial: es lo que hace que la columna
+`Edificio` de la página 2.1.6 del informe muestre la ubicación. Si un técnico no está en
+`Y:Z`, se escribe `#N/A` literal, igual que hoy, y se lista en `Comprobación` con su ID.
+Un `#N/A` nuevo significa que ha entrado un técnico que falta en el maestro, y eso hay que
+verlo antes de presentar.
 
 ---
 
-## 4. Fechas y datos personales
-
-### Conversión de fechas
+## 4. Fechas
 
 Tres formatos entran y uno solo sale.
 
@@ -194,12 +192,14 @@ O2 = MID(C2,1,2)   P2 = MID(C2,4,2)   Q2 = MID(C2,7,4)   N2 = IFERROR(DATE(Q2,P2
 
 El script escribe directamente el valor de fecha en `J` (Fecha Walkup) y `N` (Fecha Cita
 Previa), que son las dos columnas que las `COUNTIFS` de `Hoja 18` leen. Las columnas
-auxiliares `K:M` y `O:Q` se vacían. Es la mayor parte de los 11 MB del libro.
+auxiliares `K:Q` se vacían. Es la mayor parte de los 11 MB del libro.
 
 La anotación de `2.1.6 Work Orders (Informe)!K3` — *"Es necesario cambiar el formato a
 fecha (Español) en el Template"* — queda resuelta: el paso manual desaparece.
 
-### Encuestas sin datos personales
+---
+
+## 5. Datos personales en encuestas
 
 `2.1.5 Encuestas (datos)` conserva su ancho de 13 columnas, porque las fórmulas
 referencian letras y desplazarlas las rompería. Solo se escriben las columnas que alimentan
@@ -227,45 +227,99 @@ Las fórmulas que dependen de esta pestaña son del tipo
 Con esto desaparecen del libro 3.262 matrículas de usuario y 1.470 respuestas de texto
 libre, muchas de las cuales citan por su nombre al técnico que atendió.
 
+El origen es el template **`1-1 - Encuestas de incidencias`**, cuyas trece columnas
+coinciden una a una. La anotación de `B1` dice `5-5 - Peticiones ON SITE SSCC`, que es el
+volcado de work orders y no tiene ninguna de esas columnas: es un error heredado. El script
+la reescribe con la fuente correcta.
+
 Las pestañas de peticiones, work orders y citas mantienen sus columnas tal cual: son las
 que los compañeros cuadran contra sus propias herramientas. La pestaña `PLANO`, que es la
 que sale del libro hacia AV Weekly, no lleva ningún dato personal en ningún caso.
 
 ---
 
-## 5. Marcadores de periodo
+## 6. Marcadores de periodo y cierre de mes
 
-Este es el paso manual más silencioso y el que más caro sale cuando se olvida: si el
-marcador no se mueve, el informe presenta la semana anterior con los datos de esta y nada
+Este es el trabajo manual más silencioso y el que más caro sale cuando se olvida: si un
+marcador no se mueve, el informe presenta el periodo anterior con los datos de este y nada
 lo delata.
 
-Todas las `COUNTIFS` del libro se acotan con estos pares de celdas:
+### Cada semana
 
 | Celda | Hoy | Significa | Se deriva de |
 |---|---|---|---|
-| `2.1.6 Work Orders (Informe)!H1` | 46235 | primer día del mes informado | fecha de extracción |
-| `2.1.6 Work Orders (Informe)!I1` | 46265 | último día del mes informado | fecha de extracción |
-| `Hoja 18!J2` | 46251 | lunes de la semana informada | fecha de extracción |
-| `Hoja 18!K2` | 46257 | domingo de la semana informada | fecha de extracción |
-| `Hoja 19!` fila 5 y fila 30 | pares | límites de cada mes de la serie | fecha de extracción |
-| `2.2.1 (Informe)!G1` | 44927 | inicio de DAAS, constante | no se toca |
+| `2.1.6 Work Orders (Informe)!H1` | 01/08/2026 | primer día del mes informado | fecha de extracción |
+| `2.1.6 Work Orders (Informe)!I1` | 31/08/2026 | último día del mes informado | fecha de extracción |
+| `Hoja 18!J2` | 17/08/2026 | lunes de la semana informada | fecha de extracción |
+| `Hoja 18!K2` | 23/08/2026 | domingo de la semana informada | fecha de extracción |
+| `Hoja 19` filas 5 y 30 | pares | límites de cada mes de la serie IMACS | fecha de extracción |
+| `2.1.5. (Informe)!L24` | 01/08/2026 | mes actual de las encuestas | fecha de extracción |
 
-`2.2.1 (Informe)!G1` es una constante histórica (`Fecha Comiendo DAAS 2023 ->`), no un
-marcador de periodo. El script no la modifica.
+`2.2.1 (Informe)!G1` (`Fecha Comiendo DAAS 2023 ->`, 01/01/2023) es una constante
+histórica, no un marcador. El script no la toca.
 
-### Rodar la semana anterior
+**Rodar la semana anterior.** `2.2.1 (Informe)!I4:I6` es la columna *Semana anterior* y hoy
+contiene valores escritos a mano (`714`, `84`, `50`). La columna `J` calcula la variación
+con `H*100/I-100`. Antes de escribir los datos nuevos, el script copia los valores actuales
+de `H4:H6` a `I4:I6`. Ese orden importa: `H` se recalcula en cuanto se pegan los datos
+nuevos y el valor viejo se pierde.
 
-`2.2.1 (Informe)!I4:I6` es la columna **Semana anterior** y hoy contiene valores escritos a
-mano (`714`, `84`, `50`). La columna `J` calcula la variación con `H*100/I-100`.
+### Al cerrar el mes
 
-Antes de escribir los datos nuevos, el script copia los valores actuales de `H4:H6` a
-`I4:I6`. Es decir: el total de esta semana pasa a ser la semana anterior de la siguiente.
-Ese orden importa y hay que respetarlo, porque `H` se recalcula en cuanto se pegan los
-datos nuevos y el valor viejo se pierde.
+Cuatro pestañas guardan histórico congelando la celda viva y abriendo una fila o columna
+nueva. Hoy se hace a mano; pasa a hacerlo el script.
+
+| Pestaña | Celda viva hoy | Qué hace el script |
+|---|---|---|
+| `2.1.1 Volumetria` | filas 4-19, una por mes | añade la fila del mes nuevo en `A:D` y en `F:I`, sin tocar las anteriores |
+| `Hoja 13` | columna P (`VLOOKUP` a 2.1.1) | convierte P en valor y abre la columna Q con el mes nuevo |
+| `Hoja 14` | `D11` (`= WO Informe!N43`) | convierte D11 en valor y escribe la fórmula en `D12` |
+| `Hoja 15` | `B19` y `C19` | convierte la fila 19 en valor y abre la fila 20 con las dos fórmulas |
+| `2.1.5. (Informe)` | fila 22 | ver apartado 7 |
+| `2.1.6 (Informe)` filas 45-49 | literales `">=01/01/2026"` | escribe los límites del mes de cada columna a partir de su cabecera |
+
+Las anotaciones de `Hoja 15!F19:F21` documentan de dónde sale cada columna y se conservan.
+
+La cabecera de `2.1.6 (Informe)!E45` decía `2025` sobre columnas de 2026. Ya está corregida
+a `2026` en el libro. El script deriva de ahora en adelante los literales de fecha de esas
+fórmulas desde la cabecera de mes de cada columna, así que el error no puede repetirse.
 
 ---
 
-## 6. Pestaña PLANO
+## 7. Encuestas: histórico y ventana móvil
+
+`2.1.5. Encuestas (Informe)` tiene tres piezas encadenadas y hoy se mantienen a mano.
+
+**Histórico**, `B4:D22`. Una fila por mes desde febrero de 2025, con fecha, número de
+encuestas y media. Crece indefinidamente, nunca se recorta.
+
+**Fila viva**, la 22. `C22 = C31` y `D22 = J33`, es decir, el recuento y la media del mes en
+curso, calculados desde `2.1.5 Encuestas (datos)`. La anotación de `E22` lo dice: `Vivo
+(C31 y J33)`. La fila anterior lleva `Histórico`.
+
+**Ventana móvil**, `G2:Y2` y `G3:Y3`. Diecinueve columnas de referencias, hoy `=B4…=B22` y
+`=D4…=D22`. Es lo que dibuja la gráfica de barras de la página de satisfacción.
+
+Al cerrar el mes el script hace, en este orden:
+
+1. Convierte `C22` y `D22` en valores fijos, y pone `Histórico` en `E22`.
+2. Escribe la fila 23: la fecha del mes nuevo en `B23`, `=C31` en `C23`, `=J33` en `D23`, y
+   `Vivo (C31 y J33)` en `E23`.
+3. Actualiza `L24` (`MES ACTUAL`) al mes nuevo, que es lo que gobierna las `COUNTIFS` de
+   `C26:C30`.
+4. Desplaza la ventana una posición: `G2:Y2` pasan a `=B5…=B23` y `G3:Y3` a `=D5…=D23`.
+
+El resultado es el que pidieron: el histórico acumula todos los meses, y la tabla y la
+gráfica muestran siempre los últimos N, dejando caer el más antiguo. En septiembre de 2026,
+la ventana empieza en marzo de 2025 y termina en septiembre de 2026.
+
+El ancho de la ventana es hoy de **19 meses**, no de 14. La etiqueta `F1` dice `14 meses` y
+está obsoleta. El script la reescribe con el ancho real y lee ese ancho de `Configuración`,
+para que cambiarlo sea editar una celda y no rehacer diecinueve fórmulas.
+
+---
+
+## 8. Pestaña PLANO e histórico en la base de datos
 
 Formato de texto por secciones, mismo patrón que `shared/modules/aga/texto.ts`. Solo
 recuentos agregados: ni un nombre, ni una matrícula, ni una descripción libre.
@@ -292,26 +346,45 @@ Las secciones y sus dimensiones son las mismas que ya declara
 `Documentación/Informática/_esquema-excel-plano.md` y que `server/parseInformaticaPlano.ts`
 sabe leer. Lo que cambia es el envoltorio: texto en una pestaña, en vez de doce hojas.
 
+### El histórico va al PLANO, y de ahí a la base de datos
+
+La aplicación tiene que poder generar un informe de un mes pasado sin abrir el libro. Para
+eso el `PLANO` **emite siempre la serie mensual completa**, no solo la semana en curso:
+
+- `INCIDENCIAS`, todos los meses de `2.1.1` y `Hoja 13`.
+- `ENCUESTAS`, todos los meses del histórico `B4:D22`.
+- `WORKORDERS`, la serie mensual de `Hoja 14` y el detalle del mes en curso.
+- El total mensual combinado de `Hoja 15`.
+- `IMACS`, los meses de `Hoja 19`.
+
+Emitir el histórico entero cada semana hace la importación **idempotente**: subir dos veces
+el mismo `PLANO` da el mismo resultado. La alternativa, mandar solo lo nuevo, obliga a la
+aplicación a acertar qué falta, y una semana sin subir dejaría un hueco permanente.
+
+`server/informatica-import-dedup.test.ts` ya cubre la deduplicación en el lado de la
+aplicación; hay que confirmar que aplica también a las secciones históricas nuevas.
+
 En AV Weekly se copia y se pega en `Informática > Texto plano (Drive)`, igual que ya se
 hace con AGA.
 
 ---
 
-## 7. Pestaña Comprobación
+## 9. Pestaña Comprobación
 
 Se escribe en cada ejecución. Sirve para detectar una semana mala antes de presentarla.
 
 - Fichero encontrado, fecha de modificación y filas leídas, por cada uno de los cinco.
-- Filas escritas en cada pestaña destino, y cuántas se han descartado por duplicado.
-- `#N/A` nuevos en los maestros, con el valor concreto que no se ha encontrado.
-- IMACS presentes en la hoja pero no en el fichero, es decir, los que entraron por correo.
+- Filas escritas en cada pestaña destino, contrastadas con las leídas: tienen que coincidir.
+- Técnicos que no están en `Y:Z` y direcciones que no están en `X:Z`, con el valor concreto.
+- Aviso si el fichero IMAC trae menos filas que la semana anterior.
 - Marcadores de periodo aplicados, en formato legible.
-- Totales clave contrastados: peticiones en vuelo, liberadas, gestionadas, work orders del
-  mes, citas de la semana, incidencias resueltas del mes.
+- Si se ha ejecutado el cierre de mes, qué celdas se han congelado.
+- Totales clave: peticiones en vuelo, liberadas, gestionadas, work orders del mes, citas de
+  la semana, incidencias resueltas del mes.
 
 ---
 
-## 8. Correcciones a fórmulas existentes
+## 10. Correcciones a fórmulas existentes
 
 Dentro de este trabajo, porque son defectos que producen cifras mal:
 
@@ -320,41 +393,49 @@ Dentro de este trabajo, porque son defectos que producen cifras mal:
    referencia perdida hace que la celda no cuente lo que debe, así que el dato de DAAS
    APPLE en gestionadas sale mal hoy. Se repara apuntando a `G1`, que es lo que hacen las
    celdas equivalentes `F5`, `F6` y `G5`.
-2. **`COUNTIFS` sobre columnas enteras.** Todas las de `2.1.6 (Informe)`, `Hoja 18` y
+2. **`2.1.2 (Datos)` fila `Total`.** Hoy es un número pegado. Pasa a ser `SUM` de las
+   categorías, de modo que un desajuste entre el template y las filas cargadas se vea en
+   vez de quedar tapado.
+3. **`COUNTIFS` sobre columnas enteras.** Todas las de `2.1.6 (Informe)`, `Hoja 18` y
    `Hoja 19` barren `$P:$P`, `$I:$I`, `$B:$B` completas. Se acotan al número de filas
    realmente escrito, que el script conoce.
 
 ---
 
-## 9. Verificación
+## 11. Verificación
 
-- `verificar-local.mjs` corre la agregación contra los ficheros de
-  `Documentación/Informática/` y contra los seis de la carpeta local de MIX, y compara los
-  totales resultantes con los que hoy muestra el libro limpio. Una diferencia es un fallo
-  del script o un defecto del libro; hay que decidir cuál antes de seguir.
+- `verificar-local.mjs` corre la agregación contra los seis ficheros del 2026-08-24 y
+  compara los totales resultantes con los que hoy muestra el libro limpio. Una diferencia
+  es un fallo del script o un defecto del libro; hay que decidir cuál antes de seguir.
 - Tests `vitest` para `server/parseInformaticaTexto.ts`: cabecera, cada sección, secciones
-  ausentes, líneas mal formadas, y el caso de un `PLANO` completo.
-- Test de las conversiones de fecha: los tres formatos de entrada del apartado 4, incluido
-  el cambio de día que provoca una marca horaria de madrugada.
+  ausentes, líneas mal formadas, y un `PLANO` completo.
+- Test de las conversiones de fecha del apartado 4, incluido el cambio de día que provoca
+  una marca horaria de madrugada.
+- Test del cierre de mes: ejecutarlo dos veces seguidas no puede duplicar la fila ni
+  desplazar la ventana dos posiciones.
+- Test de idempotencia de la importación: subir el mismo `PLANO` dos veces deja la base de
+  datos igual.
 - `pnpm run check` y `pnpm run build`.
 
 Criterio de aceptación: ejecutar el script sobre una copia del libro con los ficheros del
-2026-08-24 tiene que reproducir las cifras que hoy muestran las pestañas `(Informe)`, salvo
-en `2.2.1 (Informe)` fila 6, donde debe corregir el `#REF!`.
+2026-08-24 reproduce las cifras que hoy muestran las pestañas `(Informe)`, salvo en
+`2.2.1 (Informe)` fila 6, donde debe corregir el `#REF!`.
 
 ---
 
-## 10. Fuera de alcance
+## 12. Fuera de alcance
 
-Propuestas de mejora identificadas al analizar el libro, que no entran en este trabajo:
+**Ignorado por decisión expresa**
+
+- `2.1.7 Volumetria de WO anuales` y `2.1.8 Volumetria de incidencias` están vacías. No se
+  tocan ni se rellenan.
 
 **Después**
 
 - `2.1.5 (Informe)!J33` usa `AVERAGE.WEIGHTED`, que solo existe en Google Sheets. Abierto
   en Excel el libro da error y arrastra el valor cacheado. Se sustituye por `SUMPRODUCT`.
 - Los maestros están dispersos y escondidos dentro de hojas de datos: `Hoja 17!X:Z`,
-  `2.1.6 Datos!Y:Z`, `2.1.6 Datos!AB`. Unificarlos en una pestaña `Maestros` los haría
-  mantenibles.
+  `2.1.6 Datos!Y:Z`, `2.1.6 Datos!AB`. Unificarlos en una pestaña `Maestros`.
 - `Hoja 13` a `Hoja 19` son nombres sin significado que guardan datos históricos y tablas
   del informe. Renombrarlas.
 
@@ -366,14 +447,12 @@ Propuestas de mejora identificadas al analizar el libro, que no entran en este t
 
 ---
 
-## 11. Riesgos y decisiones pendientes
+## 13. Pendientes
 
 | Asunto | Estado |
 |---|---|
-| Política de acumulación de `Hoja 17` y `2.3.1` | deducida de los conteos, **pendiente de confirmar** |
-| Fecha de arranque de cada acumulado | pendiente |
-| Qué hacer si el fichero IMAC trae una pestaña de año que no existe en el libro | pendiente |
-| Origen de los datos de WASP, RENOVE y series anuales | sin origen conocido, se sigue pidiendo |
-
-Mientras la primera fila de esta tabla siga pendiente, el script escribe sobre una copia
-del libro, nunca sobre el original.
+| `Hoja 19` referencia una pestaña `'2025'` que no existe en la copia limpia. El `IFERROR` lo tapa devolviendo `"0"`, así que diciembre 2025 y enero 2026 de esa tabla salen a cero sin avisar | pendiente de mirar en el libro bueno |
+| Qué hacer si el fichero IMAC trae una pestaña de año que el libro no tiene | pendiente |
+| Quién mantiene los maestros `X:Z`, `Y:Z` y `AB`, y cada cuánto | pendiente, riesgo bajo: el script no los escribe, solo avisa de los valores que no encuentra |
+| Origen de los datos de WASP, RENOVE y las series anuales de peticiones y citas | sin origen conocido, se sigue pidiendo |
+| Bloque `2.1.6 (Informe)` filas 45-49 (Teclado / Ratón / Desinstalar SW): a qué página del informe sale | pendiente, no bloquea |
