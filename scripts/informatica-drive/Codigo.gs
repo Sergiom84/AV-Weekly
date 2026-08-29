@@ -382,6 +382,31 @@ function discardTemporary(handle) {
 }
 
 /**
+ * A conversion left behind by a run that never reached its own cleanup.
+ *
+ * The normal path trashes every copy in a `finally`, and that holds for a run
+ * that fails. It does not hold for one that is cancelled or killed on timeout:
+ * the runtime stops without unwinding, and the copies stay in the input folder
+ * for good, because the classifier only knew how to skip them. Eight of them
+ * accumulated from the runs of 2026-08-28, two being 3.6 MB copies of the
+ * template.
+ *
+ * Only old ones are swept. A copy created minutes ago may belong to a run that
+ * is still going, and trashing it would break that run instead of tidying up
+ * after this one.
+ */
+var ORPHAN_TEMPORARY_AGE_MS = 60 * 60 * 1000;
+
+function discardOrphanTemporary(file, orphans) {
+  if (new Date().getTime() - file.getLastUpdated().getTime() < ORPHAN_TEMPORARY_AGE_MS) {
+    return;
+  }
+
+  file.setTrashed(true);
+  orphans.push(file.getName());
+}
+
+/**
  * Every tab of a workbook as { name, grid }.
  *
  * Values are read raw, so dates stay Date objects and padded codes stay
@@ -544,6 +569,7 @@ function classifyFolder(folderId) {
   var duplicated = [];
   var nombres = [];
   var modificados = [];
+  var orphans = [];
 
   try {
     while (files.hasNext()) {
@@ -554,7 +580,12 @@ function classifyFolder(folderId) {
         continue;
       }
 
-      if (file.getName().indexOf(TEMPORARY_PREFIX) === 0 || file.getId() === book().getId()) {
+      if (file.getId() === book().getId()) {
+        continue;
+      }
+
+      if (file.getName().indexOf(TEMPORARY_PREFIX) === 0) {
+        discardOrphanTemporary(file, orphans);
         continue;
       }
 
@@ -631,7 +662,8 @@ function classifyFolder(folderId) {
     skipped: skipped,
     duplicated: duplicated,
     nombres: nombres,
-    modificados: modificados
+    modificados: modificados,
+    orphans: orphans
   };
 }
 
@@ -2829,6 +2861,7 @@ function registrarArchivosLeidos(clasificacion, informe) {
   ];
   informe.duplicados = clasificacion.duplicated || [];
   informe.ignorados = clasificacion.skipped || [];
+  informe.huerfanos = clasificacion.orphans || [];
 }
 
 function sumarFilas(rowsValue, predicate) {
@@ -2883,6 +2916,11 @@ function detalleArchivos(informe) {
   }
   if ((informe.ignorados || []).length > 0) {
     details.push('Cabecera no reconocida: ' + informe.ignorados.join(', '));
+  }
+  if ((informe.huerfanos || []).length > 0) {
+    details.push(
+      'Conversiones huérfanas enviadas a la papelera: ' + informe.huerfanos.join(', ')
+    );
   }
 
   return details.length > 0 ? details.join('; ') : 'Sin datos de archivos en esta ejecución.';
