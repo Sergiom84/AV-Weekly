@@ -1,21 +1,13 @@
+import CategoryBarChart, {
+  type CategorySeries,
+} from "@/components/deck/CategoryBarChart";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 import {
   defaultMonthWindow,
   resolveMonthSelection,
 } from "@shared/deck/core";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { monthLabel, seriesColor, sumBy, topEntries, uniqueSorted } from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -42,6 +34,11 @@ const WINDOW = 14;
  * Series are ranked by their total over the window rather than by the last
  * month, so the in-flight month — cut at the extraction date, and therefore a
  * fraction of a real one — cannot reorder the legend or swap a series out.
+ *
+ * Drawn as grouped columns with `CategoryBarChart`, the same component the two
+ * 2.1.1 slides use. The reference is a line chart, but inside this deck the
+ * block reads as one chart repeated with different series, and a lone line
+ * chart in the middle of it looks like a different report.
  */
 export default function Top5IncidenciasPage({
   page,
@@ -78,7 +75,11 @@ export default function Top5IncidenciasPage({
       ...Object.fromEntries(top.map(entry => [entry.label, values.get(entry.label) ?? 0])),
     };
   });
-  const animate = usePresentationAnimation();
+  const series: CategorySeries[] = top.map((entry, index) => ({
+    key: entry.label,
+    label: entry.label,
+    color: seriesColor(index),
+  }));
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
@@ -101,54 +102,16 @@ export default function Top5IncidenciasPage({
       )}
 
       <section
-        className="min-h-0 flex-1 border border-border/70 px-[0.7cqi] py-[0.5cqi]"
-        role="img"
+        className="flex min-h-0 flex-1 flex-col"
         aria-label="Evolución mensual de las cinco principales categorías de incidencias"
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 24, right: 16, bottom: 6, left: 0 }}>
-            <CartesianGrid stroke="var(--border)" vertical={false} />
-            <XAxis
-              dataKey="mes"
-              tickLine={false}
-              stroke="var(--border)"
-              tick={{ fill: "var(--muted-foreground)", fontSize: "1cqi" }}
-            />
-            <YAxis
-              tickLine={false}
-              stroke="var(--border)"
-              tick={{ fill: "var(--muted-foreground)", fontSize: "1cqi" }}
-              width={36}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "var(--popover)",
-                color: "var(--popover-foreground)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-sm)",
-                fontSize: "1cqi",
-              }}
-            />
-            <Legend
-              verticalAlign="top"
-              wrapperStyle={{ fontFamily: "JetBrains Mono, monospace", fontSize: "1cqi" }}
-            />
-            {top.map((entry, index) => (
-              <Line
-                key={entry.label}
-                type="linear"
-                dataKey={entry.label}
-                name={entry.label}
-                stroke={seriesColor(index)}
-                strokeWidth={2}
-                dot={{ r: 3, fill: seriesColor(index) }}
-                activeDot={{ r: 4 }}
-                isAnimationActive={animate}
-                animationDuration={700}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
+        <CategoryBarChart
+          categoryKey="mes"
+          series={series}
+          data={data}
+          fitGroupedValueLabels
+          centerGroupedValueLabels
+        />
       </section>
     </PageShell>
   );
