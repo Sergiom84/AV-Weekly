@@ -16,7 +16,7 @@ import {
   seriesColor,
   uniqueSorted,
 } from "../aggregate";
-import { smartTechSite } from "../sources";
+import { buildingDirectory, smartTechSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface CitasSemanalPageProps extends InformaticaPageProps {
@@ -54,12 +54,34 @@ export default function CitasSemanalPage({
     uniqueSorted(current.map(row => row.tipo)),
     TYPES
   );
+  // Sites come from the master, so the table keeps its nineteen rows whether or
+  // not a point saw anyone this week, and each one is named the way the report
+  // names it. A point the extract reports and the master does not map is kept
+  // and pushed to the end: dropping it would hide real appointments, and
+  // merging it into a mapped site would misattribute them.
+  const directory = buildingDirectory(
+    dataset.edificios ?? [],
+    row => row.aliasSmartTech
+  );
+  const siteOf = (building: string) =>
+    directory.nameOf(building) ?? smartTechSite(building);
+  const unmapped = uniqueSorted(
+    current
+      .filter(row => directory.nameOf(row.edificio) === null)
+      .map(row => siteOf(row.edificio))
+  );
+  const rowOrder = [...directory.sites, ...unmapped];
   const matrix = pivot(
     current,
-    row => smartTechSite(row.edificio),
+    row => siteOf(row.edificio),
     row => row.tipo,
     row => row.citas,
-    { columns }
+    { columns, rowOrder }
+  );
+  const emptySite = { label: "", values: columns.map(() => 0) };
+  const siteRows = rowOrder.map(
+    site =>
+      matrix.rows.find(row => row.label === site) ?? { ...emptySite, label: site }
   );
 
   const totalOf = (type: string) =>
@@ -109,7 +131,11 @@ export default function CitasSemanalPage({
           <MatrixTable
             rowHeader="SmartTech"
             columns={columns}
-            rows={matrix.rows}
+            rows={siteRows}
+            // A site with no appointments this week reports a zero, not a gap:
+            // every row of this table is counted, so an empty cell would read
+            // as "not measured" for a point that was simply quiet.
+            formatValue={value => String(value)}
             variant="report"
           />
         </div>

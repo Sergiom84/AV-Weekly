@@ -1,5 +1,6 @@
 import type {
   InformaticaComparativaRow,
+  InformaticaEdificioRow,
   InformaticaHicRow,
 } from "@shared/modules/informatica/types";
 
@@ -161,6 +162,59 @@ export function hicScopeLabel(scope: string, scopes: HicScopes): string {
   }
 
   return cleanSheetName(scope);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Building master                                                             */
+/* -------------------------------------------------------------------------- */
+
+export interface BuildingDirectory {
+  /** Canonical name of a raw alias, or null when the master does not map it. */
+  nameOf: (alias: string) => string | null;
+  /** Visible sites of the master, in the order the master gives them. */
+  sites: string[];
+}
+
+/**
+ * The `Edificios` master read through one of its alias columns.
+ *
+ * Each source system names the same site differently — `Smart Tech Las Palmas,
+ * Albareda` is `Canarias`, `Smart Tech Principal AN` is `Sede - Principal` —
+ * and the master is the only place that says so. Stripping a prefix off the
+ * raw label cannot get there; it just shortens the wrong name.
+ *
+ * `sites` is the full list, not only what the extract mentions, so a site that
+ * saw no activity keeps its row instead of vanishing. Absence and zero are
+ * different answers and the table should be able to tell them apart.
+ */
+export function buildingDirectory(
+  edificios: InformaticaEdificioRow[],
+  aliasOf: (row: InformaticaEdificioRow) => string
+): BuildingDirectory {
+  const byAlias = new Map<string, string>();
+  const ordered: { name: string; orden: number }[] = [];
+
+  for (const row of edificios) {
+    const alias = aliasOf(row).trim();
+
+    if (alias === "" || !row.visible) {
+      continue;
+    }
+
+    const key = normalise(alias);
+
+    if (!byAlias.has(key)) {
+      byAlias.set(key, row.edificio);
+      ordered.push({ name: row.edificio, orden: row.orden });
+    }
+  }
+
+  ordered.sort((a, b) => a.orden - b.orden || a.name.localeCompare(b.name, "es"));
+
+  return {
+    nameOf: alias => byAlias.get(normalise(alias)) ?? null,
+    sites: ordered.map(entry => entry.name),
+  };
 }
 
 /* -------------------------------------------------------------------------- */
