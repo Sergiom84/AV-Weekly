@@ -1,19 +1,22 @@
+import CategoryBarChart, {
+  type CategorySeries,
+} from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
 import MatrixTable from "@/components/deck/MatrixTable";
-import SeriesLineChart, {
-  type LineSeries,
-} from "@/components/deck/SeriesLineChart";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
   coverageEnd,
   inWeek,
   lastClosedWeek,
+  latestOf,
   monthLabel,
+  monthsEndingAt,
   orderColumns,
   pivot,
-  reportMonths,
+  seriesColor,
   uniqueSorted,
 } from "../aggregate";
+import { smartTechSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface CitasSemanalPageProps extends InformaticaPageProps {
@@ -22,6 +25,9 @@ interface CitasSemanalPageProps extends InformaticaPageProps {
 
 /** Column order of the report: booked first, walk-up second. */
 const TYPES = ["Con Cita", "Sin Cita"];
+
+/** Months of the trailing window, the same one the rest of the deck uses. */
+const WINDOW = 14;
 
 /**
  * `2.3.1 Volumetría de Citas SmartTech Semanal`: booked versus walk-up
@@ -50,7 +56,7 @@ export default function CitasSemanalPage({
   );
   const matrix = pivot(
     current,
-    row => row.edificio,
+    row => smartTechSite(row.edificio),
     row => row.tipo,
     row => row.citas,
     { columns }
@@ -62,23 +68,26 @@ export default function CitasSemanalPage({
       .reduce((sum, row) => sum + row.citas, 0);
 
   const total = current.reduce((sum, row) => sum + row.citas, 0);
-  const months = reportMonths(dataset, rows, row => row.mes);
-  const trendSeries: LineSeries[] = columns.map((type, index) => ({
-    key: `type-${index}`,
+
+  // The trend covers whole months, including the one in flight, which is what
+  // the reference plots and what the weekly table sits next to.
+  const latestMonth = latestOf(rows, row => row.mes);
+  const months = latestMonth === null ? [] : monthsEndingAt(latestMonth, WINDOW);
+  const trendSeries: CategorySeries[] = columns.map((type, index) => ({
+    key: type,
     label: type,
-    color: index === 0 ? "var(--informe-serie-1)" : "var(--informe-serie-2)",
+    color: seriesColor(index),
   }));
   const trend = months.map(month => {
-    const entry: Record<string, string | number | null> = {
+    const entry: Record<string, string | number> = {
       mes: monthLabel(month),
     };
 
-    columns.forEach((type, index) => {
-      const value = rows
+    for (const type of columns) {
+      entry[type] = rows
         .filter(row => row.mes === month && row.tipo === type)
         .reduce((sum, row) => sum + row.citas, 0);
-      entry[`type-${index}`] = value;
-    });
+    }
 
     return entry;
   });
@@ -104,11 +113,13 @@ export default function CitasSemanalPage({
             variant="report"
           />
         </div>
-        <div className="min-h-0">
-          <SeriesLineChart
+        <div className="flex min-h-0 flex-col">
+          <CategoryBarChart
             categoryKey="mes"
             series={trendSeries}
             data={trend}
+            fitGroupedValueLabels
+            centerGroupedValueLabels
           />
         </div>
       </div>

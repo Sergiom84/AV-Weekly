@@ -164,6 +164,27 @@ export function hicScopeLabel(scope: string, scopes: HicScopes): string {
 }
 
 /* -------------------------------------------------------------------------- */
+/* SmartTech points                                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Name of a SmartTech point without the prefix every one of them carries.
+ *
+ * The extract labels each point `Smart Tech <sede>`, so a table of nothing but
+ * SmartTech points repeats those two words on every row and pushes the part
+ * that identifies it out of the column. The reference prints the site alone,
+ * under a `SmartTech` header that already says what the column is.
+ *
+ * Only a leading prefix is removed, and only when something is left after it: a
+ * point named just `Smart Tech` keeps its name rather than becoming blank.
+ */
+export function smartTechSite(building: string): string {
+  const site = building.replace(/^\s*smart\s*tech\s+/i, "").trim();
+
+  return site === "" ? building : site;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Work order scope                                                            */
 /* -------------------------------------------------------------------------- */
 
