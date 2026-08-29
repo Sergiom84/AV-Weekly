@@ -260,6 +260,33 @@ function headerIndex(row) {
   return columns;
 }
 
+/**
+ * Header of a table whose title block spans more than one row, flattened into
+ * one row by taking the first non-empty cell of each column.
+ *
+ * A merged header cell is materialised in every row it covers when the workbook
+ * is read as XLSX, but Google keeps the value only in the top row of the merge.
+ * A reader that trusts a single row therefore finds the header locally and
+ * nothing at all after the conversion — and finds it silently, because a header
+ * that is not there just skips its column instead of failing. Both the 2-2
+ * pivot and the two SLA tabs are shaped this way.
+ */
+function mergedHeaderRow(grid, lastRow) {
+  var header = [];
+
+  for (var rowIndex = 0; rowIndex <= lastRow; rowIndex += 1) {
+    var row = grid[rowIndex] || [];
+
+    for (var column = 0; column < row.length; column += 1) {
+      if (text(header[column]) === '') {
+        header[column] = row[column];
+      }
+    }
+  }
+
+  return header;
+}
+
 /** True when every required column is present in the header index. */
 function hasColumns(columns, required) {
   for (var index = 0; index < required.length; index += 1) {
@@ -1508,7 +1535,12 @@ function topFiveSource(grids) {
     var second = grid[1] || [];
 
     if (monthCellCount(first) >= 2 && normalize(second[0]) === 'CATEGORIZATION TIER 1') {
-      return { name: grids[index].name, grid: grid, headerRow: 1, columns: headerIndex(second) };
+      return {
+        name: grids[index].name,
+        grid: grid,
+        headerRow: 1,
+        columns: headerIndex(mergedHeaderRow(grid, 1)),
+      };
     }
   }
 
@@ -2390,7 +2422,19 @@ function agregarHic(found, hic) {
   }
 
   var pivot = topFiveSource(grids);
-  var header = pivot.grid[pivot.headerRow] || [];
+  var header = mergedHeaderRow(pivot.grid, pivot.headerRow);
+  var months = 0;
+
+  for (var probe = 0; probe < header.length; probe += 1) {
+    if (MONTH_TEXT.test(text(header[probe]))) months += 1;
+  }
+
+  // Finding the tab and then reading no month out of it is the failure this
+  // whole helper exists to prevent, so it stops instead of publishing a HIC
+  // section with the total series and no breakdown behind it.
+  if (months === 0) {
+    throw new Error('El bloque 2-2 no expone ningún mes en su cabecera.');
+  }
 
   for (var categoryRow = pivot.headerRow + 1; categoryRow < pivot.grid.length; categoryRow += 1) {
     var category = text((pivot.grid[categoryRow] || [])[0]);
@@ -2463,12 +2507,19 @@ function agregarSlas(found, slas) {
 
     if (headerAt < 0) continue;
 
-    var headers = headerIndex(grid[headerAt] || []);
+    var headers = headerIndex(mergedHeaderRow(grid, headerAt));
     var met = headers[normalize('Cumplido')];
     var missed = headers[normalize('Incumplido')];
     var total = headers[normalize('Total')];
 
-    if (met === undefined || missed === undefined) continue;
+    // The tab named itself as an SLA block, so missing columns are a defect of
+    // this reader and not an absent section. Failing here is what stops the
+    // PLANO from silently shipping without SLAs.
+    if (met === undefined || missed === undefined) {
+      throw new Error(
+        'La pestaña ' + grids[gridIndex].name + ' declara SVTTitle pero no expone Cumplido e Incumplido.'
+      );
+    }
 
     var month = normalize(grids[gridIndex].name).indexOf('MES AN') >= 0 ? shiftMonthLabel(reference, -1) : reference;
 

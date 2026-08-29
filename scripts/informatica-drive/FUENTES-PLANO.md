@@ -19,3 +19,28 @@ reconoce las tablas por cabeceras y no por el nombre de fichero.
 El preámbulo del TXT siempre declara `asOfDate`, `semana` y `alcance completo`.
 Las filas conservan año dentro de `mes`, y las secciones semanales conservan
 además `fecha` y `semana`; las anuales transportan `anio` y `mes`.
+
+## Cabeceras de dos filas
+
+El pivote `2-2` y las dos pestañas de SLAs tienen la cabecera repartida en dos
+filas mediante celdas combinadas. Ese bloque **no se lee igual en las dos
+formas del mismo fichero**:
+
+| | XLSX leído en local | Google Sheets tras convertir |
+|---|---|---|
+| `2-2`, fila 1 | `"", "Fecha", 2025/05, 2025/06…` | igual |
+| `2-2`, fila 2 | `"Categorization Tier 1", "", 2025/05, 2025/06…` | `"Categorization Tier 1"` y el resto vacío |
+| `12-11`, fila 1 | `"", "MeasurementStatus", "Cumplido", "Incumplido", "Total"` | igual |
+| `12-11`, fila 2 | `"SVTTitle", "", "Cumplido", "Incumplido", "Total"` | `"SVTTitle"` y el resto vacío |
+
+Al leer el XLSX, una celda combinada aparece materializada en todas las filas
+que abarca. Google conserva el valor sólo en la fila superior de la
+combinación. Un lector que se fíe de una sola fila encuentra la cabecera en la
+verificación local y no encuentra nada en producción, además en silencio,
+porque una columna ausente se salta en lugar de fallar.
+
+Por eso `mergedHeaderRow` aplana el bloque tomando la primera celda no vacía de
+cada columna, y `agregarHic` y `agregarSlas` lanzan error si la pestaña se
+identifica pero sus columnas no aparecen. Esto costó dos ejecuciones vivas que
+terminaron correctamente publicando un PLANO sin pivote de categorías y sin
+`SLAS`: cualquier lectura nueva de cabecera debe usar el mismo helper.
