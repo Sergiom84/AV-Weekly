@@ -235,13 +235,14 @@ function toRows(units) {
 }
 
 function parseArgs(argv) {
-  const options = { xlsx: null, db: false, salida: null, anexar: null };
+  const options = { xlsx: null, db: false, salida: null, anexar: null, semana: null };
 
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--xlsx") options.xlsx = argv[i + 1] ?? null;
     if (argv[i] === "--db") options.db = true;
     if (argv[i] === "--salida") options.salida = argv[i + 1] ?? null;
     if (argv[i] === "--anexar") options.anexar = argv[i + 1] ?? null;
+    if (argv[i] === "--semana") options.semana = argv[i + 1] ?? null;
   }
 
   return options;
@@ -252,7 +253,7 @@ async function main() {
 
   if (!options.xlsx && !options.db) {
     console.error(
-      "Uso: exportar-renove.mjs (--xlsx <libro> | --db) [--salida <fichero>] [--anexar <plano.txt>]"
+      "Uso: exportar-renove.mjs (--xlsx <libro> | --db) [--salida <fichero>] [--semana <YYYY-MM-DD>] [--anexar <plano.txt>]"
     );
     process.exit(1);
   }
@@ -280,13 +281,26 @@ async function main() {
     return;
   }
 
+  // With a week, the block is wrapped into a document AV Weekly accepts on its
+  // own. It deliberately omits `alcance completo`: this text carries one
+  // section, so it has to merge into the stored dataset instead of replacing
+  // it and wiping every section the Drive run wrote.
+  const document = options.semana
+    ? [
+        "INFORMATICA TEXTO PLANO v1",
+        `semana\t${options.semana}`,
+        `asOfDate\t${options.semana}`,
+        block,
+      ].join("\n")
+    : block;
+
   if (options.salida) {
-    writeFileSync(options.salida, `${block}\n`, "utf8");
+    writeFileSync(options.salida, `${document}\n`, "utf8");
     console.error(`Escrito ${options.salida}`);
     return;
   }
 
-  process.stdout.write(`${block}\n`);
+  process.stdout.write(`${document}\n`);
 }
 
 main().catch((error) => {
