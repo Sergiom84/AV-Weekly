@@ -4,7 +4,7 @@ import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
   coverageEnd,
   inWeek,
-  lastClosedWeek,
+  snapshotWeek,
   orderColumns,
   pivot,
   uniqueSorted,
@@ -17,6 +17,12 @@ interface PeticionesPageProps extends InformaticaPageProps {
 
 /** Status order of the report, from open backlog to closed. */
 const STATES = ["En vuelo", "Liberadas", "Gestionadas"];
+
+/**
+ * Origin order of the reference tables. On Site leads because it is the bulk of
+ * the service; the other three are the contracts carved out of it.
+ */
+const ORIGINS = ["On Site", "BBVA Tech", "RENOVE", "DAAS APPLE"];
 
 /** Rows of the top-10 table, highest first. */
 const TOP_PRODUCTS = 10;
@@ -41,10 +47,18 @@ export default function PeticionesPage({
 }: PeticionesPageProps) {
   const rows = dataset.peticiones ?? [];
   const cutoff = coverageEnd(dataset);
-  const window = lastClosedWeek(rows, row => row.fecha, cutoff);
+  const window = snapshotWeek(rows, row => row.fecha, cutoff);
   const current = rows.filter(row => inWeek(row.fecha, window));
 
+  // The reference reads status down the side and origin across the top. Keeping
+  // that orientation matters beyond taste: the row that is read out loud is the
+  // status, and the totals column the slide is checked against is the one that
+  // adds up the origins of a status.
   const columns = orderColumns(
+    uniqueSorted(current.map(row => row.origen)),
+    ORIGINS
+  );
+  const rowOrder = orderColumns(
     uniqueSorted(current.map(row => row.estado)),
     STATES
   );
@@ -52,10 +66,10 @@ export default function PeticionesPage({
   const matrixFor = (entity: string) =>
     pivot(
       current.filter(row => row.entidad === entity),
-      row => row.origen,
       row => row.estado,
+      row => row.origen,
       row => row.total,
-      { columns }
+      { columns, rowOrder }
     );
 
   const entities = orderColumns(uniqueSorted(current.map(row => row.entidad)), [
@@ -64,7 +78,7 @@ export default function PeticionesPage({
   ]);
 
   const productRows = dataset.peticionesProducto ?? [];
-  const productWindow = lastClosedWeek(productRows, row => row.fecha, cutoff);
+  const productWindow = snapshotWeek(productRows, row => row.fecha, cutoff);
   const topProducts: MatrixRow[] = Array.from(
     productRows
       .filter(row => inWeek(row.fecha, productWindow))
@@ -74,13 +88,22 @@ export default function PeticionesPage({
       }, new Map<string, number>())
       .entries()
   )
-    .sort((a, b) => b[1] - a[1])
+    // Ties broken by name: two products on the same count are common here, and
+    // without it their order follows how the rows happened to arrive, so the
+    // slide reshuffles between runs that report the very same figures.
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"))
     .slice(0, TOP_PRODUCTS)
     .map(([label, total]) => ({ label, values: [total] }));
 
+  // Requests only. `Peticiones` and `Posiciones` are two counts of the same
+  // week, so adding them together reports every request twice: the headline for
+  // the reported week was 1.473 where the deck says 733.
+  const headlineEntity = entities.includes("Peticiones")
+    ? "Peticiones"
+    : entities[0];
   const totalsByState = STATES.map(state =>
     current
-      .filter(row => row.estado === state)
+      .filter(row => row.estado === state && row.entidad === headlineEntity)
       .reduce((sum, row) => sum + row.total, 0)
   );
 
@@ -94,9 +117,18 @@ export default function PeticionesPage({
                 {entity}
               </p>
               <MatrixTable
-                rowHeader="Origen"
+                rowHeader="Estado"
                 columns={columns}
                 rows={matrixFor(entity).rows}
+                // No column totals: the states are not parts of a whole. "En
+                // vuelo" is the backlog standing on the extraction day, while
+                // the other two count what moved during that week, so adding
+                // the three down a column produces a number of nothing.
+                columnTotals={false}
+                // The table hides zeros by default, which reads as "not
+                // measured" on a grid this small and dense. Here every cell is
+                // counted, so a zero is a result and the reference prints it.
+                formatValue={value => String(value)}
                 variant="report"
               />
             </div>

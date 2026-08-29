@@ -198,6 +198,44 @@ export function lastClosedWeek<T>(
   return { start, end: addDays(start, 6) };
 }
 
+/**
+ * Week a snapshot belongs to: the one containing its most recent row.
+ *
+ * `lastClosedWeek` only accepts a week once it reaches Friday, which is right
+ * for rows that accumulate through the week and wrong for a backlog counted in
+ * one go. The requests snapshot carries a single date, the Monday the extract
+ * was taken, so the closed-week rule steps back to the previous week and finds
+ * nothing at all — the page renders zeros instead of the figures the report is
+ * about.
+ */
+export function snapshotWeek<T>(
+  rows: T[],
+  dateOf: (row: T) => InformaticaDateCell,
+  cutoff: string | null
+): WeekWindow | null {
+  let last: string | null = null;
+
+  for (const row of rows) {
+    const day = isoDay(dateOf(row));
+
+    if (day === null || (cutoff !== null && day > cutoff)) {
+      continue;
+    }
+
+    if (last === null || day > last) {
+      last = day;
+    }
+  }
+
+  if (last === null) {
+    return null;
+  }
+
+  const start = mondayOf(last);
+
+  return { start, end: addDays(start, 6) };
+}
+
 /** True when a dated row falls inside the window. */
 export function inWeek(
   cell: InformaticaDateCell,
