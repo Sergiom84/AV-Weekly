@@ -75,7 +75,7 @@ function lastDayOf(month: string): string {
  * hand-edited workbook carries ISO text, so both are accepted — the same
  * contract `InformaticaDateCell` declares.
  */
-function isoDay(cell: InformaticaDateCell): string | null {
+export function isoDay(cell: InformaticaDateCell): string | null {
   if (typeof cell === "number" && Number.isFinite(cell)) {
     // Excel's epoch is 1899-12-30: day 1 is 1900-01-01 and the 1900 leap bug
     // is already absorbed by the two-day offset.

@@ -139,6 +139,13 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
     sections: ["imacs"],
   },
   { id: "wasp", kind: "itWasp", title: "2.6 WASP", sections: ["wasp"] },
+  { id: "renove", kind: "itRenove", title: "2.7 Renove", sections: ["renove"] },
+  {
+    id: "renove-acumulado",
+    kind: "itRenove",
+    title: "2.7.1 Renove",
+    sections: ["renove"],
+  },
 ];
 
 /** Sections a page needs, by page id. Empty for the pages with no dataset. */
@@ -257,20 +264,12 @@ export function mergeInformaticaDeckTemplate(
   const reference = createDefaultInformaticaDeck().pages;
   const kinds = new Map(reference.map((page) => [page.id, page.kind]));
 
-  // Renove is intentionally outside the active presentation until a source is
-  // verified. Its types, parser support and historical data remain intact.
-  const retiredIds = new Set(["renove", "renove-acumulado"]);
-
   // A page whose spec changed kind — a placeholder promoted to a data page, or
   // an incident page re-pointed at the `hic`/`comparativas` sections — keeps its
   // stored id, so a deck saved before the change carries the old kind and would
   // render the old page forever. Only the kind is realigned; everything the user
   // wrote or moved is theirs, not the template's.
   const pages = deck.pages.flatMap((page) => {
-    if (retiredIds.has(page.id)) {
-      return [];
-    }
-
     const kind = kinds.get(page.id);
 
     // Adopt the new title only while the stored page still has the old seeded

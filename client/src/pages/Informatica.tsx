@@ -41,6 +41,8 @@ import Top5IncidenciasPage from "@/modules/informatica/pages/Top5IncidenciasPage
 import TopTenIncidenciasPage from "@/modules/informatica/pages/TopTenIncidenciasPage";
 import PeticionesAnualPage from "@/modules/informatica/pages/PeticionesAnualPage";
 import PeticionesPage from "@/modules/informatica/pages/PeticionesPage";
+import RenoveAcumuladoPage from "@/modules/informatica/pages/RenoveAcumuladoPage";
+import RenoveSemanalPage from "@/modules/informatica/pages/RenoveSemanalPage";
 import WorkOrdersAnualPage from "@/modules/informatica/pages/WorkOrdersAnualPage";
 import WorkOrdersPage from "@/modules/informatica/pages/WorkOrdersPage";
 import type { InformaticaPageProps } from "@/modules/informatica/pages/PageShell";
@@ -74,6 +76,8 @@ const DATA_PAGES: Record<
   "citas-anual": CitasAnualPage,
   "imacs-tablas": ImacsTablePage,
   "imacs-grafico": ImacsChartPage,
+  renove: RenoveSemanalPage,
+  "renove-acumulado": RenoveAcumuladoPage,
 };
 
 function scrollToPage(pageId: string) {

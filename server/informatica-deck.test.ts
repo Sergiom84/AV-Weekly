@@ -50,15 +50,34 @@ function legacyDeck(title = OLD_TITLE): InformaticaDeckState {
 }
 
 describe("mergeInformaticaDeckTemplate", () => {
-  it("removes Renove without losing the restored 2.1.1 or manual pages", () => {
+  /**
+   * Renove was held out of the deck while its source was unidentified. Now that
+   * the workbook behind it is known, a deck stored during that period keeps the
+   * two pages it already had rather than having them removed and re-seeded at
+   * the end, which would lose wherever the editor had put them.
+   */
+  it("keeps Renove, the restored 2.1.1 and the manual pages", () => {
     const merged = mergeInformaticaDeckTemplate(legacyDeck());
 
     expect(merged.pages.some(page => page.id === "volumetria-incidencias")).toBe(true);
-    expect(merged.pages.some(page => page.id === "renove")).toBe(false);
-    expect(merged.pages.some(page => page.id === "renove-acumulado")).toBe(false);
+    expect(merged.pages.some(page => page.id === "renove")).toBe(true);
+    expect(merged.pages.some(page => page.id === "renove-acumulado")).toBe(true);
     expect(merged.pages.find(page => page.id === "manual-follow-up")?.text).toEqual(
       { title: "Seguimiento manual", subtitle: "" }
     );
+  });
+
+  /** A deck stored before the pages existed gets them back from the template. */
+  it("seeds Renove into a deck that never had it", () => {
+    const deck = legacyDeck();
+    deck.pages = deck.pages.filter(
+      page => page.id !== "renove" && page.id !== "renove-acumulado"
+    );
+
+    const merged = mergeInformaticaDeckTemplate(deck);
+
+    expect(merged.pages.some(page => page.id === "renove")).toBe(true);
+    expect(merged.pages.some(page => page.id === "renove-acumulado")).toBe(true);
   });
 
   it("migrates the exact old seeded title on the retained slide", () => {
