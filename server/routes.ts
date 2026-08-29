@@ -22,6 +22,7 @@ import type {
   BuildingLocationImportReport,
   InformaticaDataset,
   InformaticaDeckState,
+  InformaticaHistoricoRow,
   InformaticaPayload,
 } from "../shared/modules/informatica/types.ts";
 import {
@@ -652,18 +653,43 @@ async function readBuildingLocationMaster(): Promise<BuildingLocationResolver> {
   );
 }
 
+/**
+ * Frozen monthly series, read from their own table.
+ *
+ * Never merged into `informatica_dataset` on the way in: an upload with
+ * complete scope replaces that row wholesale, so history stored there would
+ * survive exactly until the next weekly import.
+ */
+async function readInformaticaHistorico(): Promise<InformaticaHistoricoRow[]> {
+  const result = await client.execute(
+    "SELECT serie, mes, total FROM informatica_historico ORDER BY serie, mes"
+  );
+
+  return result.rows.map((row) => ({
+    serie: String(row.serie ?? ""),
+    mes: String(row.mes ?? ""),
+    total: Number(row.total ?? 0),
+  }));
+}
+
 async function buildInformaticaPayload(): Promise<InformaticaResponse> {
-  const [deck, dataset, buildings] = await Promise.all([
+  const [deck, dataset, buildings, historico] = await Promise.all([
     readStoredInformaticaDeck(),
     readStoredInformaticaDataset(),
     readBuildingLocationMaster(),
+    readInformaticaHistorico(),
   ]);
 
   const data = dataset
     ? normalizeInformaticaBuildingLocations(dataset, buildings).dataset
     : emptyInformaticaDataset();
 
-  return { deck: deck ?? createDefaultInformaticaDeck(), data };
+  return {
+    deck: deck ?? createDefaultInformaticaDeck(),
+    // An empty table stays absent rather than becoming an empty array, so a page
+    // asking "is this section present" gets the same answer as before it existed.
+    data: historico.length === 0 ? data : { ...data, historico },
+  };
 }
 
 router.get("/api/informatica", async (_req, res) => {
@@ -944,10 +970,17 @@ router.post("/api/informatica/upload/texto", upload.single("file"), async (req, 
     const normalizedExisting = existing
       ? normalizeInformaticaBuildingLocations(existing, buildings).dataset
       : null;
-    const stored = mergeInformaticaDataset(normalizedExisting, normalized, {
+    const source = {
       sourceFile: req.file?.originalname ?? meta.source ?? "PLANO (Drive)",
       uploadedAt: new Date().toISOString(),
-    });
+      asOfDate: meta.asOfDate ?? meta.week ?? null,
+    };
+    // Drive serializes one auditable complete snapshot. Reusing omitted sections
+    // from an older import would make optional data (notably WASP) look current.
+    const stored =
+      meta.scope === "completo"
+        ? { ...normalized, source }
+        : mergeInformaticaDataset(normalizedExisting, normalized, source);
 
     await client.execute({
       sql: `INSERT INTO informatica_dataset (id, data, source_file, uploaded_at)

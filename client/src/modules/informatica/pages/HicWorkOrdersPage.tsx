@@ -9,7 +9,14 @@ import {
   PieChart,
   ResponsiveContainer,
 } from "recharts";
-import { latestOf, monthLabel, monthsEndingAt, seriesColor } from "../aggregate";
+import {
+  historicoByMonth,
+  latestOf,
+  monthLabel,
+  monthsEndingAt,
+  publishedTotal,
+  seriesColor,
+} from "../aggregate";
 import { HIC_RESOLVED, isReportedWorkOrder } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -62,21 +69,33 @@ export default function HicWorkOrdersPage({
     : monthsEndingAt(currentMonth, WINDOW_MONTHS);
   const value = <T,>(rows: T[], month: string, monthOf: (row: T) => string, totalOf: (row: T) => number) =>
     rows.filter(row => monthOf(row) === month).reduce((sum, row) => sum + totalOf(row), 0);
+  const frozenIncidencias = historicoByMonth(dataset, "incidencias");
+  const frozenWorkOrders = historicoByMonth(dataset, "workOrders");
+  const incidenciasOf = (month: string) =>
+    publishedTotal(
+      month,
+      frozenIncidencias,
+      value(incidentRows, month, row => row.mes, row => row.total)
+    );
+  const workOrdersOf = (month: string) =>
+    publishedTotal(
+      month,
+      frozenWorkOrders,
+      value(workOrders, month, row => row.mes, row => row.ordenes)
+    );
   const data = months.map(month => ({
     mes: monthLabel(month),
-    incidencias: value(incidentRows, month, row => row.mes, row => row.total),
-    workOrders: value(workOrders, month, row => row.mes, row => row.ordenes),
+    incidencias: incidenciasOf(month),
+    workOrders: workOrdersOf(month),
   }));
   const series: CategorySeries[] = [
     { key: "workOrders", label: "Work Orders", color: seriesColor(0) },
     { key: "incidencias", label: "Incidencias", color: seriesColor(1) },
   ];
-  const currentIncidencias = currentMonth
-    ? value(incidentRows, currentMonth, row => row.mes, row => row.total)
-    : 0;
-  const currentWorkOrders = currentMonth
-    ? value(workOrders, currentMonth, row => row.mes, row => row.ordenes)
-    : 0;
+  // The donut reads the same resolved figures as the bars, so the headline and
+  // the axis can never report different numbers for the same month.
+  const currentIncidencias = currentMonth ? incidenciasOf(currentMonth) : 0;
+  const currentWorkOrders = currentMonth ? workOrdersOf(currentMonth) : 0;
   const currentTotal = currentIncidencias + currentWorkOrders;
   const distribution = [
     { name: "Work Orders", value: currentWorkOrders, color: seriesColor(0) },

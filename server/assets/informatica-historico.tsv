@@ -1,0 +1,87 @@
+# Series congeladas del informe de Informatica SSCC.
+#
+# Origen: SSCC- Informe Semanal limpio.xlsx, extraido el 2026-08-29.
+#   incidencias -> Hoja 13, pivote W6:AB18 (anos 2022-2026).
+#   workOrders  -> Hoja 14, tabla B3:D15, rotulada "Datos historicos - No del Template".
+#
+# Son cifras publicadas que los extractos semanales no reproducen: la serie de
+# incidencias empieza en 2022 y el template solo cubre desde mayo de 2025, y el
+# historico de Work Orders se congelo con un maestro de edificios anterior.
+# Solo los meses hasta INFORMATICA_HISTORICO_UNTIL mandan sobre el calculo.
+#
+# serie	mes	total
+incidencias	2022/01	1346
+incidencias	2022/02	1524
+incidencias	2022/03	2413
+incidencias	2022/04	1854
+incidencias	2022/05	1907
+incidencias	2022/06	2108
+incidencias	2022/07	1679
+incidencias	2022/08	1039
+incidencias	2022/09	1722
+incidencias	2022/10	1301
+incidencias	2022/11	1681
+incidencias	2022/12	1065
+incidencias	2023/01	1600
+incidencias	2023/02	1586
+incidencias	2023/03	1581
+incidencias	2023/04	1333
+incidencias	2023/05	1919
+incidencias	2023/06	1740
+incidencias	2023/07	1210
+incidencias	2023/08	770
+incidencias	2023/09	1360
+incidencias	2023/10	1475
+incidencias	2023/11	1786
+incidencias	2023/12	861
+incidencias	2024/01	861
+incidencias	2024/02	1346
+incidencias	2024/03	1146
+incidencias	2024/04	1230
+incidencias	2024/05	1199
+incidencias	2024/06	1257
+incidencias	2024/07	996
+incidencias	2024/08	589
+incidencias	2024/09	1069
+incidencias	2024/10	1196
+incidencias	2024/11	1056
+incidencias	2024/12	806
+incidencias	2025/01	1202
+incidencias	2025/02	862
+incidencias	2025/03	877
+incidencias	2025/04	875
+incidencias	2025/05	788
+incidencias	2025/06	771
+incidencias	2025/07	604
+incidencias	2025/08	434
+incidencias	2025/09	1047
+incidencias	2025/10	1090
+incidencias	2025/11	1289
+incidencias	2025/12	746
+incidencias	2026/01	792
+incidencias	2026/02	881
+incidencias	2026/03	839
+incidencias	2026/04	815
+incidencias	2026/05	829
+incidencias	2026/06	688
+incidencias	2026/07	767
+incidencias	2026/08	231
+workOrders	2025/02	1664
+workOrders	2025/03	1472
+workOrders	2025/04	1441
+workOrders	2025/05	1263
+workOrders	2025/06	941
+workOrders	2025/07	1091
+workOrders	2025/08	747
+workOrders	2025/09	1195
+workOrders	2025/10	1430
+workOrders	2025/11	1365
+workOrders	2025/12	963
+workOrders	2026/01	1086
+workOrders	2026/02	1349
+workOrders	2026/03	1187
+workOrders	2026/04	1178
+workOrders	2026/05	1179
+workOrders	2026/06	1481
+workOrders	2026/07	1095
+workOrders	2026/08	576

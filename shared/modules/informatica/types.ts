@@ -314,6 +314,41 @@ export interface InformaticaSlaRow {
   total: number;
 }
 
+/**
+ * One published figure, for one series and one month.
+ *
+ * Deliberately outside `INFORMATICA_SHEETS`: this never arrives in an uploaded
+ * workbook and never travels in the weekly text. It is loaded once into its own
+ * table — see `scripts/importar-historico-informatica.mjs` — because an import
+ * with complete scope replaces the stored dataset wholesale, and history kept
+ * inside it would last exactly until the following Monday.
+ *
+ * The row is as narrow as the source is: the clean workbook keeps these as bare
+ * monthly totals with no breakdown, and widening it here would invite code that
+ * assumes a detail nobody has.
+ */
+export interface InformaticaHistoricoRow {
+  serie: string;
+  mes: InformaticaMonth;
+  total: number;
+}
+
+/**
+ * Last month the frozen history is authoritative for.
+ *
+ * From 2025/06 on, the weekly extracts cover a full month and reproduce the
+ * published figures — the incident series matches within a couple of tickets
+ * (604 against 604 in 2025/07, 1289 against 1289 in 2025/11), so recomputing is
+ * both correct and self-maintaining. Before that the extracts are either absent
+ * or partial: 2025/05 starts on the 12th and yields 171 against the 788 that was
+ * published.
+ *
+ * The history table still carries later months, because it is the record of what
+ * was presented. This constant is what stops that record from being mistaken for
+ * the current figure.
+ */
+export const INFORMATICA_HISTORICO_UNTIL = "2025/05";
+
 /* -------------------------------------------------------------------------- */
 /* Dataset                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -338,6 +373,11 @@ export interface InformaticaDataset {
   hic?: InformaticaHicRow[];
   comparativas?: InformaticaComparativaRow[];
   slas?: InformaticaSlaRow[];
+  /**
+   * Frozen series, merged in when the payload is built. It never arrives with an
+   * upload, so a complete-scope import cannot wipe it.
+   */
+  historico?: InformaticaHistoricoRow[];
   source: DatasetSource;
   /** Sheets found in the uploaded workbook, in workbook order. */
   sheetsFound?: InformaticaSectionKey[];

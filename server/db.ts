@@ -67,6 +67,20 @@ export async function initDb() {
       uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Published monthly figures the weekly extracts cannot reproduce, kept in
+    -- their own table for the same reason as the building master: an import
+    -- with complete scope replaces informatica_dataset wholesale, so anything
+    -- stored inside it would be wiped by the next upload. Seeded once from
+    -- server/assets/informatica-historico.tsv.
+    CREATE TABLE IF NOT EXISTS informatica_historico (
+      serie TEXT NOT NULL,
+      mes TEXT NOT NULL,
+      total INTEGER NOT NULL,
+      source_file TEXT,
+      imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (serie, mes)
+    );
+
     -- Authoritative Edificio -> Ubicacion master shared by importers. Conflicts
     -- are preserved as separate rows so the resolver can refuse ambiguity.
     CREATE TABLE IF NOT EXISTS building_location_master (

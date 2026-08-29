@@ -1,5 +1,6 @@
 import { MONTH_LABELS } from "@shared/deck/core";
 import type { MatrixRow } from "@/components/deck/MatrixTable";
+import { INFORMATICA_HISTORICO_UNTIL } from "@shared/modules/informatica/types";
 import type {
   InformaticaDataset,
   InformaticaDateCell,
@@ -280,6 +281,50 @@ export function reportMonths<T>(
   const closed = reportMonth(dataset, rows, monthOf);
 
   return closed === null ? [] : months.filter(month => month <= closed);
+}
+
+/**
+ * Published total of one frozen series, by month.
+ *
+ * Empty when the history has not been loaded, which makes the caller fall back
+ * to what it can compute — a chart missing its oldest bars is a smaller failure
+ * than one that silently swaps definitions halfway through.
+ */
+export function historicoByMonth(
+  dataset: InformaticaDataset,
+  serie: string
+): Map<string, number> {
+  const totals = new Map<string, number>();
+
+  for (const row of dataset.historico ?? []) {
+    if (row.serie !== serie || row.mes === "") {
+      continue;
+    }
+
+    totals.set(row.mes, (totals.get(row.mes) ?? 0) + row.total);
+  }
+
+  return totals;
+}
+
+/**
+ * The figure to publish for a month: the frozen one while it is authoritative,
+ * the computed one from `INFORMATICA_HISTORICO_UNTIL` on.
+ *
+ * The boundary is a property of the sources, not of the chart, so every page
+ * that mixes both must resolve it the same way or two slides will disagree
+ * about the same month.
+ */
+export function publishedTotal(
+  month: string,
+  frozen: Map<string, number>,
+  computed: number
+): number {
+  if (month > INFORMATICA_HISTORICO_UNTIL) {
+    return computed;
+  }
+
+  return frozen.get(month) ?? computed;
 }
 
 /**
