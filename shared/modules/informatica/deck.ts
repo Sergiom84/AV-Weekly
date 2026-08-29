@@ -56,7 +56,9 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
     id: "top5-incidencias",
     kind: "itIncidencias",
     title: "2.1.2 Top 5 de incidencias",
-    sections: ["incidencias"],
+    // The category breakdown lives in the HIC pivot, not in `incidencias`,
+    // which reports the same months with no category tree.
+    sections: ["hic"],
   },
   {
     id: "top-ten-incidencias",

@@ -3,7 +3,7 @@ import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 import {
-  defaultMonthSelection,
+  defaultMonthWindow,
   resolveMonthSelection,
 } from "@shared/deck/core";
 import {
@@ -16,29 +16,32 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { monthLabel, reportMonth, seriesColor, sumBy, topEntries } from "../aggregate";
+import { monthLabel, seriesColor, sumBy, topEntries, uniqueSorted } from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface Top5IncidenciasPageProps extends InformaticaPageProps {
   dataset: InformaticaDataset;
 }
 
-/** Metric the ranking counts. Assigned tickets are a workload, not a volume. */
-const METRIC = "Resueltas";
-
 const TOP = 5;
 
+/** Months of the trailing window, the same one the rest of the 2.1 block uses. */
+const WINDOW = 14;
+
 /**
- * `2.1.2 Top 5 de incidencias`: the five categories that resolved most tickets
- * in the reported month, shown as their monthly evolution. The reference slide
- * is a trend, not a single-month ranking: ranking chooses the five series and
- * the complete selected range is retained on the chart.
+ * `2.1.2 Top 5 de incidencias`: the five categories with most incidents, shown
+ * as their monthly evolution. The reference slide is a trend, not a
+ * single-month ranking: the ranking only chooses which five series are drawn.
  *
- * Grouped by `Categoria`, not `Subcategoria`, because that is the level the
- * original slide ranks — five names against the two hundred-odd subcategories
- * the catalogue carries, which no top five would summarise. The subcategory
- * detail is kept as the caption of each bar so the slide still answers "of
- * what", which is the first question a category name raises.
+ * The source is the HIC pivot by `Categorization Tier 1` — the `hic` rows that
+ * carry a `categoria` — and not the `incidencias` detail. They are not
+ * interchangeable: the pivot is the signed-off monthly breakdown that
+ * reconciles against the totals of the 2.1.1 slides, while `incidencias`
+ * reports the same months without a category tree at all.
+ *
+ * Series are ranked by their total over the window rather than by the last
+ * month, so the in-flight month — cut at the extraction date, and therefore a
+ * fraction of a real one — cannot reorder the legend or swap a series out.
  */
 export default function Top5IncidenciasPage({
   page,
@@ -46,25 +49,18 @@ export default function Top5IncidenciasPage({
   onChange,
   dataset,
 }: Top5IncidenciasPageProps) {
-  const rows = (dataset.incidencias ?? []).filter(
-    row => row.metrica === METRIC
+  const rows = (dataset.hic ?? []).filter(row => row.categoria !== "");
+  const availableMonths = uniqueSorted(rows.map(row => row.mes));
+  const monthSelection = page.monthSelection ?? defaultMonthWindow(WINDOW);
+  const months = resolveMonthSelection(monthSelection, availableMonths).slice(
+    -WINDOW
   );
-  const availableMonths = Array.from(new Set(rows.map(row => row.mes))).sort();
-  const monthSelection =
-    page.monthSelection ??
-    defaultMonthSelection(
-      reportMonth(dataset, rows, row => row.mes) ??
-        availableMonths[availableMonths.length - 1] ??
-        ""
-    );
-  const months = resolveMonthSelection(monthSelection, availableMonths);
-  const month = months[months.length - 1] ?? null;
-  const current = rows.filter(row => row.mes === month);
+  const drawn = new Set(months);
 
   const byCategory = sumBy(
-    current,
+    rows.filter(row => drawn.has(row.mes)),
     row => row.categoria,
-    row => row.tickets
+    row => row.total
   );
   const allTop = topEntries(byCategory, TOP);
   const hiddenRows = page.hiddenRows ?? [];
@@ -74,7 +70,7 @@ export default function Top5IncidenciasPage({
     const values = sumBy(
       rows.filter(row => row.mes === target),
       row => row.categoria,
-      row => row.tickets
+      row => row.total
     );
 
     return {
