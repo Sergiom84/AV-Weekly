@@ -16,7 +16,12 @@
  * slide any department can add by hand — plain text plus uploaded images,
  * with no data source behind it.
  */
-export type CoreDeckPageKind = "cover" | "index" | "section" | "closing" | "notes";
+export type CoreDeckPageKind =
+  | "cover"
+  | "index"
+  | "section"
+  | "closing"
+  | "notes";
 
 export const MONTH_LABELS = [
   "Ene",
@@ -32,6 +37,32 @@ export const MONTH_LABELS = [
   "Nov",
   "Dic",
 ];
+
+/** Formats quantitative chart ticks without abbreviating thousands. */
+export function formatChartMetric(value: number): string {
+  const sign = value < 0 ? "-" : "";
+  const absolute = Math.abs(value);
+  const fractionDigits = Number.isInteger(absolute) ? 0 : 1;
+  const [whole, fraction] = absolute.toFixed(fractionDigits).split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+  return fraction ? `${sign}${grouped},${fraction}` : `${sign}${grouped}`;
+}
+
+/**
+ * Width reserved for a quantitative Y axis. Recharts otherwise defaults to a
+ * fixed narrow gutter that clips the leading digit of values such as 1.600.
+ */
+export function metricAxisWidth(values: unknown[]): number {
+  const longest = values.reduce<number>((max, value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric)
+      ? Math.max(max, formatChartMetric(numeric).length)
+      : max;
+  }, 1);
+
+  return Math.min(80, Math.max(44, longest * 11 + 12));
+}
 
 /* -------------------------------------------------------------------------- */
 /* Labeled matrices                                                            */
@@ -63,6 +94,8 @@ export type WeeklyMatrix = LabeledMatrix;
 export interface DatasetSource {
   sourceFile: string | null;
   uploadedAt: string | null;
+  /** Extraction date declared by the source, never inferred from its filename. */
+  asOfDate?: string | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -100,7 +133,7 @@ export function resolveWeekSelection(
   }
 
   if (selection.mode === "list") {
-    const wanted = selection.weeks.filter((week) => available.includes(week));
+    const wanted = selection.weeks.filter(week => available.includes(week));
     return wanted.length > 0 ? wanted : available;
   }
 
@@ -111,7 +144,68 @@ export function resolveWeekSelection(
 
   const from = Math.min(selection.from, selection.to);
   const to = Math.max(selection.from, selection.to);
-  const inRange = available.filter((week) => week >= from && week <= to);
+  const inRange = available.filter(week => week >= from && week <= to);
+  return inRange.length > 0 ? inRange : available;
+}
+
+/**
+ * Limits a calendar-shaped week axis to the latest week that was actually
+ * reported. Some workbook templates carry empty columns through week 52;
+ * those columns must not make a trailing window point into the future.
+ */
+export function reportedWeekAvailability(
+  available: number[],
+  reportedWeeks: number[]
+): number[] {
+  const lastReported = Math.max(
+    ...reportedWeeks.filter(week => available.includes(week))
+  );
+
+  return Number.isFinite(lastReported)
+    ? available.filter(week => week <= lastReported)
+    : available;
+}
+
+/** Selection of `YYYY/MM` reporting months for monthly charts and tables. */
+export interface MonthSelection {
+  mode: "range" | "list" | "window";
+  from: string;
+  to: string;
+  months: string[];
+  size?: number;
+}
+
+export function defaultMonthSelection(maxMonth: string): MonthSelection {
+  return { mode: "range", from: maxMonth, to: maxMonth, months: [] };
+}
+
+/**
+ * Default selection of a page whose chart is a monthly series.
+ *
+ * `defaultMonthSelection` pins one month, which is right for a page reporting a
+ * single period and wrong for one plotting a trend: it collapses the chart to a
+ * single column until somebody opens the editor and widens the range by hand.
+ */
+export function defaultMonthWindow(size: number): MonthSelection {
+  return { mode: "window", from: "", to: "", months: [], size };
+}
+
+export function resolveMonthSelection(
+  selection: MonthSelection | undefined,
+  available: string[]
+): string[] {
+  if (!selection) return available;
+  if (selection.mode === "list") {
+    const wanted = selection.months.filter(month => available.includes(month));
+    return wanted.length > 0 ? wanted : available;
+  }
+  if (selection.mode === "window") {
+    return available.slice(-Math.max(1, selection.size ?? 12));
+  }
+
+  const from = selection.from < selection.to ? selection.from : selection.to;
+  const to = selection.from < selection.to ? selection.to : selection.from;
+  const inRange = available.filter(month => month >= from && month <= to);
   return inRange.length > 0 ? inRange : available;
 }
 
@@ -143,6 +237,8 @@ export interface DeckPage<
   visible: boolean;
   /** Only meaningful for week-based pages. */
   weekSelection: WeekSelection | null;
+  /** Only meaningful for month-based pages. */
+  monthSelection?: MonthSelection | null;
   /** Only meaningful for year-based pages. Years shown, ascending. */
   years: number[] | null;
   overrides: CellOverrides;
@@ -223,7 +319,7 @@ export function insertBeforeClosing<TPage extends DeckPage<string, string>>(
   pages: TPage[],
   page: TPage
 ): TPage[] {
-  const closingIndex = pages.findIndex((entry) => entry.kind === "closing");
+  const closingIndex = pages.findIndex(entry => entry.kind === "closing");
   const insertAt = closingIndex === -1 ? pages.length : closingIndex;
   return [...pages.slice(0, insertAt), page, ...pages.slice(insertAt)];
 }

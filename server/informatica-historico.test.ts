@@ -52,16 +52,26 @@ describe("series congeladas de Informática", () => {
 
     // 2025/05 se calcula en 171 porque el extracto arranca el día 12; lo
     // publicado fue 788.
-    expect(publishedTotal("2025/05", incidencias, 171)).toBe(788);
+    expect(publishedTotal("incidencias", "2025/05", incidencias, 171)).toBe(788);
     // 2025/06 en adelante manda el cálculo, aunque el histórico exista.
-    expect(publishedTotal("2025/06", incidencias, 770)).toBe(770);
-    expect(INFORMATICA_HISTORICO_UNTIL).toBe("2025/05");
+    expect(publishedTotal("incidencias", "2025/06", incidencias, 770)).toBe(770);
+    expect(INFORMATICA_HISTORICO_UNTIL.incidencias).toBe("2025/05");
   });
 
-  it("cae al cálculo cuando el histórico no cubre un mes anterior a la frontera", () => {
+  it("calcula siempre los Work Orders, que no tienen frontera", () => {
     const workOrders = historicoByMonth(dataset, "workOrders");
 
-    expect(publishedTotal("2025/04", workOrders, 1567)).toBe(1567);
+    // El extracto cubre meses enteros desde 2025/02, asi que el congelado nunca
+    // manda: 2025/06 vale 1532 y no los 941 que se capturaron con ventana corta.
+    expect(publishedTotal("workOrders", "2025/03", workOrders, 1536)).toBe(1536);
+    expect(publishedTotal("workOrders", "2025/06", workOrders, 1532)).toBe(1532);
+    expect(INFORMATICA_HISTORICO_UNTIL.workOrders).toBeUndefined();
+  });
+
+  it("cae al cálculo cuando el histórico no cubre un mes bajo la frontera", () => {
+    const incidencias = historicoByMonth(dataset, "incidencias");
+
+    expect(publishedTotal("incidencias", "2025/01", incidencias, 1202)).toBe(1202);
   });
 
   it("construye una ventana de 18 meses naturales, sin saltarse los vacíos", () => {

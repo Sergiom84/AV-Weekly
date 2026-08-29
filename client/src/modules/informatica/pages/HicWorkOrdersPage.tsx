@@ -73,12 +73,14 @@ export default function HicWorkOrdersPage({
   const frozenWorkOrders = historicoByMonth(dataset, "workOrders");
   const incidenciasOf = (month: string) =>
     publishedTotal(
+      "incidencias",
       month,
       frozenIncidencias,
       value(incidentRows, month, row => row.mes, row => row.total)
     );
   const workOrdersOf = (month: string) =>
     publishedTotal(
+      "workOrders",
       month,
       frozenWorkOrders,
       value(workOrders, month, row => row.mes, row => row.ordenes)

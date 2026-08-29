@@ -1,48 +1,48 @@
 import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
-import KpiRow from "@/components/deck/KpiRow";
+import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
-  monthLabel,
-  percent,
-  reportMonth,
-  reportMonths,
-  seriesColor,
-  sumBy,
-  topEntries,
-} from "../aggregate";
-import {
-  HIC_ASSIGNED,
-  HIC_RESOLVED,
-  hicScopeLabel,
-  hicScopes,
-} from "../sources";
+  defaultMonthWindow,
+  resolveMonthSelection,
+} from "@shared/deck/core";
+import { monthLabel, seriesColor, uniqueSorted } from "../aggregate";
+import { HIC_ASSIGNED, HIC_RESOLVED } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface HicCategoriasPageProps extends InformaticaPageProps {
   dataset: InformaticaDataset;
 }
 
-/** Months of the trailing window the columns cover. */
-const WINDOW = 12;
+/**
+ * Months of the trailing window the columns cover.
+ *
+ * Fourteen is the width of the block the clean workbook keeps for this slide,
+ * and with the current extract it resolves to 2025/07–2026/08 — the exact range
+ * of the reference chart. It also lands past 2025/05, the month HIC only covers
+ * from the 12th, so the partial figure never reaches the axis.
+ */
+const WINDOW = 14;
 
-/** Categories the breakdown draws before the axis stops being readable. */
-const CATEGORY_LIMIT = 12;
+const HIC_ASSIGNMENTS = "Asignaciones";
 
 /**
  * `2.1.1 Volumetría de Incidencias`: the same `Hic` sheet as the previous page,
  * read the other way round.
  *
- * Left, the main SSCC scope month by month as columns — the last year only, so
- * a grouped bar per month stays wide enough to read. Right, the same volume
- * split by `Categorization Tier 1` for the reported month, which is the pivot
- * the sheet ships and which reconciles exactly with the resolved series next to
- * it.
+ * The presentation's second 2.1.1 slide is the operational monthly series:
+ * assigned, assignments and resolved. It deliberately does not reuse the
+ * category pivot from the combined slide: these three signed-off indicators
+ * are a different source shape within HIC.
  *
- * Categories reported as zero are dropped rather than drawn flat: the source
- * pivot lists every catalogue entry every month, and twenty-four ticks of which
- * half are empty is an axis nobody can read.
+ * All three add up both HIC scopes, for the same reason the combined slide does:
+ * the workbook splits the figures into `3-3` (BBVA) and `4-4` (BBVA TECH) and
+ * publishes the sum. Its own history block proves it, reporting `OnSite`,
+ * `BBVAIT` and a total row that is the addition of the two.
+ *
+ * Like the combined slide it publishes the month in flight, which is what the
+ * reference does and what the report is about.
  */
 export default function HicCategoriasPage({
   page,
@@ -51,15 +51,22 @@ export default function HicCategoriasPage({
   dataset,
 }: HicCategoriasPageProps) {
   const rows = dataset.hic ?? [];
-  const scopes = hicScopes(rows);
-
-  const totals = rows.filter(
-    row => row.categoria === "" && row.ambito === scopes.main
+  const totals = rows.filter(row => row.categoria === "");
+  const availableMonths = uniqueSorted(totals.map(row => row.mes));
+  // `defaultMonthSelection` pins a single month — `from` and `to` are the same —
+  // which on a monthly series collapses the chart to one column. The default
+  // here is the window the slide is about; an editor's saved range still wins.
+  const monthSelection = page.monthSelection ?? defaultMonthWindow(WINDOW);
+  const months = resolveMonthSelection(monthSelection, availableMonths).slice(
+    -WINDOW
   );
-  const months = reportMonths(dataset, totals, row => row.mes).slice(-WINDOW);
-  const month = reportMonth(dataset, totals, row => row.mes);
+  const month = months[months.length - 1] ?? null;
 
-  const monthlySeries: CategorySeries[] = [HIC_RESOLVED, HIC_ASSIGNED].map(
+  const monthlySeries: CategorySeries[] = [
+    HIC_ASSIGNED,
+    HIC_ASSIGNMENTS,
+    HIC_RESOLVED,
+  ].map(
     (metric, index) => ({
       key: metric,
       label: metric,
@@ -70,7 +77,7 @@ export default function HicCategoriasPage({
   const monthlyData = months.map(target => {
     const entry: Record<string, number | string> = { mes: monthLabel(target) };
 
-    for (const metric of [HIC_RESOLVED, HIC_ASSIGNED]) {
+    for (const metric of [HIC_ASSIGNED, HIC_ASSIGNMENTS, HIC_RESOLVED]) {
       entry[metric] = totals
         .filter(row => row.mes === target && row.metrica === metric)
         .reduce((sum, row) => sum + row.total, 0);
@@ -79,78 +86,33 @@ export default function HicCategoriasPage({
     return entry;
   });
 
-  const pivotRows = rows.filter(
-    row =>
-      row.categoria !== "" && row.ambito === scopes.pivot && row.mes === month
-  );
-  const byCategory = sumBy(
-    pivotRows,
-    row => row.categoria,
-    row => row.total
-  );
-  const categories = topEntries(byCategory, CATEGORY_LIMIT);
-
-  const categorySeries: CategorySeries[] = [
-    { key: "total", label: "Incidencias", color: seriesColor(0) },
-  ];
-  const categoryData = categories.map(entry => ({
-    categoria: entry.label,
-    total: entry.value,
-  }));
-
-  const monthTotal = Array.from(byCategory.values()).reduce(
-    (sum, value) => sum + value,
-    0
-  );
-  const leader = categories[0];
   const suffix = month ? ` ${monthLabel(month)}` : "";
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
-      <KpiRow
-        items={[
-          {
-            label: `${hicScopeLabel(scopes.main ?? "", scopes)}${suffix}`,
-            value: monthTotal.toLocaleString("es-ES"),
-          },
-          {
-            label: "Categoría principal",
-            value: leader ? leader.label : "",
-          },
-          {
-            label: "Peso de la principal",
-            value:
-              leader && monthTotal > 0
-                ? percent(leader.value / monthTotal)
-                : "",
-          },
-        ]}
-      />
-
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-[1.5cqi]">
-        <div className="flex min-h-0 flex-col">
-          <p className="shrink-0 pb-[0.4cqi] font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
-            Incidencias por mes
-          </p>
-          <CategoryBarChart
-            categoryKey="mes"
-            series={monthlySeries}
-            data={monthlyData}
-          />
-        </div>
-
-        <div className="flex min-h-0 flex-col">
-          <p className="shrink-0 pb-[0.4cqi] font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
-            Categorías{suffix}
-          </p>
-          <CategoryBarChart
-            categoryKey="categoria"
-            series={categorySeries}
-            data={categoryData}
-            angledCategories
-          />
-        </div>
-      </div>
+      {editing && (
+        <MonthRangeSelector
+          selection={monthSelection}
+          available={availableMonths}
+          format={monthLabel}
+          onChange={monthSelection => onChange({ monthSelection })}
+        />
+      )}
+      <section className="flex min-h-0 flex-1 flex-col" aria-label="Volumen operativo mensual">
+        <h3 className="shrink-0 pb-[0.7cqi] font-mono text-[1.35cqi] font-medium text-muted-foreground">
+          Volumen Operativo Mensual: Abiertas, Reasignaciones y Resueltas{suffix ? ` · hasta${suffix}` : ""}
+        </h3>
+        <CategoryBarChart
+          categoryKey="mes"
+          series={monthlySeries}
+          data={monthlyData}
+          fitGroupedValueLabels
+          centerGroupedValueLabels
+        />
+      </section>
+      <p className="shrink-0 border border-border bg-muted/30 px-[1.2cqi] py-[0.75cqi] text-center font-mono text-[1.2cqi] leading-snug text-muted-foreground">
+        En los meses de septiembre a noviembre de 2025 se aprecia un volumen elevado de incidencias asociado a la migración a W11.
+      </p>
     </PageShell>
   );
 }

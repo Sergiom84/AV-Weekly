@@ -308,19 +308,22 @@ export function historicoByMonth(
 }
 
 /**
- * The figure to publish for a month: the frozen one while it is authoritative,
- * the computed one from `INFORMATICA_HISTORICO_UNTIL` on.
+ * The figure to publish for a month: the frozen one while it is authoritative
+ * for that series, the computed one after.
  *
  * The boundary is a property of the sources, not of the chart, so every page
  * that mixes both must resolve it the same way or two slides will disagree
  * about the same month.
  */
 export function publishedTotal(
+  serie: string,
   month: string,
   frozen: Map<string, number>,
   computed: number
 ): number {
-  if (month > INFORMATICA_HISTORICO_UNTIL) {
+  const until = INFORMATICA_HISTORICO_UNTIL[serie];
+
+  if (until === undefined || month > until) {
     return computed;
   }
 

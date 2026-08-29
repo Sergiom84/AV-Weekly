@@ -334,20 +334,28 @@ export interface InformaticaHistoricoRow {
 }
 
 /**
- * Last month the frozen history is authoritative for.
+ * Last month the frozen figure outranks the computed one, per series.
  *
- * From 2025/06 on, the weekly extracts cover a full month and reproduce the
- * published figures — the incident series matches within a couple of tickets
- * (604 against 604 in 2025/07, 1289 against 1289 in 2025/11), so recomputing is
- * both correct and self-maintaining. Before that the extracts are either absent
- * or partial: 2025/05 starts on the 12th and yields 171 against the 788 that was
- * published.
+ * The boundary is per series because the two sources start at different points,
+ * and forcing one date on both would publish a worse number for one of them:
  *
- * The history table still carries later months, because it is the record of what
- * was presented. This constant is what stops that record from being mistaken for
- * the current figure.
+ * - `incidencias`: HIC begins mid-May 2025, so 2025/05 is partial — it computes
+ *   to 171 against the 788 that was published — and earlier months are absent
+ *   entirely. From 2025/06 the extract reproduces the published series (604
+ *   against 604 in 2025/07, 1289 against 1289 in 2025/11).
+ * - `workOrders`: the extract covers whole months from 2025/02, so there is no
+ *   month where the frozen copy is better. It is absent from this map on
+ *   purpose. The frozen values were captured week by week through a sliding
+ *   window that sometimes cut the month short — 941 for 2025/06 against the 1532
+ *   it actually holds — while the months captured cleanly agree exactly (1263 in
+ *   2025/05, 747 in 2025/08, 963 in 2025/12, 1349 in 2026/02).
+ *
+ * A series with no entry is always computed. The history table still stores it,
+ * because it is the record of what was presented.
  */
-export const INFORMATICA_HISTORICO_UNTIL = "2025/05";
+export const INFORMATICA_HISTORICO_UNTIL: Record<string, string> = {
+  incidencias: "2025/05",
+};
 
 /* -------------------------------------------------------------------------- */
 /* Dataset                                                                     */
