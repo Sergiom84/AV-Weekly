@@ -16,7 +16,7 @@ import {
   seriesColor,
   uniqueSorted,
 } from "../aggregate";
-import { buildingDirectory, smartTechSite } from "../sources";
+import { siteLabels, smartTechSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface CitasSemanalPageProps extends InformaticaPageProps {
@@ -59,21 +59,15 @@ export default function CitasSemanalPage({
   // names it. A point the extract reports and the master does not map is kept
   // and pushed to the end: dropping it would hide real appointments, and
   // merging it into a mapped site would misattribute them.
-  const directory = buildingDirectory(
+  const { labelOf, order: rowOrder } = siteLabels(
     dataset.edificios ?? [],
-    row => row.aliasSmartTech
+    row => row.aliasSmartTech,
+    current.map(row => row.edificio),
+    { allSites: true, clean: smartTechSite }
   );
-  const siteOf = (building: string) =>
-    directory.nameOf(building) ?? smartTechSite(building);
-  const unmapped = uniqueSorted(
-    current
-      .filter(row => directory.nameOf(row.edificio) === null)
-      .map(row => siteOf(row.edificio))
-  );
-  const rowOrder = [...directory.sites, ...unmapped];
   const matrix = pivot(
     current,
-    row => siteOf(row.edificio),
+    row => labelOf(row.edificio),
     row => row.tipo,
     row => row.citas,
     { columns, rowOrder }

@@ -1,6 +1,7 @@
 import MatrixTable from "@/components/deck/MatrixTable";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { monthLabel, pivot, uniqueSorted } from "../aggregate";
+import { siteLabels } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface ImacsTablePageProps extends InformaticaPageProps {
@@ -20,12 +21,19 @@ export default function ImacsTablePage({
   const columns = months.flatMap(month =>
     metrics.map(metric => `${month}|${metric}`)
   );
+  // The IMAC export names every site its own way; the master's alias column
+  // maps all thirty of them onto the names the report uses.
+  const { labelOf, order: rowOrder } = siteLabels(
+    dataset.edificios ?? [],
+    row => row.aliasImacs,
+    rows.map(row => row.ciudad)
+  );
   const matrix = pivot(
     rows,
-    row => row.ciudad,
+    row => labelOf(row.ciudad),
     row => `${row.mes}|${row.metrica}`,
     row => row.total,
-    { columns }
+    { columns, rowOrder }
   );
 
   return (

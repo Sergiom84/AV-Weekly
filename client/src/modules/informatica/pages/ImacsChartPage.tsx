@@ -15,6 +15,7 @@ import {
   monthLabel,
   seriesColor,
 } from "../aggregate";
+import { siteLabels } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface ImacsChartPageProps extends InformaticaPageProps {
@@ -56,10 +57,19 @@ export default function ImacsChartPage({
     { solicitudes: number; intervenciones: number }
   >();
 
+  // Same naming as the IMAC table, so the chart and the matrix next to it call
+  // each site by the same name.
+  const { labelOf } = siteLabels(
+    dataset.edificios ?? [],
+    row => row.aliasImacs,
+    rows.map(row => row.ciudad)
+  );
+
   for (const row of rows) {
     if (row.mes !== month) continue;
 
-    const current = grouped.get(row.ciudad) ?? {
+    const site = labelOf(row.ciudad);
+    const current = grouped.get(site) ?? {
       solicitudes: 0,
       intervenciones: 0,
     };
@@ -67,7 +77,7 @@ export default function ImacsChartPage({
 
     if (metric === "solicitudes") current.solicitudes += row.total;
     if (metric === "intervenciones") current.intervenciones += row.total;
-    grouped.set(row.ciudad, current);
+    grouped.set(site, current);
   }
 
   const allData = Array.from(grouped.entries())

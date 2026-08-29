@@ -1,6 +1,7 @@
 import MatrixTable from "@/components/deck/MatrixTable";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { monthLabel, pivot, reportMonth } from "../aggregate";
+import { siteLabels } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface WorkOrdersPageProps extends InformaticaPageProps {
@@ -26,11 +27,20 @@ export default function WorkOrdersPage({
   const month = reportMonth(dataset, rows, row => row.mes);
   const current = rows.filter(row => row.mes === month);
 
+  // Buildings named through the master's work-order alias. Whatever it does not
+  // map keeps its raw value and goes last, including the "#N/A" the lookup
+  // leaves on rows whose address matched nothing.
+  const { labelOf, order: rowOrder } = siteLabels(
+    dataset.edificios ?? [],
+    row => row.aliasWorkOrder,
+    current.map(row => row.edificio)
+  );
   const matrix = pivot(
     current,
-    row => row.edificio,
+    row => labelOf(row.edificio),
     row => row.tipo,
-    row => row.ordenes
+    row => row.ordenes,
+    { rowOrder }
   );
 
   const total = current.reduce((sum, row) => sum + row.ordenes, 0);

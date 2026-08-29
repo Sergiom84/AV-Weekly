@@ -217,6 +217,58 @@ export function buildingDirectory(
   };
 }
 
+/**
+ * Row labels and row order of a table listing sites.
+ *
+ * `labelOf` renames a raw value through the master; `order` lists the rows the
+ * table should show, with anything the master does not map pushed to the end so
+ * it is visible rather than dropped or merged into a real site.
+ *
+ * `allSites` decides whether sites with no data keep a row. It is worth it on a
+ * table reporting one period, where an empty row says "open and quiet". On a
+ * matrix spanning every month it is not: a blank row across sixteen columns
+ * says nothing, and a site absent from the whole history is not part of the
+ * report rather than idle in it.
+ */
+export function siteLabels(
+  edificios: InformaticaEdificioRow[],
+  aliasOf: (row: InformaticaEdificioRow) => string,
+  present: string[],
+  options: { allSites?: boolean; clean?: (raw: string) => string } = {}
+): { labelOf: (raw: string) => string; order: string[] } {
+  const directory = buildingDirectory(edificios, aliasOf);
+  const clean = options.clean ?? ((raw: string) => raw);
+  const labelOf = (raw: string) => directory.nameOf(raw) ?? clean(raw);
+  const seen = new Set<string>();
+  const mapped: string[] = [];
+  const unmapped: string[] = [];
+
+  for (const raw of present) {
+    const label = labelOf(raw);
+
+    if (label === "" || seen.has(label)) {
+      continue;
+    }
+
+    seen.add(label);
+    (directory.nameOf(raw) === null ? unmapped : mapped).push(label);
+  }
+
+  const sites = options.allSites
+    ? directory.sites
+    : directory.sites.filter(site => seen.has(site));
+
+  // The lookup marker is not a site and never leads: it is the count of rows
+  // whose address matched nothing, and it belongs at the bottom of the list.
+  unmapped.sort(
+    (a, b) =>
+      Number(a === UNMAPPED_BUILDING) - Number(b === UNMAPPED_BUILDING) ||
+      a.localeCompare(b, "es")
+  );
+
+  return { labelOf, order: [...sites, ...unmapped] };
+}
+
 /* -------------------------------------------------------------------------- */
 /* SmartTech points                                                            */
 /* -------------------------------------------------------------------------- */
