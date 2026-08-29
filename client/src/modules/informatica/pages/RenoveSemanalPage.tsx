@@ -74,11 +74,15 @@ export default function RenoveSemanalPage({
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
+        {/* Every week is drawn, tilted. Left to itself the axis drops the ticks
+            that overlap and prints one week in two, so half the columns lose
+            the only thing that identifies them. */}
         <CategoryBarChart
           categoryKey="semana"
           series={SERIES}
           data={data}
           stacked
+          angledCategories
         />
       </div>
     </PageShell>
