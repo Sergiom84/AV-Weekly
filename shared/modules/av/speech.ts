@@ -76,7 +76,7 @@ export function resolutionValueAt(
   return match?.total ?? 0;
 }
 
-/** Totals always cover the whole imported history, never only the visible range. */
+/** Totals always cover the full reported history, not only visible columns. */
 export function calculateResolutionTableTotals(
   availableWeeks: number[],
   rows: ResolutionTableRow[],

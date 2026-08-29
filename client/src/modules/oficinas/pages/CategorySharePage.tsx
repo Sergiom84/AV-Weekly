@@ -140,7 +140,13 @@ function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
   const { containerRef, tableRef } = useFitTableScale<
     HTMLDivElement,
     HTMLTableElement
-  >({ deps: [rows.length] });
+  >({
+    deps: [rows.length],
+    // The compact element/type slides are visual siblings. Without this cap a
+    // short pivot (eight request types) grows larger than a twelve-row element
+    // pivot merely because it has fewer lines to fit.
+    maxScale: compact ? 0.615 : 1,
+  });
   const labelWidth = compact ? "w-1/3" : "w-[60%]";
   const numericWidth = compact ? "w-1/3" : "";
 
@@ -153,14 +159,16 @@ function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
             ? "text-[length:calc(var(--fit-scale,1)*1.5cqi)]"
             : "text-[length:calc(var(--fit-scale,1)*1.15cqi)]"
         } ${
-          compact ? "mx-auto w-[30%]" : "w-full min-w-full"
+          compact ? "mx-auto w-[50%]" : "w-full min-w-full"
         }`}
       >
         <thead>
           <tr className="border-b border-border text-muted-foreground">
             <th
               scope="col"
-              className={`${labelWidth} truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-normal`}
+              className={`${labelWidth} ${
+                compact ? "whitespace-normal break-words" : "truncate"
+              } py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-normal`}
             >
               {header}
             </th>
@@ -183,7 +191,9 @@ function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
             <tr key={row.label} className="border-b border-border/60">
               <th
                 scope="row"
-                className="truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-left font-normal"
+                className={`${
+                  compact ? "whitespace-normal break-words" : "truncate"
+                } py-[calc(var(--fit-scale,1)*0.25cqi)] text-left font-normal`}
                 title={row.label}
               >
                 {row.label}
@@ -206,7 +216,9 @@ function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
           >
             <th
               scope="row"
-              className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left"
+              className={`${
+                compact ? "whitespace-normal break-words" : "truncate"
+              } py-[calc(var(--fit-scale,1)*0.3cqi)] text-left`}
             >
               {compact ? "Total general" : "Total"}
             </th>

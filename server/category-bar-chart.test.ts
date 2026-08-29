@@ -21,4 +21,12 @@ describe("CategoryBarChart grouped value labels", () => {
       [0, 1, 2, 3].map(index => groupedLabelPlacement(index).offset)
     ).toEqual([-1, 1, -1, 1]);
   });
+
+  it("opens three annual-series labels outwards without a vertical cascade", () => {
+    expect([0, 1, 2].map(index => groupedLabelPlacement(index, 3))).toEqual([
+      { offset: -1, textAnchor: "end" },
+      { offset: 0, textAnchor: "middle" },
+      { offset: 1, textAnchor: "start" },
+    ]);
+  });
 });

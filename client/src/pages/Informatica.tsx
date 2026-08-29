@@ -32,7 +32,8 @@ import CitasAnualPage from "@/modules/informatica/pages/CitasAnualPage";
 import CitasMensualPage from "@/modules/informatica/pages/CitasMensualPage";
 import CitasSemanalPage from "@/modules/informatica/pages/CitasSemanalPage";
 import EncuestasPage from "@/modules/informatica/pages/EncuestasPage";
-import HicPage from "@/modules/informatica/pages/HicPage";
+import HicCategoriasPage from "@/modules/informatica/pages/HicCategoriasPage";
+import HicWorkOrdersPage from "@/modules/informatica/pages/HicWorkOrdersPage";
 import ImacsChartPage from "@/modules/informatica/pages/ImacsChartPage";
 import ImacsTablePage from "@/modules/informatica/pages/ImacsTablePage";
 import SlasPage from "@/modules/informatica/pages/SlasPage";
@@ -58,7 +59,8 @@ const DATA_PAGES: Record<
     props: InformaticaPageProps & { dataset: InformaticaDataset }
   ) => ReactElement
 > = {
-  "volumetria-incidencias-wo": HicPage,
+  "volumetria-incidencias-wo": HicWorkOrdersPage,
+  "volumetria-incidencias": HicCategoriasPage,
   "top5-incidencias": Top5IncidenciasPage,
   "top-ten-incidencias": TopTenIncidenciasPage,
   "encuestas-incidencias": EncuestasPage,

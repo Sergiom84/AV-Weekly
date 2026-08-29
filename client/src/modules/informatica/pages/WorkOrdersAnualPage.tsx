@@ -2,13 +2,10 @@ import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
+import YearSelector from "@/components/deck/YearSelector";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import {
-  monthIndexOf,
-  reportMonth,
-  seriesColor,
-  yearlyComparison,
-} from "../aggregate";
+import { monthIndexOf, reportMonth, yearlyComparison } from "../aggregate";
+import { yearSeriesColor } from "@/lib/yearSeries";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface WorkOrdersAnualPageProps extends InformaticaPageProps {
@@ -35,17 +32,33 @@ export default function WorkOrdersAnualPage({
     closed === null ? undefined : { throughMonth: monthIndexOf(closed) }
   );
 
-  const series: CategorySeries[] = years.map((year, index) => ({
+  const availableYears = years.filter(year => year >= 2024);
+  const selectedYears = page.years
+    ? page.years.filter(year => availableYears.includes(year))
+    : availableYears;
+  const series: CategorySeries[] = selectedYears.map(year => ({
     key: `y${year}`,
     label: String(year),
-    color: seriesColor(index),
+    color: yearSeriesColor(year),
   }));
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
+      {editing && availableYears.length > 0 && (
+        <YearSelector
+          selection={{
+            available: availableYears,
+            selected: selectedYears,
+            onChange: years =>
+              onChange({
+                years: Array.from(new Set(years)).sort((a, b) => a - b),
+              }),
+          }}
+        />
+      )}
       <KpiRow
-        items={years.map(year => ({
-          label: `Total ${year}`,
+        items={selectedYears.map(year => ({
+          label: String(year),
           value: (totals.get(year) ?? 0).toLocaleString("es-ES"),
         }))}
       />

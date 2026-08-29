@@ -70,7 +70,6 @@ export default function IncidenciasDTPage({
   const selectedYears = page.years
     ? page.years.filter(y => availableYears.includes(y))
     : defaultYears;
-
   return (
     <DTPage
       page={page}
@@ -93,6 +92,7 @@ export default function IncidenciasDTPage({
       masters={dataset.masters}
       totals={variant === "con" ? section?.totalsByWeek : undefined}
       throughWeek={reportWeek(dataset, year)}
+      layout="incidencias-territoriales"
       caption={variantLabel(variant)}
       controls={
         <VariantSelector

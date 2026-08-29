@@ -45,6 +45,7 @@ export default function PeticionesTipoPage({
       entries={entries}
       column={week === null ? String(year) : weekLabel(week)}
       seriesLabel="Tipo de petición"
+      compactPresentation
       kpis={
         week === null
           ? []

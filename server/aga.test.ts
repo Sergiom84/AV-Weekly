@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { agaPeriodLabel, agaReportingPeriod, agaWeekLabel } from "../shared/modules/aga/calendar.ts";
+import {
+  agaPeriodLabel,
+  agaReportingPeriod,
+  agaWeekLabel,
+} from "../shared/modules/aga/calendar.ts";
 import {
   breakdownForWeeks,
+  locationShareAt,
   managedWeeklyDelta,
   topLocationShare,
 } from "../shared/modules/aga/managed.ts";
@@ -15,7 +20,10 @@ import {
 } from "../shared/modules/aga/types.ts";
 import { mergeAgaDataset, parseAgaWorkbook } from "./parseAgaPlano.ts";
 
-const source = { sourceFile: "gps.xlsx", uploadedAt: "2026-08-21T00:00:00.000Z" };
+const source = {
+  sourceFile: "gps.xlsx",
+  uploadedAt: "2026-08-21T00:00:00.000Z",
+};
 
 function week(weekDate: string, total: number): AgaWeekAggregate {
   return {
@@ -52,7 +60,9 @@ describe("calendario AGA", () => {
       end: "2026-08-16",
     });
     expect(agaWeekLabel("2026-08-17")).toBe("S33");
-    expect(agaPeriodLabel("2026-08-17")).toBe("Semana 33 de 2026 · 10-16 agosto");
+    expect(agaPeriodLabel("2026-08-17")).toBe(
+      "Semana 33 de 2026 · 10-16 agosto"
+    );
   });
 
   it("acepta el número guardado y conserva fallback para datasets existentes", () => {
@@ -79,13 +89,21 @@ describe("parser y merge AGA", () => {
       null,
       new Date(2026, 7, 17),
     ];
-    const sheet = XLSX.utils.aoa_to_sheet([["Peticiones"], [...AGA_COLUMNS], row]);
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ["Peticiones"],
+      [...AGA_COLUMNS],
+      row,
+    ]);
     XLSX.utils.book_append_sheet(workbook, sheet, "Semana actual");
 
     const parsed = parseAgaWorkbook(workbook);
 
     expect(parsed.weeks).toHaveLength(1);
-    expect(parsed.weeks[0]).toMatchObject({ week: "2026-08-17", reportWeek: 33, total: 1 });
+    expect(parsed.weeks[0]).toMatchObject({
+      week: "2026-08-17",
+      reportWeek: 33,
+      total: 1,
+    });
     expect(parsed.weeks[0].byDepartment).toEqual([{ label: "GAM", count: 1 }]);
   });
 
@@ -94,9 +112,30 @@ describe("parser y merge AGA", () => {
     const existing: AgaDataset = {
       weeks: [week("2026-08-17", 846)],
       managed: managedSection,
-      office: { months: ["2026-08"], families: [{ label: "Office", values: [11] }] },
+      office: {
+        months: ["2026-08"],
+        families: [{ label: "Office", values: [11] }],
+      },
       annual: {
-        peticiones: [{ year: 2026, values: [1, null, null, null, null, null, null, null, null, null, null, null] }],
+        peticiones: [
+          {
+            year: 2026,
+            values: [
+              1,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+            ],
+          },
+        ],
         posiciones: [],
       },
       source,
@@ -110,7 +149,7 @@ describe("parser y merge AGA", () => {
       ["actual"]
     );
 
-    expect(merged.weeks.map((entry) => entry.total)).toEqual([850, 900]);
+    expect(merged.weeks.map(entry => entry.total)).toEqual([850, 900]);
     expect(merged.managed).toBe(managedSection);
     expect(merged.office).toEqual(existing.office);
     expect(merged.annual).toEqual(existing.annual);
@@ -140,7 +179,42 @@ describe("métricas AGA", () => {
     expect(topLocationShare(complete)?.share).toBeCloseTo(175 / 300, 8);
 
     const fallback = topLocationShare(managed());
-    expect(fallback).toMatchObject({ total: 297, drawnTotal: 297, complete: false });
+    expect(fallback).toMatchObject({
+      total: 297,
+      drawnTotal: 297,
+      complete: false,
+    });
+  });
+
+  it("calcula la cuota de ubicación para la semana filtrada", () => {
+    const section = managed();
+    section.byLocation = [
+      {
+        label: "Sede",
+        counts: [
+          { week: "2026-08-10", count: 200 },
+          { week: "2026-08-17", count: 175 },
+        ],
+      },
+      {
+        label: "Resto mostrado",
+        counts: [
+          { week: "2026-08-10", count: 100 },
+          { week: "2026-08-17", count: 122 },
+        ],
+      },
+    ];
+    section.locationTotals = [
+      { week: "2026-08-10", total: 320 },
+      { week: "2026-08-17", total: 300 },
+    ];
+
+    expect(locationShareAt(section, "2026-08-10")).toMatchObject({
+      label: "Sede",
+      count: 200,
+      total: 320,
+      complete: true,
+    });
   });
 });
 
@@ -189,7 +263,7 @@ describe("recorte de las gráficas de producto", () => {
   it("ordena por la última semana y conserva la cifra real de la anterior", () => {
     const rows = breakdownForWeeks(products(), WEEKS);
 
-    expect(rows.map((row) => row.label)).toEqual([
+    expect(rows.map(row => row.label)).toEqual([
       "MICROSOFT OFFICE 365 X64 WASP",
       "PORTATIL RECICLADO",
       'MONITOR 27"',
@@ -204,7 +278,7 @@ describe("recorte de las gráficas de producto", () => {
   it("recorta al máximo de barras sin tocar las cifras que quedan", () => {
     const rows = breakdownForWeeks(products(), WEEKS, 2);
 
-    expect(rows.map((row) => row.label)).toEqual([
+    expect(rows.map(row => row.label)).toEqual([
       "MICROSOFT OFFICE 365 X64 WASP",
       "PORTATIL RECICLADO",
     ]);
@@ -220,12 +294,15 @@ describe("recorte de las gráficas de producto", () => {
     const rows = breakdownForWeeks(
       [
         ...products(),
-        { label: "PRODUCTO DE OTRA SEMANA", counts: [{ week: "2026-06-01", count: 9 }] },
+        {
+          label: "PRODUCTO DE OTRA SEMANA",
+          counts: [{ week: "2026-06-01", count: 9 }],
+        },
       ],
       WEEKS
     );
 
-    expect(rows.map((row) => row.label)).not.toContain("PRODUCTO DE OTRA SEMANA");
+    expect(rows.map(row => row.label)).not.toContain("PRODUCTO DE OTRA SEMANA");
   });
 });
 
@@ -233,7 +310,9 @@ describe("importador histórico AGA", () => {
   it("preserva secciones y enriquece ubicaciones desde el pivot sin nombres fijos", async () => {
     // The production script is plain ESM because it also runs directly with Node.
     // @ts-expect-error JavaScript script intentionally has no declaration file.
-    const { mergeHistoricDataset } = await import("../scripts/importar-historico-aga.mjs");
+    const { mergeHistoricDataset } = await import(
+      "../scripts/importar-historico-aga.mjs"
+    );
     const existing: AgaDataset = {
       weeks: [week("2026-08-17", 846)],
       managed: managed(),
@@ -260,8 +339,10 @@ describe("importador histórico AGA", () => {
     expect(merged.office).toEqual(existing.office);
     expect(merged.annual).toEqual(existing.annual);
     expect(merged.sheetsFound).toEqual(existing.sheetsFound);
-    expect(merged.managed?.locationTotals).toEqual([{ week: "2026-08-17", total: 299 }]);
-    expect(merged.managed?.byLocation.map((row) => row.label)).toEqual(
+    expect(merged.managed?.locationTotals).toEqual([
+      { week: "2026-08-17", total: 299 },
+    ]);
+    expect(merged.managed?.byLocation.map(row => row.label)).toEqual(
       expect.arrayContaining(["Valencia", "Oviedo"])
     );
   });

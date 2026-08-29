@@ -31,6 +31,8 @@ interface CategoryBarChartProps {
   stacked?: boolean;
   /** Spreads adjacent value labels horizontally and tightens grouped gaps. */
   fitGroupedValueLabels?: boolean;
+  /** Keeps every grouped value centred on the column it belongs to. */
+  centerGroupedValueLabels?: boolean;
   /**
    * Draws every category tick, angled, instead of letting Recharts drop the
    * ones that overlap. Opt-in: only needed for long text categories such as the
@@ -181,6 +183,8 @@ interface StackLabelProps {
 
 interface GroupedValueLabelProps extends StackLabelProps {
   seriesIndex: number;
+  seriesCount: number;
+  centerOnBar: boolean;
 }
 
 /**
@@ -193,9 +197,13 @@ function GroupedValueLabel({
   width,
   value,
   seriesIndex,
+  seriesCount,
+  centerOnBar,
 }: GroupedValueLabelProps) {
   const box = { x: Number(x), y: Number(y), width: Number(width) };
-  const placement = groupedLabelPlacement(seriesIndex);
+  const placement = centerOnBar
+    ? { offset: 0, textAnchor: "middle" as const }
+    : groupedLabelPlacement(seriesIndex, seriesCount);
 
   if (
     value === undefined ||
@@ -305,6 +313,7 @@ export default function CategoryBarChart({
   data,
   stacked = false,
   fitGroupedValueLabels = false,
+  centerGroupedValueLabels = false,
   angledCategories = false,
   alignYAxisStart = false,
 }: CategoryBarChartProps) {
@@ -446,7 +455,11 @@ export default function CategoryBarChart({
                     {...(fitGroupedValueLabels
                       ? {
                           content: (
-                            <GroupedValueLabel seriesIndex={seriesIndex} />
+                            <GroupedValueLabel
+                              seriesIndex={seriesIndex}
+                              seriesCount={series.length}
+                              centerOnBar={centerGroupedValueLabels}
+                            />
                           ),
                         }
                       : { position: "top" as const, className: labelClass })}

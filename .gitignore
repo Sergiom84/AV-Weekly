@@ -122,5 +122,8 @@ data/*.db
 # Planning documents
 plans/
 
+# Local QA artifacts: generated TXT, screenshots and exported PDFs
+output/
+
 # Documentation folder (large files)
 Documentación/

@@ -26,7 +26,7 @@ export default function EditableNumber({
   if (!editing) {
     return (
       <span className={cn("font-mono tabular-nums", overridden && "text-primary", className)}>
-        {value == null ? "" : value}
+        {value == null || value === 0 ? "" : value}
       </span>
     );
   }
@@ -41,7 +41,7 @@ export default function EditableNumber({
         overridden && "text-primary ring-primary/40",
         className
       )}
-      value={value == null ? "" : String(value)}
+      value={value == null || value === 0 ? "" : String(value)}
       onChange={(event) => {
         const raw = event.target.value.trim();
         if (raw === "") {

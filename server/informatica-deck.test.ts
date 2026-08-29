@@ -9,8 +9,8 @@ import type {
   InformaticaDeckState,
 } from "../shared/modules/informatica/types.ts";
 
-const OLD_TITLE = "2.1.1 Volumetría de Incidencias y Work Orders";
-const NEW_TITLE = "2.1.1 Volumetría de Incidencias";
+const OLD_TITLE = "2.1.1 Volumetría de Incidencias";
+const NEW_TITLE = "2.1.1 Volumetría de Incidencias y Work Orders";
 
 function legacyDeck(title = OLD_TITLE): InformaticaDeckState {
   const deck = createDefaultInformaticaDeck();
@@ -23,7 +23,7 @@ function legacyDeck(title = OLD_TITLE): InformaticaDeckState {
   }
 
   retained.text = { ...retained.text, title };
-  const retired: InformaticaDeckPage = {
+  const individual: InformaticaDeckPage = {
     ...retained,
     id: "volumetria-incidencias",
     text: { ...retained.text, title: NEW_TITLE },
@@ -34,17 +34,28 @@ function legacyDeck(title = OLD_TITLE): InformaticaDeckState {
     "Seguimiento manual"
   ) as InformaticaDeckPage;
 
-  deck.pages.splice(3, 0, retired, manual);
+  const renove: InformaticaDeckPage = {
+    ...retained,
+    id: "renove",
+    kind: "itRenove",
+    text: { ...retained.text, title: "2.7 Renove" },
+  };
+  const renoveAcumulado: InformaticaDeckPage = {
+    ...renove,
+    id: "renove-acumulado",
+    text: { ...renove.text, title: "2.7.1 Renove" },
+  };
+  deck.pages.splice(3, 0, individual, renove, renoveAcumulado, manual);
   return deck;
 }
 
 describe("mergeInformaticaDeckTemplate", () => {
-  it("removes the retired slide without losing manual pages", () => {
+  it("removes Renove without losing the restored 2.1.1 or manual pages", () => {
     const merged = mergeInformaticaDeckTemplate(legacyDeck());
 
-    expect(merged.pages.some(page => page.id === "volumetria-incidencias")).toBe(
-      false
-    );
+    expect(merged.pages.some(page => page.id === "volumetria-incidencias")).toBe(true);
+    expect(merged.pages.some(page => page.id === "renove")).toBe(false);
+    expect(merged.pages.some(page => page.id === "renove-acumulado")).toBe(false);
     expect(merged.pages.find(page => page.id === "manual-follow-up")?.text).toEqual(
       { title: "Seguimiento manual", subtitle: "" }
     );
@@ -57,6 +68,16 @@ describe("mergeInformaticaDeckTemplate", () => {
       merged.pages.find(page => page.id === "volumetria-incidencias-wo")?.text
         .title
     ).toBe(NEW_TITLE);
+  });
+
+  it("keeps both 2.1.1 pages consecutive with their own data requirements", () => {
+    const pages = createDefaultInformaticaDeck().pages;
+    const combined = pages.findIndex(page => page.id === "volumetria-incidencias-wo");
+    const individual = pages.findIndex(page => page.id === "volumetria-incidencias");
+
+    expect(individual).toBe(combined + 1);
+    expect(pages[combined]?.text.title).toBe(NEW_TITLE);
+    expect(pages[individual]?.text.title).toBe(OLD_TITLE);
   });
 
   it("preserves a customized title on the retained slide", () => {

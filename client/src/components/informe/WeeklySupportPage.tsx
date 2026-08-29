@@ -3,6 +3,7 @@ import {
   comparisonValue,
   defaultHiddenRows,
   defaultWeekSelection,
+  reportedWeekAvailability,
   resolveWeekSelection,
 } from "@shared/informe";
 import EditableText from "@/components/deck/EditableText";
@@ -11,6 +12,7 @@ import SlideHeading from "@/components/deck/SlideHeading";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import WeeklyBarChart, { type WeeklySeries } from "@/components/deck/WeeklyBarChart";
 import WeeklyTable from "@/components/deck/WeeklyTable";
+import { yearSeriesColor } from "@/lib/yearSeries";
 
 interface WeeklySupportPageProps {
   page: DeckPage;
@@ -61,9 +63,14 @@ export default function WeeklySupportPage({
     );
   }
 
+  const availableWeeks = reportedWeekAvailability(
+    matrix.weeks,
+    Object.keys(typeData?.resolutionsByWeek ?? {}).map(Number)
+  );
   const selection: WeekSelection =
-    page.weekSelection ?? defaultWeekSelection(matrix.weeks[matrix.weeks.length - 1]);
-  const weeks = resolveWeekSelection(selection, matrix.weeks);
+    page.weekSelection ??
+    defaultWeekSelection(availableWeeks[availableWeeks.length - 1]);
+  const weeks = resolveWeekSelection(selection, availableWeeks);
 
   // A page that has never been filtered opens on its default rows.
   const rowLabels = matrix.rows.map((row) => row.label);
@@ -99,15 +106,15 @@ export default function WeeklySupportPage({
     comparisons.length > 0 ? comparisons[comparisons.length - 1].year + 1 : null;
 
   const series: WeeklySeries[] = [
-    ...comparisons.map((comparison, index) => ({
+    ...comparisons.map((comparison) => ({
       key: `y${comparison.year}`,
       label: String(comparison.year),
-      color: `var(--informe-serie-${Math.min(3, index + 3)})`,
+      color: yearSeriesColor(comparison.year),
     })),
     {
       key: CURRENT_SERIES_KEY,
       label: currentYear ? String(currentYear) : "Total",
-      color: "var(--informe-serie-4)",
+      color: currentYear ? yearSeriesColor(currentYear) : "var(--informe-serie-4)",
     },
   ];
 
@@ -139,7 +146,7 @@ export default function WeeklySupportPage({
         <div className="mt-[1cqi] shrink-0">
           <WeekRangeSelector
             selection={selection}
-            available={matrix.weeks}
+            available={availableWeeks}
             onChange={(next) => onChange({ weekSelection: next })}
           />
         </div>

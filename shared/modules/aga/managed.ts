@@ -16,7 +16,7 @@ import type {
 
 /** The weeks the section reports on, ascending. */
 export function managedWeeks(section: AgaManagedSection | undefined): string[] {
-  return (section?.weeklyTotals ?? []).map((entry) => entry.week);
+  return (section?.weeklyTotals ?? []).map(entry => entry.week);
 }
 
 /** The last two weeks of the section, oldest first. Fewer when there are fewer. */
@@ -25,7 +25,7 @@ export function lastTwoWeeks(section: AgaManagedSection | undefined): string[] {
 }
 
 function countAt(counts: AgaWeekCount[], week: string): number {
-  return counts.find((entry) => entry.week === week)?.count ?? 0;
+  return counts.find(entry => entry.week === week)?.count ?? 0;
 }
 
 /**
@@ -59,11 +59,11 @@ export function breakdownForWeeks(
   limit?: number
 ): { label: string; counts: number[] }[] {
   const ordered = (rows ?? [])
-    .map((row) => ({
+    .map(row => ({
       label: row.label,
-      counts: weeks.map((week) => countAt(row.counts, week)),
+      counts: weeks.map(week => countAt(row.counts, week)),
     }))
-    .filter((row) => row.counts.some((count) => count > 0))
+    .filter(row => row.counts.some(count => count > 0))
     .sort(
       (a, b) =>
         b.counts[b.counts.length - 1] - a.counts[a.counts.length - 1] ||
@@ -116,8 +116,14 @@ export function managedWeeklyDelta(
     currentWeek: current.week,
     previous: previous.total,
     current: current.total,
-    overPrevious: previous.total === 0 ? 0 : (current.total - previous.total) / previous.total,
-    overCurrent: current.total === 0 ? 0 : (previous.total - current.total) / current.total,
+    overPrevious:
+      previous.total === 0
+        ? 0
+        : (current.total - previous.total) / previous.total,
+    overCurrent:
+      current.total === 0
+        ? 0
+        : (previous.total - current.total) / current.total,
   };
 }
 
@@ -131,8 +137,9 @@ export function managedWeeklyDelta(
  * and the UI labels the result as a subtotal rather than presenting it as the
  * full week.
  */
-export function topLocationShare(
-  section: AgaManagedSection | undefined
+export function locationShareAt(
+  section: AgaManagedSection | undefined,
+  week: string
 ): {
   label: string;
   count: number;
@@ -141,19 +148,15 @@ export function topLocationShare(
   complete: boolean;
   share: number;
 } | null {
-  const week = managedWeeks(section).slice(-1)[0];
-
-  if (!week) {
-    return null;
-  }
-
-  const rows = (section?.byLocation ?? []).map((row) => ({
+  const rows = (section?.byLocation ?? []).map(row => ({
     label: row.label,
     count: countAt(row.counts, week),
   }));
 
   const drawnTotal = rows.reduce((sum, row) => sum + row.count, 0);
-  const declaredTotal = section?.locationTotals?.find((entry) => entry.week === week)?.total;
+  const declaredTotal = section?.locationTotals?.find(
+    entry => entry.week === week
+  )?.total;
   const complete =
     typeof declaredTotal === "number" &&
     Number.isFinite(declaredTotal) &&
@@ -171,6 +174,20 @@ export function topLocationShare(
   return { ...top, total, drawnTotal, complete, share: top.count / total };
 }
 
+/** Share of the busiest location in the latest reported week. */
+export function topLocationShare(section: AgaManagedSection | undefined): {
+  label: string;
+  count: number;
+  total: number;
+  drawnTotal: number;
+  complete: boolean;
+  share: number;
+} | null {
+  const week = managedWeeks(section).slice(-1)[0];
+
+  return week ? locationShareAt(section, week) : null;
+}
+
 /** Product rows of one of the departments broken out by slides 2.5 to 2.7. */
 export function departmentProducts(
   section: AgaManagedSection | undefined,
@@ -178,7 +195,7 @@ export function departmentProducts(
 ): AgaBreakdownRow[] {
   return (
     (section?.byDepartmentProduct ?? []).find(
-      (entry) => entry.department === department
+      entry => entry.department === department
     )?.rows ?? []
   );
 }

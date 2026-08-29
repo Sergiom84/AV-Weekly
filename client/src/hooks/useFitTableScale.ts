@@ -5,6 +5,8 @@ interface UseFitTableScaleOptions {
   deps?: unknown[];
   /** Floor so a very dense table stays legible instead of vanishing. */
   minScale?: number;
+  /** Ceiling used when sibling slides need a consistent visual density. */
+  maxScale?: number;
 }
 
 /**
@@ -20,7 +22,7 @@ interface UseFitTableScaleOptions {
 export function useFitTableScale<
   TContainer extends HTMLElement = HTMLDivElement,
   TTable extends HTMLElement = HTMLTableElement,
->({ deps = [], minScale = 0.55 }: UseFitTableScaleOptions = {}) {
+>({ deps = [], minScale = 0.55, maxScale = 1 }: UseFitTableScaleOptions = {}) {
   const containerRef = useRef<TContainer>(null);
   const tableRef = useRef<TTable>(null);
   const [scale, setScale] = useState(1);
@@ -45,7 +47,10 @@ export function useFitTableScale<
       }
 
       // Small safety margin so rounding never leaves a 1px overflow.
-      const next = Math.max(minScale, Math.min(1, (available / natural) * 0.98));
+      const next = Math.max(
+        minScale,
+        Math.min(maxScale, (available / natural) * 0.98)
+      );
       table.style.setProperty("--fit-scale", String(next));
       setScale(next);
     };

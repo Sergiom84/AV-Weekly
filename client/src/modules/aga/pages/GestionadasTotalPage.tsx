@@ -2,8 +2,10 @@ import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
+import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
+import { defaultWeekSelection, resolveWeekSelection } from "@shared/deck/core";
 import type { AgaDataset } from "@shared/modules/aga/types";
-import { agaColor, variationLabel, weekLabel } from "../aggregate";
+import { agaColor, variationLabel, weekLabel, weekNumber } from "../aggregate";
 import {
   TOTAL_ROW,
   cellKey,
@@ -39,8 +41,16 @@ export default function GestionadasTotalPage({
   dataset,
 }: GestionadasTotalPageProps) {
   const totals = dataset.managed?.weeklyTotals ?? [];
+  const availableWeeks = totals
+    .map(entry => weekNumber(entry.week))
+    .filter((week): week is number => week !== null);
+  const selection =
+    page.weekSelection ?? defaultWeekSelection(availableWeeks.at(-1) ?? 1);
+  const selectedWeeks = new Set(
+    resolveWeekSelection(selection, availableWeeks)
+  );
 
-  const entries = totals.map((entry) => {
+  const entries = totals.map(entry => {
     const key = cellKey(TOTAL_ROW, entry.week);
 
     return {
@@ -51,10 +61,15 @@ export default function GestionadasTotalPage({
     };
   });
 
-  const data = entries.map((entry) => ({
-    semana: weekLabel(entry.week),
-    total: entry.value ?? 0,
-  }));
+  const data = entries
+    .filter(entry => {
+      const number = weekNumber(entry.week);
+      return number !== null && selectedWeeks.has(number);
+    })
+    .map(entry => ({
+      semana: weekLabel(entry.week),
+      total: entry.value ?? 0,
+    }));
 
   const previous = entries[entries.length - 2] ?? null;
   const current = entries[entries.length - 1] ?? null;
@@ -86,18 +101,26 @@ export default function GestionadasTotalPage({
     <PageShell page={page} editing={editing} onChange={onChange}>
       <KpiRow items={items} />
 
+      {editing && (
+        <WeekRangeSelector
+          selection={selection}
+          available={availableWeeks}
+          onChange={weekSelection => onChange({ weekSelection })}
+        />
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart categoryKey="semana" series={SERIES} data={data} />
       </div>
 
       {editing && (
         <ValueGrid
-          columns={entries.map((entry) => weekLabel(entry.week))}
+          columns={entries.map(entry => weekLabel(entry.week))}
           rows={[
             {
               label: "Gestionadas",
               color: agaColor(0),
-              cells: entries.map((entry) => ({
+              cells: entries.map(entry => ({
                 key: entry.key,
                 value: entry.value,
                 overridden: entry.overridden,

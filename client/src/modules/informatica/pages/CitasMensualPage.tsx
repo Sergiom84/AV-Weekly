@@ -35,6 +35,7 @@ export default function CitasMensualPage({
           rowHeader="Edificio"
           columns={months.map(monthLabel)}
           rows={matrix.rows}
+          variant="report"
         />
       </div>
     </PageShell>

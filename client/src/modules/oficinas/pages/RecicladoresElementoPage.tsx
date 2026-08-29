@@ -41,6 +41,7 @@ export default function RecicladoresElementoPage({
       entries={entries}
       column={String(year)}
       seriesLabel="Elemento"
+      compactPresentation
       kpis={[
         { label: `Total ${year}`, value: total.toLocaleString("es-ES") },
         { label: "Elementos", value: String(entries.length) },

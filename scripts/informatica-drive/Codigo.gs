@@ -750,6 +750,15 @@ function toNumber(value) {
   return isFinite(parsed) ? parsed : 0;
 }
 
+/** First integer in report cells such as `127 (98%)`; never concatenate the percentage. */
+function leadingNumber(value) {
+  if (typeof value === 'number') return isFinite(value) ? value : 0;
+
+  var match = /^\s*(-?[\d.,\s]+)/.exec(String(value == null ? '' : value));
+
+  return match ? toNumber(match[1]) : 0;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Weekly period markers                                                       */
 /* -------------------------------------------------------------------------- */
@@ -2056,8 +2065,13 @@ var SECTION = {
   workOrders: 'WORKORDERS',
   peticiones: 'PETICIONES',
   peticionesProducto: 'PETICIONESPRODUCTO',
+  peticionesAnual: 'PETICIONESANUAL',
   citas: 'CITAS',
+  citasAnual: 'CITASANUAL',
   imacs: 'IMACS'
+  ,hic: 'HIC'
+  ,comparativas: 'COMPARATIVAS'
+  ,slas: 'SLAS'
 };
 
 var SECTION_ORDER = [
@@ -2067,7 +2081,12 @@ var SECTION_ORDER = [
   'workOrders',
   'peticiones',
   'peticionesProducto',
+  'peticionesAnual',
   'citas',
+  'citasAnual',
+  'hic',
+  'comparativas',
+  'slas',
   'imacs'
 ];
 
@@ -2113,6 +2132,33 @@ function monthLabel(date) {
 
 function monthStart(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function shiftMonthLabel(month, offset) {
+  var match = /^(\d{4})\/(\d{2})$/.exec(month);
+  if (!match) return '';
+
+  return monthLabel(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1 + offset, 1)));
+}
+
+/**
+ * Latest month of the small 3-3 HIC series. Do not scan the raw Work Orders
+ * and Citas grids here: they contain tens of thousands of rows and do not own
+ * the reporting month for relative comparison/SLA tables.
+ */
+function templateReferenceMonth(grids) {
+  var source = monthlySource(grids, '3-3');
+  var data = sourceRows(source);
+  var latest = '';
+
+  for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+    var date = toDate((data[rowIndex] || [])[0]);
+    var month = date ? monthLabel(date) : '';
+
+    if (month > latest) latest = month;
+  }
+
+  return latest;
 }
 
 function periodCells(date) {
@@ -2299,12 +2345,12 @@ function agregarWorkOrders(found, workOrders) {
   }
 }
 
-function agregarCitas(found, extraction, citas) {
+function agregarCitas(found, extraction, citas, citasAnual) {
   if (!found.citas) return;
 
   var source = firstSource(found.citas, 'Citas SmartTech');
   var data = sourceRows(source);
-  var bounds = weekBounds(extraction);
+  var cutoff = isoDate(extraction);
 
   for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
     var row = data[rowIndex] || [];
@@ -2313,11 +2359,156 @@ function agregarCitas(found, extraction, citas) {
     var date = booked || walkup;
     var building = text(valueAt(row, source.columns, 'Smart_Tech'));
 
-    if (!date || !within(date, bounds) || building === '' || normalize(building).indexOf('TELEFONIA') >= 0) {
+    if (!date || isoDate(date) > cutoff || building === '' || normalize(building).indexOf('TELEFONIA') >= 0) {
       continue;
     }
 
     bump(citas, periodCells(date).concat([building, booked ? 'Con Cita' : 'Sin Cita']), 1);
+    bump(citasAnual, [String(date.getUTCFullYear()), monthLabel(date)], 1);
+  }
+}
+
+/** HIC total series and its category pivot, kept separate from daily incidences. */
+function agregarHic(found, hic) {
+  var grids = templateGrids(found);
+  var sources = [monthlySource(grids, '3-3'), monthlySource(grids, '4-4')];
+  var metrics = ['Resueltas', 'Asignadas', 'Asignaciones'];
+
+  for (var sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
+    var source = sources[sourceIndex];
+    var data = sourceRows(source);
+
+    for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+      var date = toDate((data[rowIndex] || [])[0]);
+
+      if (!date) continue;
+
+      for (var metricIndex = 0; metricIndex < metrics.length; metricIndex += 1) {
+        bump(hic, [source.name, monthLabel(monthStart(date)), '', metrics[metricIndex]], toNumber((data[rowIndex] || [])[metricIndex + 1]));
+      }
+    }
+  }
+
+  var pivot = topFiveSource(grids);
+  var header = pivot.grid[pivot.headerRow] || [];
+
+  for (var categoryRow = pivot.headerRow + 1; categoryRow < pivot.grid.length; categoryRow += 1) {
+    var category = text((pivot.grid[categoryRow] || [])[0]);
+
+    if (category === '' || normalize(category) === 'TOTAL') continue;
+
+    for (var column = 0; column < header.length; column += 1) {
+      var month = text(header[column]);
+
+      if (!MONTH_TEXT.test(month)) continue;
+
+      bump(hic, [pivot.name, month, category, 'Incidencias'], toNumber((pivot.grid[categoryRow] || [])[column]));
+    }
+  }
+}
+
+function agregarComparativas(found, comparativas) {
+  var grids = templateGrids(found);
+  var reference = templateReferenceMonth(grids);
+
+  if (reference === '') return;
+
+  for (var gridIndex = 0; gridIndex < grids.length; gridIndex += 1) {
+    var grid = grids[gridIndex].grid;
+    var header = grid[0] || [];
+    var offsets = [];
+
+    for (var column = 0; column < header.length; column += 1) {
+      var label = normalize(header[column]);
+
+      if (label === 'MES ACTUAL' || label === 'MESACTUAL') offsets.push([column, 0]);
+      if (label.indexOf('MES ANTERIOR') === 0 || label.indexOf('MESANTERIOR') === 0) offsets.push([column, -1]);
+      if (label.indexOf('HACE DOS') === 0 || label.indexOf('HACEDOS') === 0) offsets.push([column, -2]);
+    }
+
+    if (offsets.length === 0) continue;
+
+    for (var rowIndex = 1; rowIndex < grid.length; rowIndex += 1) {
+      var element = text((grid[rowIndex] || [])[0]);
+
+      if (element === '' || normalize(element) === 'TOTAL') continue;
+
+      for (var offsetIndex = 0; offsetIndex < offsets.length; offsetIndex += 1) {
+        var pair = offsets[offsetIndex];
+        var raw = (grid[rowIndex] || [])[pair[0]];
+
+        if (text(raw).toUpperCase() === 'N/A') continue;
+
+        bump(comparativas, [grids[gridIndex].name, element, shiftMonthLabel(reference, pair[1])], toNumber(raw));
+      }
+    }
+  }
+}
+
+function agregarSlas(found, slas) {
+  var grids = templateGrids(found);
+  var reference = templateReferenceMonth(grids);
+
+  if (reference === '') return;
+
+  for (var gridIndex = 0; gridIndex < grids.length; gridIndex += 1) {
+    var grid = grids[gridIndex].grid;
+    var headerAt = -1;
+
+    // SLA identifies itself in the two header rows. Searching the raw grids
+    // below would repeatedly traverse the 24k Work Orders and 45k Citas rows.
+    for (var rowIndex = 0; rowIndex < Math.min(grid.length, 3); rowIndex += 1) {
+      if (normalize((grid[rowIndex] || [])[0]) === 'SVTTITLE') { headerAt = rowIndex; break; }
+    }
+
+    if (headerAt < 0) continue;
+
+    var headers = headerIndex(grid[headerAt] || []);
+    var met = headers[normalize('Cumplido')];
+    var missed = headers[normalize('Incumplido')];
+    var total = headers[normalize('Total')];
+
+    if (met === undefined || missed === undefined) continue;
+
+    var month = normalize(grids[gridIndex].name).indexOf('MES AN') >= 0 ? shiftMonthLabel(reference, -1) : reference;
+
+    for (var dataIndex = headerAt + 1; dataIndex < grid.length; dataIndex += 1) {
+      var row = grid[dataIndex] || [];
+      var svt = text(row[0]);
+
+      if (svt === '' || normalize(svt) === 'TOTAL') continue;
+
+      var metValue = leadingNumber(row[met]);
+      var missedValue = leadingNumber(row[missed]);
+      bump(slas, [month, svt, metValue, missedValue], total === undefined ? metValue + missedValue : leadingNumber(row[total]));
+    }
+  }
+}
+
+/** Only historical source for annual requests; it is explicitly labelled as such in the clean book. */
+function agregarPeticionesAnual(peticionesAnual) {
+  var sheet = sheetByName(TAB.peticionesInforme, false);
+
+  if (!sheet) return;
+
+  // L3:Q15: row 3 names years, column L names Spanish months. The source is
+  // an audited aggregate, not a weekly snapshot, so it must not be recreated.
+  var values = sheet.getRange(3, 12, 13, 6).getValues();
+  var years = values[0] || [];
+
+  for (var rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
+    var monthNumber = numeroMesEspanol(values[rowIndex][0]);
+
+    if (monthNumber === 0) continue;
+
+    for (var column = 1; column < values[rowIndex].length; column += 1) {
+      var year = Number(years[column]);
+      var raw = values[rowIndex][column];
+
+      if (!isFinite(year) || text(raw) === '') continue;
+
+      bump(peticionesAnual, [String(year), year + '/' + pad2(monthNumber)], toNumber(raw));
+    }
   }
 }
 
@@ -2441,7 +2632,12 @@ function agregar(clasificacion, extraction) {
     workOrders: {},
     peticiones: {},
     peticionesProducto: {},
+    peticionesAnual: {},
     citas: {},
+    citasAnual: {},
+    hic: {},
+    comparativas: {},
+    slas: {},
     imacs: {}
   };
 
@@ -2449,7 +2645,11 @@ function agregar(clasificacion, extraction) {
   agregarEncuestas(found, buckets.encuestas);
   agregarWorkOrders(found, buckets.workOrders);
   agregarPeticiones(found, date, buckets.peticiones, buckets.peticionesProducto);
-  agregarCitas(found, date, buckets.citas);
+  agregarPeticionesAnual(buckets.peticionesAnual);
+  agregarCitas(found, date, buckets.citas, buckets.citasAnual);
+  agregarHic(found, buckets.hic);
+  agregarComparativas(found, buckets.comparativas);
+  agregarSlas(found, buckets.slas);
   agregarImacs(found, buckets.imacs);
 
   return {
@@ -2459,7 +2659,12 @@ function agregar(clasificacion, extraction) {
     workOrders: rows(buckets.workOrders),
     peticiones: rows(buckets.peticiones),
     peticionesProducto: rows(buckets.peticionesProducto),
+    peticionesAnual: rows(buckets.peticionesAnual),
     citas: rows(buckets.citas),
+    citasAnual: rows(buckets.citasAnual),
+    hic: rows(buckets.hic),
+    comparativas: rows(buckets.comparativas),
+    slas: rows(buckets.slas),
     imacs: rows(buckets.imacs)
   };
 }
@@ -2475,6 +2680,8 @@ function serializarPlano(agregado, meta) {
   if (meta.week) out.push('semana\t' + planoCell(meta.week));
   if (meta.generated) out.push('generado\t' + planoCell(meta.generated));
   if (meta.source) out.push('origen\t' + planoCell(meta.source));
+  if (meta.asOfDate) out.push('asOfDate\t' + planoCell(meta.asOfDate));
+  if (meta.scope === 'completo') out.push('alcance\tcompleto');
 
   for (var index = 0; index < SECTION_ORDER.length; index += 1) {
     var key = SECTION_ORDER[index];
@@ -2783,8 +2990,10 @@ function procesarSemana() {
     var agregado = agregar(clasificacion.found, config.extraction);
     var textoPlano = serializarPlano(agregado, {
       week: isoDate(config.extraction),
-      generated: new Date().toISOString(),
-      source: clasificacion.nombres.join('; ')
+    generated: new Date().toISOString(),
+      source: clasificacion.nombres.join('; '),
+      asOfDate: isoDate(config.extraction),
+      scope: 'completo'
     });
 
     escribirPlano(textoPlano);

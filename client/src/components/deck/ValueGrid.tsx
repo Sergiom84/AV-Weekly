@@ -34,21 +34,33 @@ export default function ValueGrid({ columns, rows, onChange }: ValueGridProps) {
     return null;
   }
 
+  // A full weekly (or long monthly) run needs its cells, not an empty label
+  // gutter. Short grids still retain the wider column needed by long category
+  // names. Week identity remains in the aria label and override key; the `S`
+  // prefix is only redundant visual noise in a dense editor.
+  const compactLabelColumn = columns.length >= 20;
+  const visibleColumns = columns.map(column =>
+    /^S\d+$/.test(column) ? column.slice(1) : column
+  );
+
   return (
     <div className="mt-[1cqi] max-h-[32%] shrink-0 overflow-auto border-t border-border pt-[0.8cqi] print:hidden">
       <table className="w-full table-fixed border-collapse font-mono text-[1.05cqi] tabular-nums">
         <thead>
           <tr>
-            <th className="w-[26%] px-[0.4cqi] py-[0.35cqi] text-left text-[1cqi] font-normal uppercase tracking-wide text-muted-foreground">
+            <th
+              className="px-[0.4cqi] py-[0.35cqi] text-left text-[1cqi] font-normal uppercase tracking-wide text-muted-foreground"
+              style={{ width: compactLabelColumn ? "9%" : "26%" }}
+            >
               <span className="sr-only">Categoría</span>
             </th>
-            {columns.map((column) => (
+            {columns.map((column, index) => (
               <th
                 key={column}
                 scope="col"
                 className="px-[0.2cqi] py-[0.35cqi] text-center text-[1cqi] font-normal uppercase tracking-wide text-muted-foreground"
               >
-                {column}
+                {visibleColumns[index]}
               </th>
             ))}
           </tr>

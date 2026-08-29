@@ -1,5 +1,10 @@
-import type { AgaCount, AgaDataset, AgaWeekAggregate } from "@shared/modules/aga/types";
+import type {
+  AgaCount,
+  AgaDataset,
+  AgaWeekAggregate,
+} from "@shared/modules/aga/types";
 import { agaWeekLabel } from "@shared/modules/aga/calendar";
+import { agaReportingPeriod } from "@shared/modules/aga/calendar";
 
 /**
  * Aggregation helpers for the AGA dataset.
@@ -32,17 +37,29 @@ export function weekLabel(date: string, reportWeek?: number | null): string {
   return agaWeekLabel(date, reportWeek);
 }
 
+/** Numeric AGA reporting week used by the common week-range selector. */
+export function weekNumber(
+  date: string,
+  reportWeek?: number | null
+): number | null {
+  return agaReportingPeriod(date, reportWeek)?.week ?? null;
+}
+
 /** The last `count` weeks of the history, still ascending by date. */
-export function lastWeeks(dataset: AgaDataset, count: number): AgaWeekAggregate[] {
+export function lastWeeks(
+  dataset: AgaDataset,
+  count: number
+): AgaWeekAggregate[] {
   const weeks = dataset.weeks ?? [];
 
   return count >= weeks.length ? weeks : weeks.slice(weeks.length - count);
 }
 
 /** The penultimate and the last week, the pair every comparison page charts. */
-export function comparedWeeks(
-  dataset: AgaDataset
-): { previous: AgaWeekAggregate | null; current: AgaWeekAggregate | null } {
+export function comparedWeeks(dataset: AgaDataset): {
+  previous: AgaWeekAggregate | null;
+  current: AgaWeekAggregate | null;
+} {
   const weeks = dataset.weeks ?? [];
 
   return {
@@ -52,7 +69,10 @@ export function comparedWeeks(
 }
 
 /** Signed variation of the last week over the previous one, e.g. `+5%`. */
-export function variationLabel(previous: number | null, current: number | null): string {
+export function variationLabel(
+  previous: number | null,
+  current: number | null
+): string {
   if (previous === null || current === null || previous === 0) {
     return "—";
   }
@@ -65,12 +85,12 @@ export function variationLabel(previous: number | null, current: number | null):
 
 /** Breakdown without the regional support desks. */
 export function withoutSupport(counts: AgaCount[]): AgaCount[] {
-  return counts.filter((entry) => entry.label !== EXCLUDED_DEPARTMENT);
+  return counts.filter(entry => entry.label !== EXCLUDED_DEPARTMENT);
 }
 
 /** Lookup of a breakdown by label, so a missing category reads as zero. */
 export function countsByLabel(counts: AgaCount[]): Map<string, number> {
-  return new Map(counts.map((entry) => [entry.label, entry.count]));
+  return new Map(counts.map(entry => [entry.label, entry.count]));
 }
 
 /**
@@ -119,4 +139,7 @@ export function agaColor(index: number): string {
 }
 
 /** Colours of the two-week comparison pages: previous muted, current dominant. */
-export const COMPARE_COLORS = ["var(--informe-serie-2)", "var(--informe-serie-4)"];
+export const COMPARE_COLORS = [
+  "var(--informe-serie-2)",
+  "var(--informe-serie-4)",
+];

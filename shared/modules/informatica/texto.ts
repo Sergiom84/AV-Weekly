@@ -33,10 +33,24 @@ export const INFORMATICA_TEXTO_SECTIONS = {
   peticiones: "PETICIONES",
   /** `fecha` `mes` `semana` `producto` `estado` `total` */
   peticionesProducto: "PETICIONESPRODUCTO",
+  /** `anio` `mes` `peticiones` — historical annual comparison. */
+  peticionesAnual: "PETICIONESANUAL",
   /** `fecha` `mes` `semana` `edificio` `tipo` `citas` */
   citas: "CITAS",
+  /** `anio` `mes` `citas` — historical annual comparison. */
+  citasAnual: "CITASANUAL",
   /** `fecha` `mes` `ciudad` `metrica` `total` */
   imacs: "IMACS",
+  /** `fecha` `mes` `semana` `proveedor` `estado` `equipos` — optional until its source is supplied. */
+  wasp: "WASP",
+  /** `fecha` `mes` `semana` `ambito` `estado` `equipos` — optional and not active in the deck. */
+  renove: "RENOVE",
+  /** `ambito` `mes` `categoria` `metrica` `total` — historical incident volumetry. */
+  hic: "HIC",
+  /** `vista` `elemento` `mes` `total` — three-month incident comparison. */
+  comparativas: "COMPARATIVAS",
+  /** `mes` `svt` `cumplido` `incumplido` `total` — monthly SLA results. */
+  slas: "SLAS",
 } as const;
 
 /** Metadata keys of the preamble, written as `clave<TAB>valor`. */
@@ -47,12 +61,18 @@ export const INFORMATICA_TEXTO_META = {
   generated: "generado",
   /** Source files the run read, separated by `;`. */
   source: "origen",
+  /** Explicit extraction date for period-sensitive sections. */
+  asOfDate: "asOfDate",
+  /** The whole dataset snapshot is present; omitted sections must not survive from an older import. */
+  scope: "alcance",
 } as const;
 
 export interface InformaticaTextoMeta {
   week?: string;
   generated?: string;
   source?: string;
+  asOfDate?: string;
+  scope?: string;
 }
 
 const TAB = "\t";
@@ -111,6 +131,8 @@ export function serializeInformaticaTexto(
   if (meta.week) preamble.push(line(INFORMATICA_TEXTO_META.week, meta.week));
   if (meta.generated) preamble.push(line(INFORMATICA_TEXTO_META.generated, meta.generated));
   if (meta.source) preamble.push(line(INFORMATICA_TEXTO_META.source, meta.source));
+  if (meta.asOfDate) preamble.push(line(INFORMATICA_TEXTO_META.asOfDate, meta.asOfDate));
+  if (meta.scope === "completo") preamble.push(line(INFORMATICA_TEXTO_META.scope, meta.scope));
 
   const body = [
     ...section(
@@ -176,15 +198,51 @@ export function serializeInformaticaTexto(
       )
     ),
     ...section(
+      INFORMATICA_TEXTO_SECTIONS.peticionesAnual,
+      (dataset.peticionesAnual ?? []).map((row) => line(row.anio, row.mes, row.peticiones))
+    ),
+    ...section(
       INFORMATICA_TEXTO_SECTIONS.citas,
       (dataset.citas ?? []).map((row) =>
         line(isoDay(row.fecha), row.mes, row.semana, row.edificio, row.tipo, row.citas)
       )
     ),
     ...section(
+      INFORMATICA_TEXTO_SECTIONS.citasAnual,
+      (dataset.citasAnual ?? []).map((row) => line(row.anio, row.mes, row.citas))
+    ),
+    ...section(
       INFORMATICA_TEXTO_SECTIONS.imacs,
       (dataset.imacs ?? []).map((row) =>
         line(isoDay(row.fecha), row.mes, row.ciudad, row.metrica, row.total)
+      )
+    ),
+    ...section(
+      INFORMATICA_TEXTO_SECTIONS.wasp,
+      (dataset.wasp ?? []).map((row) =>
+        line(isoDay(row.fecha), row.mes, row.semana, row.proveedor, row.estado, row.equipos)
+      )
+    ),
+    ...section(
+      INFORMATICA_TEXTO_SECTIONS.renove,
+      (dataset.renove ?? []).map((row) =>
+        line(isoDay(row.fecha), row.mes, row.semana, row.ambito, row.estado, row.equipos)
+      )
+    ),
+    ...section(
+      INFORMATICA_TEXTO_SECTIONS.hic,
+      (dataset.hic ?? []).map((row) =>
+        line(row.ambito, row.mes, row.categoria, row.metrica, row.total)
+      )
+    ),
+    ...section(
+      INFORMATICA_TEXTO_SECTIONS.comparativas,
+      (dataset.comparativas ?? []).map((row) => line(row.vista, row.elemento, row.mes, row.total))
+    ),
+    ...section(
+      INFORMATICA_TEXTO_SECTIONS.slas,
+      (dataset.slas ?? []).map((row) =>
+        line(row.mes, row.svt, row.cumplido, row.incumplido, row.total)
       )
     ),
   ];

@@ -302,6 +302,8 @@ const plain = script.serializarPlano(aggregated, {
   week: extractionArg,
   generated: `${extractionArg}T00:00:00.000Z`,
   source,
+  asOfDate: extractionArg,
+  scope: "completo",
 });
 
 process.stdout.write(`${plain}\n`);

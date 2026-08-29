@@ -19,6 +19,7 @@ export interface OficinasDataPageProps extends OficinasPageProps {
 
 interface PageShellProps extends OficinasPageProps {
   children: ReactNode;
+  dense?: boolean;
 }
 
 /** Heading, body and footnote every Oficinas data page shares. */
@@ -27,6 +28,7 @@ export default function PageShell({
   editing,
   onChange,
   children,
+  dense = false,
 }: PageShellProps) {
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
@@ -41,7 +43,7 @@ export default function PageShell({
         onTitleChange={setSlot("title")}
       />
 
-      <div className="mt-[1.5cqi] flex min-h-0 flex-1 flex-col gap-[1.2cqi]">
+      <div className={`flex min-h-0 flex-1 flex-col ${dense ? "mt-[0.8cqi] gap-[0.5cqi]" : "mt-[1.5cqi] gap-[1.2cqi]"}`}>
         {children}
       </div>
 

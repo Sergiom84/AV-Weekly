@@ -1,10 +1,18 @@
 import { MONTH_LABELS } from "@shared/deck/core";
 import type { AgaYearSeries } from "@shared/modules/aga/types";
 import KpiRow from "@/components/deck/KpiRow";
-import { agaColor } from "../aggregate";
-import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
+import { yearSeriesColor } from "@/lib/yearSeries";
+import YearSelector from "@/components/deck/YearSelector";
+import {
+  cellKey,
+  isOverridden,
+  overriddenValue,
+  withOverride,
+} from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
-import SeriesLineChart, { type LineSeries } from "@/components/deck/SeriesLineChart";
+import SeriesLineChart, {
+  type LineSeries,
+} from "@/components/deck/SeriesLineChart";
 import ValueGrid from "@/components/deck/ValueGrid";
 
 interface AnualEvolutionProps extends AgaPageProps {
@@ -25,12 +33,21 @@ export default function AnualEvolution({
   onChange,
   years,
 }: AnualEvolutionProps) {
-  const entries = [...years]
+  // The annual presentation compares 2024 onward. Earlier history remains
+  // imported but is intentionally outside the report's visible comparison.
+  const availableYears = Array.from(
+    new Set(years.map(serie => serie.year).filter(year => year >= 2024))
+  ).sort((a, b) => a - b);
+  const selectedYears = page.years
+    ? page.years.filter(year => availableYears.includes(year))
+    : availableYears;
+  const entries = years
+    .filter(serie => selectedYears.includes(serie.year))
     .sort((a, b) => a.year - b.year)
-    .map((serie, index) => ({
+    .map(serie => ({
       year: serie.year,
       key: `y${serie.year}`,
-      color: agaColor(index),
+      color: yearSeriesColor(serie.year),
       cells: MONTH_LABELS.map((_, monthIndex) => {
         const key = cellKey(String(serie.year), String(monthIndex));
 
@@ -42,7 +59,7 @@ export default function AnualEvolution({
       }),
     }));
 
-  const series: LineSeries[] = entries.map((entry) => ({
+  const series: LineSeries[] = entries.map(entry => ({
     key: entry.key,
     label: String(entry.year),
     color: entry.color,
@@ -58,7 +75,7 @@ export default function AnualEvolution({
     return row;
   });
 
-  const items = entries.map((entry) => ({
+  const items = entries.map(entry => ({
     label: String(entry.year),
     value: entry.cells
       .reduce((sum, cell) => sum + (cell.value ?? 0), 0)
@@ -67,6 +84,19 @@ export default function AnualEvolution({
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
+      {editing && availableYears.length > 0 && (
+        <YearSelector
+          selection={{
+            available: availableYears,
+            selected: selectedYears,
+            onChange: selected =>
+              onChange({
+                years: Array.from(new Set(selected)).sort((a, b) => a - b),
+              }),
+          }}
+        />
+      )}
+
       <KpiRow items={items} />
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -76,7 +106,7 @@ export default function AnualEvolution({
       {editing && (
         <ValueGrid
           columns={MONTH_LABELS}
-          rows={entries.map((entry) => ({
+          rows={entries.map(entry => ({
             label: String(entry.year),
             color: entry.color,
             cells: entry.cells,

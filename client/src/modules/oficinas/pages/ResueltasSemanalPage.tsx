@@ -72,6 +72,8 @@ export default function ResueltasSemanalPage({
       throughWeek={throughWeek}
       caption="Sin validadoras"
       totalRow={false}
+      rankByAverage
+      layout="comparativas-semanales"
       yearSelector={
         availableYears.length > 0
           ? {

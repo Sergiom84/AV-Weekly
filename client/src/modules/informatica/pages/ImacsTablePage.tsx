@@ -15,16 +15,16 @@ export default function ImacsTablePage({
   dataset,
 }: ImacsTablePageProps) {
   const rows = dataset.imacs ?? [];
-  const months = uniqueSorted(rows.map((row) => row.mes));
+  const months = uniqueSorted(rows.map(row => row.mes));
   const metrics = ["Solicitudes", "Intervenciones"];
-  const columns = months.flatMap((month) =>
-    metrics.map((metric) => `${month}|${metric}`)
+  const columns = months.flatMap(month =>
+    metrics.map(metric => `${month}|${metric}`)
   );
   const matrix = pivot(
     rows,
-    (row) => row.ciudad,
-    (row) => `${row.mes}|${row.metrica}`,
-    (row) => row.total,
+    row => row.ciudad,
+    row => `${row.mes}|${row.metrica}`,
+    row => row.total,
     { columns }
   );
 
@@ -33,12 +33,13 @@ export default function ImacsTablePage({
       <div className="min-h-0 flex-1 overflow-auto">
         <MatrixTable
           rowHeader="Edificio"
-          columns={columns.map((column) => {
+          columns={columns.map(column => {
             const [month, metric] = column.split("|");
             return `${monthLabel(month)} ${metric === "Solicitudes" ? "Sol" : "Int"}`;
           })}
           rows={matrix.rows}
           rowTotals={false}
+          variant="report"
         />
       </div>
     </PageShell>

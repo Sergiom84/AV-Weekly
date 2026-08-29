@@ -96,6 +96,11 @@ const SECTIONS: Record<
       total: num(c[5]),
     }),
   },
+  [INFORMATICA_TEXTO_SECTIONS.peticionesAnual]: {
+    key: "peticionesAnual",
+    cells: 3,
+    build: (c) => ({ anio: num(c[0]), mes: c[1], peticiones: num(c[2]) }),
+  },
   [INFORMATICA_TEXTO_SECTIONS.citas]: {
     key: "citas",
     cells: 6,
@@ -108,6 +113,11 @@ const SECTIONS: Record<
       citas: num(c[5]),
     }),
   },
+  [INFORMATICA_TEXTO_SECTIONS.citasAnual]: {
+    key: "citasAnual",
+    cells: 3,
+    build: (c) => ({ anio: num(c[0]), mes: c[1], citas: num(c[2]) }),
+  },
   [INFORMATICA_TEXTO_SECTIONS.imacs]: {
     key: "imacs",
     cells: 5,
@@ -118,6 +128,35 @@ const SECTIONS: Record<
       metrica: c[3],
       total: num(c[4]),
     }),
+  },
+  [INFORMATICA_TEXTO_SECTIONS.wasp]: {
+    key: "wasp",
+    cells: 6,
+    build: (c) => ({
+      fecha: day(c[0]), mes: c[1], semana: num(c[2]), proveedor: c[3], estado: c[4], equipos: num(c[5]),
+    }),
+  },
+  [INFORMATICA_TEXTO_SECTIONS.renove]: {
+    key: "renove",
+    cells: 6,
+    build: (c) => ({
+      fecha: day(c[0]), mes: c[1], semana: num(c[2]), ambito: c[3], estado: c[4], equipos: num(c[5]),
+    }),
+  },
+  [INFORMATICA_TEXTO_SECTIONS.hic]: {
+    key: "hic",
+    cells: 5,
+    build: (c) => ({ ambito: c[0], mes: c[1], categoria: c[2], metrica: c[3], total: num(c[4]) }),
+  },
+  [INFORMATICA_TEXTO_SECTIONS.comparativas]: {
+    key: "comparativas",
+    cells: 4,
+    build: (c) => ({ vista: c[0], elemento: c[1], mes: c[2], total: num(c[3]) }),
+  },
+  [INFORMATICA_TEXTO_SECTIONS.slas]: {
+    key: "slas",
+    cells: 5,
+    build: (c) => ({ mes: c[0], svt: c[1], cumplido: num(c[2]), incumplido: num(c[3]), total: num(c[4]) }),
   },
 };
 
@@ -143,6 +182,8 @@ const META_BY_LABEL: Record<string, keyof InformaticaTextoMeta> = {
   [INFORMATICA_TEXTO_META.week]: "week",
   [INFORMATICA_TEXTO_META.generated]: "generated",
   [INFORMATICA_TEXTO_META.source]: "source",
+  [INFORMATICA_TEXTO_META.asOfDate]: "asOfDate",
+  [INFORMATICA_TEXTO_META.scope]: "scope",
 };
 
 /** `1.480` and `1,480` are the same number: the sheet writes group separators. */

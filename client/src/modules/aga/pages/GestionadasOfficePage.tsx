@@ -1,9 +1,17 @@
 import { MONTH_LABELS } from "@shared/deck/core";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { AgaDataset } from "@shared/modules/aga/types";
 import { agaColor } from "../aggregate";
-import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
+import {
+  cellKey,
+  isOverridden,
+  overriddenValue,
+  withOverride,
+} from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
-import SeriesLineChart, { type LineSeries } from "@/components/deck/SeriesLineChart";
+import SeriesLineChart, {
+  type LineSeries,
+} from "@/components/deck/SeriesLineChart";
 import ValueGrid from "@/components/deck/ValueGrid";
 
 interface GestionadasOfficePageProps extends AgaPageProps {
@@ -31,8 +39,13 @@ export default function GestionadasOfficePage({
 }: GestionadasOfficePageProps) {
   const months = dataset.office?.months ?? [];
   const families = dataset.office?.families ?? [];
+  const labels = families.map(family => family.label);
+  const hiddenRows = page.hiddenRows ?? [];
+  const visibleFamilies = families.filter(
+    family => !hiddenRows.includes(family.label)
+  );
 
-  const entries = families.map((family, index) => ({
+  const entries = visibleFamilies.map((family, index) => ({
     label: family.label,
     key: `f${index}`,
     color: agaColor(index),
@@ -47,14 +60,16 @@ export default function GestionadasOfficePage({
     }),
   }));
 
-  const series: LineSeries[] = entries.map((entry) => ({
+  const series: LineSeries[] = entries.map(entry => ({
     key: entry.key,
     label: entry.label,
     color: entry.color,
   }));
 
   const data = months.map((month, position) => {
-    const row: Record<string, number | string | null> = { mes: monthLabel(month) };
+    const row: Record<string, number | string | null> = {
+      mes: monthLabel(month),
+    };
 
     for (const entry of entries) {
       row[entry.key] = entry.cells[position].value;
@@ -65,6 +80,16 @@ export default function GestionadasOfficePage({
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
+      {editing && (
+        <RowFilterPanel
+          labels={labels}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col">
         <SeriesLineChart categoryKey="mes" series={series} data={data} />
       </div>
@@ -72,7 +97,7 @@ export default function GestionadasOfficePage({
       {editing && (
         <ValueGrid
           columns={months.map(monthLabel)}
-          rows={entries.map((entry) => ({
+          rows={entries.map(entry => ({
             label: entry.label,
             color: entry.color,
             cells: entry.cells,

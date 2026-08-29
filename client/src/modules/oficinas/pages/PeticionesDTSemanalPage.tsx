@@ -51,6 +51,8 @@ export default function PeticionesDTSemanalPage({
       totals={totals}
       comparison={totals}
       throughWeek={reportWeek(dataset, year)}
+      rankByAverage
+      layout="peticiones-territorial-semanal"
       yearSelector={
         availableYears.length > 0
           ? {

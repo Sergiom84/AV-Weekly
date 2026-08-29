@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -12,10 +11,10 @@ import type { DeckPage, InformeMonthlyDataset } from "@shared/informe";
 import { MONTH_LABELS } from "@shared/informe";
 import EditableNumber from "@/components/deck/EditableNumber";
 import EditableText from "@/components/deck/EditableText";
+import YearSelector from "@/components/deck/YearSelector";
 import SlideHeading from "@/components/deck/SlideHeading";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
+import { yearSeriesColor } from "@/lib/yearSeries";
 
 interface MonthlyTrendPageProps {
   page: DeckPage;
@@ -24,22 +23,14 @@ interface MonthlyTrendPageProps {
   onChange: (patch: Partial<DeckPage>) => void;
 }
 
-const DEFAULT_YEARS = [2023, 2024, 2025, 2026];
-
-// Report palette, assigned by position in the ascending year list so adding or
-// removing a year keeps the sequence intact.
-const SERIES_COLORS = [
-  "var(--informe-serie-1)",
-  "var(--informe-serie-2)",
-  "var(--informe-serie-3)",
-  "var(--informe-serie-4)",
-];
-
-const seriesColor = (index: number) => SERIES_COLORS[index % SERIES_COLORS.length];
+const DEFAULT_YEARS = [2024, 2025, 2026];
 
 // Recharts inlines its own tick fill, which overrides a Tailwind class and
 // leaves the axis unreadable in dark mode. Set the token explicitly.
-const AXIS_TICK = { fill: "var(--muted-foreground)", className: "text-[1.1cqi]" };
+const AXIS_TICK = {
+  fill: "var(--muted-foreground)",
+  className: "text-[1.1cqi]",
+};
 
 const cellKey = (year: number, monthIndex: number) => `${year}:${monthIndex}`;
 
@@ -53,16 +44,23 @@ export default function MonthlyTrendPage({
   editing,
   onChange,
 }: MonthlyTrendPageProps) {
-  const [yearDraft, setYearDraft] = useState("");
   const animate = usePresentationAnimation();
 
-  const years = [
-    ...(page.years && page.years.length > 0 ? page.years : DEFAULT_YEARS),
-  ].sort((a, b) => a - b);
-  const imported = page.supportType ? monthly.byType[page.supportType] : undefined;
+  const imported = page.supportType
+    ? monthly.byType[page.supportType]
+    : undefined;
+  const availableYears = Array.from(
+    new Set([...DEFAULT_YEARS, ...monthly.years].filter(year => year >= 2024))
+  ).sort((a, b) => a - b);
+  const years = page.years
+    ? page.years.filter(year => availableYears.includes(year))
+    : availableYears;
 
   const isOverridden = (year: number, monthIndex: number) =>
-    Object.prototype.hasOwnProperty.call(page.overrides, cellKey(year, monthIndex));
+    Object.prototype.hasOwnProperty.call(
+      page.overrides,
+      cellKey(year, monthIndex)
+    );
 
   const valueAt = (year: number, monthIndex: number): number | null => {
     if (isOverridden(year, monthIndex)) {
@@ -84,22 +82,12 @@ export default function MonthlyTrendPage({
     onChange({ text: { ...page.text, [key]: value } });
 
   const setCell = (year: number, monthIndex: number, value: number | null) =>
-    onChange({ overrides: { ...page.overrides, [cellKey(year, monthIndex)]: value } });
+    onChange({
+      overrides: { ...page.overrides, [cellKey(year, monthIndex)]: value },
+    });
 
   const setYears = (next: number[]) =>
     onChange({ years: Array.from(new Set(next)).sort((a, b) => a - b) });
-
-  const candidateYears = Array.from(
-    new Set([...DEFAULT_YEARS, ...monthly.years, ...years])
-  ).sort((a, b) => a - b);
-
-  const addDraftYear = () => {
-    const parsed = Number(yearDraft.trim());
-    if (Number.isInteger(parsed) && parsed > 1900 && parsed < 2200) {
-      setYears([...years, parsed]);
-      setYearDraft("");
-    }
-  };
 
   return (
     <div className="@container flex h-full w-full flex-col text-foreground">
@@ -112,49 +100,24 @@ export default function MonthlyTrendPage({
       />
 
       {editing && (
-        <div className="mt-[1cqi] flex shrink-0 flex-wrap items-center gap-1">
-          {candidateYears.map((year) => {
-            const active = years.includes(year);
-            return (
-              <Button
-                key={year}
-                type="button"
-                size="sm"
-                variant={active ? "default" : "outline"}
-                aria-pressed={active}
-                className="h-7 px-2 font-mono text-xs tabular-nums"
-                onClick={() =>
-                  setYears(active ? years.filter((item) => item !== year) : [...years, year])
-                }
-              >
-                {year}
-              </Button>
-            );
-          })}
-          <Input
-            aria-label="Añadir año"
-            inputMode="numeric"
-            className="h-7 w-20 font-mono text-xs tabular-nums"
-            value={yearDraft}
-            onBlur={addDraftYear}
-            onChange={(event) => setYearDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addDraftYear();
-              }
+        <div className="mt-[1cqi]">
+          <YearSelector
+            selection={{
+              available: availableYears,
+              selected: years,
+              onChange: setYears,
             }}
           />
         </div>
       )}
 
       <div className="mt-[1.2cqi] flex shrink-0 items-center justify-center gap-[2.4cqi] font-mono text-[1.3cqi] text-foreground">
-        {years.map((year, index) => (
+        {years.map(year => (
           <span key={year} className="flex items-center gap-[0.6cqi]">
             <span
               aria-hidden="true"
               className="inline-block size-[1.1cqi] rounded-full"
-              style={{ backgroundColor: seriesColor(index) }}
+              style={{ backgroundColor: yearSeriesColor(year) }}
             />
             <span className="tabular-nums">{year}</span>
           </span>
@@ -165,7 +128,10 @@ export default function MonthlyTrendPage({
           table below keeps its natural height. */}
       <div className="mt-[0.6cqi] h-[46%] shrink-0">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+          <LineChart
+            data={chartData}
+            margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+          >
             <CartesianGrid vertical={false} stroke="var(--border)" />
             <XAxis
               dataKey="mes"
@@ -192,15 +158,15 @@ export default function MonthlyTrendPage({
                 fontSize: "1.2cqi",
               }}
             />
-            {years.map((year, index) => (
+            {years.map(year => (
               <Line
                 key={year}
                 type="natural"
                 dataKey={String(year)}
                 name={String(year)}
-                stroke={seriesColor(index)}
+                stroke={yearSeriesColor(year)}
                 strokeWidth={3}
-                dot={{ r: 4, fill: seriesColor(index), strokeWidth: 0 }}
+                dot={{ r: 4, fill: yearSeriesColor(year), strokeWidth: 0 }}
                 activeDot={{ r: 5, strokeWidth: 0 }}
                 connectNulls={false}
                 isAnimationActive={animate}
@@ -215,12 +181,12 @@ export default function MonthlyTrendPage({
       <div className="mt-[1.4cqi] min-h-0 flex-1 overflow-auto">
         <table className="w-full table-fixed border-collapse font-mono text-[1.15cqi] tabular-nums">
           <tbody>
-            {years.map((year, index) => (
+            {years.map(year => (
               <tr key={year}>
                 <th
                   scope="row"
                   className="w-[9%] px-[0.4cqi] py-[0.45cqi] text-center text-[1.25cqi] font-bold text-white dark:text-[color:var(--background)]"
-                  style={{ backgroundColor: seriesColor(index) }}
+                  style={{ backgroundColor: yearSeriesColor(year) }}
                 >
                   {year}
                 </th>
@@ -231,7 +197,7 @@ export default function MonthlyTrendPage({
                   >
                     <EditableNumber
                       value={valueAt(year, monthIndex)}
-                      onChange={(value) => setCell(year, monthIndex, value)}
+                      onChange={value => setCell(year, monthIndex, value)}
                       editing={editing}
                       overridden={isOverridden(year, monthIndex)}
                       ariaLabel={`${label} ${year}`}

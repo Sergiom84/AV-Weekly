@@ -2,14 +2,17 @@ import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
+import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
+import { resolveWeekSelection, type WeekSelection } from "@shared/deck/core";
 import type { AgaCount, AgaDataset } from "@shared/modules/aga/types";
 import {
-  COMPARE_COLORS,
-  comparedWeeks,
   countsByLabel,
+  agaColor,
   orderedLabels,
   variationLabel,
   weekLabel,
+  weekNumber,
 } from "../aggregate";
 import PageShell, { type AgaPageProps } from "./PageShell";
 
@@ -18,7 +21,10 @@ interface TwoWeekCompareProps extends AgaPageProps {
   /** Label of the category axis, used as the chart row key. */
   categoryKey: string;
   /** Breakdown of a week the page charts, already filtered by the caller. */
-  breakdownOf: (week: { byDepartment: AgaCount[]; byProject: AgaCount[] }) => AgaCount[];
+  breakdownOf: (week: {
+    byDepartment: AgaCount[];
+    byProject: AgaCount[];
+  }) => AgaCount[];
 }
 
 /**
@@ -36,47 +42,56 @@ export default function TwoWeekCompare({
   categoryKey,
   breakdownOf,
 }: TwoWeekCompareProps) {
-  const { previous, current } = comparedWeeks(dataset);
+  const entries = dataset.weeks ?? [];
+  const availableWeeks = entries
+    .map(entry => weekNumber(entry.week, entry.reportWeek))
+    .filter((week): week is number => week !== null);
+  const defaultSelection: WeekSelection = {
+    mode: "list",
+    from: availableWeeks[Math.max(0, availableWeeks.length - 2)] ?? 1,
+    to: availableWeeks[availableWeeks.length - 1] ?? 1,
+    weeks: availableWeeks.slice(-2),
+  };
+  const selection = page.weekSelection ?? defaultSelection;
+  const selectedWeeks = new Set(
+    resolveWeekSelection(selection, availableWeeks)
+  );
+  const selectedEntries = entries.filter(entry => {
+    const week = weekNumber(entry.week, entry.reportWeek);
+    return week !== null && selectedWeeks.has(week);
+  });
+  const breakdowns = selectedEntries.map(breakdownOf);
+  const labels = orderedLabels(breakdowns);
+  const hiddenRows = page.hiddenRows ?? [];
+  const visibleLabels = labels.filter(label => !hiddenRows.includes(label));
 
-  const previousCounts = previous ? breakdownOf(previous) : [];
-  const currentCounts = current ? breakdownOf(current) : [];
-  const labels = orderedLabels([previousCounts, currentCounts]);
-
-  const previousBy = countsByLabel(previousCounts);
-  const currentBy = countsByLabel(currentCounts);
-
-  const series: CategorySeries[] = [
-    ...(previous
-      ? [
-          {
-            key: "previa",
-            label: weekLabel(previous.week, previous.reportWeek),
-            color: COMPARE_COLORS[0],
-          },
-        ]
-      : []),
-    ...(current
-      ? [
-          {
-            key: "actual",
-            label: weekLabel(current.week, current.reportWeek),
-            color: COMPARE_COLORS[1],
-          },
-        ]
-      : []),
-  ];
-
-  const data = labels.map((label) => ({
-    [categoryKey]: label,
-    previa: previousBy.get(label) ?? 0,
-    actual: currentBy.get(label) ?? 0,
+  const series: CategorySeries[] = selectedEntries.map((entry, index) => ({
+    key: `w${index}`,
+    label: weekLabel(entry.week, entry.reportWeek),
+    color: agaColor(index),
   }));
+
+  const data = visibleLabels.map(label => {
+    const row: Record<string, number | string> = { [categoryKey]: label };
+
+    breakdowns.forEach((breakdown, index) => {
+      row[`w${index}`] = countsByLabel(breakdown).get(label) ?? 0;
+    });
+
+    return row;
+  });
 
   const sum = (counts: AgaCount[]) =>
     counts.reduce((total, entry) => total + entry.count, 0);
 
-  const previousTotal = previous ? sum(previousCounts) : null;
-  const currentTotal = current ? sum(currentCounts) : null;
+  const previous = selectedEntries[selectedEntries.length - 2] ?? null;
+  const current = selectedEntries[selectedEntries.length - 1] ?? null;
+  const previousTotal = previous
+    ? sum(breakdowns[breakdowns.length - 2] ?? [])
+    : null;
+  const currentTotal = current
+    ? sum(breakdowns[breakdowns.length - 1] ?? [])
+    : null;
 
   const items = [
     ...(previous
@@ -101,6 +116,24 @@ export default function TwoWeekCompare({
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
       <KpiRow items={items} />
+
+      {editing && (
+        <WeekRangeSelector
+          selection={selection}
+          available={availableWeeks}
+          onChange={weekSelection => onChange({ weekSelection })}
+        />
+      )}
+
+      {editing && (
+        <RowFilterPanel
+          labels={labels}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart

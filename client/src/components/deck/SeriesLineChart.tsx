@@ -8,6 +8,7 @@ import {
   YAxis,
 } from "recharts";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
+import { formatChartMetric, metricAxisWidth } from "@shared/deck/core";
 
 export interface LineSeries {
   key: string;
@@ -43,6 +44,9 @@ export default function SeriesLineChart({
   data,
 }: SeriesLineChartProps) {
   const animate = usePresentationAnimation();
+  const yAxisWidth = metricAxisWidth(
+    data.flatMap(entry => series.map(item => entry[item.key]))
+  );
 
   return (
     <>
@@ -63,7 +67,7 @@ export default function SeriesLineChart({
           ResponsiveContainer to zero. */}
       <div className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 12, right: 8, bottom: 0, left: 0 }}>
+          <LineChart data={data} margin={{ top: 12, right: 0, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--border)" />
             <XAxis
               dataKey={categoryKey}
@@ -75,8 +79,9 @@ export default function SeriesLineChart({
             <YAxis
               stroke="var(--border)"
               tick={AXIS_TICK}
+              tickFormatter={formatChartMetric}
               tickLine={false}
-              width={40}
+              width={yAxisWidth}
               domain={[0, "auto"]}
               allowDecimals={false}
             />

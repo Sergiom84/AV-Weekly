@@ -1,6 +1,14 @@
-import CategoryBarChart, { type CategorySeries } from "@/components/deck/CategoryBarChart";
+import CategoryBarChart, {
+  type CategorySeries,
+} from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
+import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
+import {
+  defaultMonthSelection,
+  resolveMonthSelection,
+} from "@shared/deck/core";
 import {
   coverageEnd,
   lastClosedMonth,
@@ -30,13 +38,31 @@ export default function ImacsChartPage({
   // month. When IMAC is the only uploaded source there is no operational
   // cutoff from incidents/requests, so today is the conservative fallback.
   const cutoff = coverageEnd(dataset) ?? new Date().toISOString().slice(0, 10);
-  const month = lastClosedMonth(rows.map((row) => row.mes), cutoff);
-  const grouped = new Map<string, { solicitudes: number; intervenciones: number }>();
+  const availableMonths = rows
+    .map(row => row.mes)
+    .filter((month, index, all) => all.indexOf(month) === index)
+    .sort();
+  const monthSelection =
+    page.monthSelection ??
+    defaultMonthSelection(
+      lastClosedMonth(availableMonths, cutoff) ??
+        availableMonths[availableMonths.length - 1] ??
+        ""
+    );
+  const selectedMonths = resolveMonthSelection(monthSelection, availableMonths);
+  const month = selectedMonths[selectedMonths.length - 1] ?? null;
+  const grouped = new Map<
+    string,
+    { solicitudes: number; intervenciones: number }
+  >();
 
   for (const row of rows) {
     if (row.mes !== month) continue;
 
-    const current = grouped.get(row.ciudad) ?? { solicitudes: 0, intervenciones: 0 };
+    const current = grouped.get(row.ciudad) ?? {
+      solicitudes: 0,
+      intervenciones: 0,
+    };
     const metric = row.metrica.toLocaleLowerCase("es-ES");
 
     if (metric === "solicitudes") current.solicitudes += row.total;
@@ -44,25 +70,54 @@ export default function ImacsChartPage({
     grouped.set(row.ciudad, current);
   }
 
-  const data = Array.from(grouped.entries())
+  const allData = Array.from(grouped.entries())
     .map(([edificio, totals]) => ({ edificio, ...totals }))
-    .sort((a, b) =>
-      b.intervenciones - a.intervenciones ||
-      b.solicitudes - a.solicitudes ||
-      a.edificio.localeCompare(b.edificio, "es")
+    .sort(
+      (a, b) =>
+        b.intervenciones - a.intervenciones ||
+        b.solicitudes - a.solicitudes ||
+        a.edificio.localeCompare(b.edificio, "es")
     );
+  const hiddenRows = page.hiddenRows ?? [];
+  const data = allData.filter(row => !hiddenRows.includes(row.edificio));
   const totalRequests = data.reduce((sum, row) => sum + row.solicitudes, 0);
-  const totalInterventions = data.reduce((sum, row) => sum + row.intervenciones, 0);
+  const totalInterventions = data.reduce(
+    (sum, row) => sum + row.intervenciones,
+    0
+  );
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
       <KpiRow
         items={[
           { label: month ? monthLabel(month) : "Periodo", value: "IMACs" },
-          { label: "Solicitudes", value: totalRequests.toLocaleString("es-ES") },
-          { label: "Intervenciones", value: totalInterventions.toLocaleString("es-ES") },
+          {
+            label: "Solicitudes",
+            value: totalRequests.toLocaleString("es-ES"),
+          },
+          {
+            label: "Intervenciones",
+            value: totalInterventions.toLocaleString("es-ES"),
+          },
         ]}
       />
+      {editing && (
+        <MonthRangeSelector
+          selection={monthSelection}
+          available={availableMonths}
+          format={monthLabel}
+          onChange={monthSelection => onChange({ monthSelection })}
+        />
+      )}
+      {editing && (
+        <RowFilterPanel
+          labels={allData.map(row => row.edificio)}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart
           categoryKey="edificio"

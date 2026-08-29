@@ -15,30 +15,6 @@ interface WeekRangeSelectorProps {
   disabled?: boolean;
 }
 
-/**
- * Month (0-11) an ISO week belongs to, taken from its Thursday: start at
- * January 1st, move forward to the requested week, step back to that week's
- * Monday and add three days. Matches how the weekly workbook is bucketed.
- */
-function isoWeekMonth(week: number, year: number): number {
-  const date = new Date(Date.UTC(year, 0, 1));
-  date.setUTCDate(date.getUTCDate() + (week - 1) * 7);
-  // getUTCDay() is 0 on Sunday; shift so Monday is 0.
-  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7) + 3);
-  return date.getUTCMonth();
-}
-
-/**
- * Weeks of the last month with data: the month of the latest available week,
- * from its first to its last available week. A single week is a valid result.
- */
-function lastMonthRange(available: number[], year: number): [number, number] {
-  const last = available[available.length - 1];
-  const month = isoWeekMonth(last, year);
-  const weeks = available.filter((week) => isoWeekMonth(week, year) === month);
-  return [weeks[0] ?? last, weeks[weeks.length - 1] ?? last];
-}
-
 export default function WeekRangeSelector({
   selection,
   available,
@@ -51,7 +27,6 @@ export default function WeekRangeSelector({
 
   const first = available[0];
   const last = available[available.length - 1];
-  const year = new Date().getFullYear();
 
   const setRange = (from: number, to: number) => {
     onChange({
@@ -72,7 +47,7 @@ export default function WeekRangeSelector({
         <Select
           disabled={disabled}
           value={String(selection.from)}
-          onValueChange={(value) => setRange(Number(value), selection.to)}
+          onValueChange={value => setRange(Number(value), selection.to)}
         >
           <SelectTrigger
             size="sm"
@@ -82,8 +57,12 @@ export default function WeekRangeSelector({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {available.map((week) => (
-              <SelectItem key={week} value={String(week)} className="font-mono text-xs">
+            {available.map(week => (
+              <SelectItem
+                key={week}
+                value={String(week)}
+                className="font-mono text-xs"
+              >
                 {`S${week}`}
               </SelectItem>
             ))}
@@ -95,7 +74,7 @@ export default function WeekRangeSelector({
         <Select
           disabled={disabled}
           value={String(selection.to)}
-          onValueChange={(value) => setRange(selection.from, Number(value))}
+          onValueChange={value => setRange(selection.from, Number(value))}
         >
           <SelectTrigger
             size="sm"
@@ -105,8 +84,12 @@ export default function WeekRangeSelector({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {available.map((week) => (
-              <SelectItem key={week} value={String(week)} className="font-mono text-xs">
+            {available.map(week => (
+              <SelectItem
+                key={week}
+                value={String(week)}
+                className="font-mono text-xs"
+              >
                 {`S${week}`}
               </SelectItem>
             ))}
@@ -124,19 +107,6 @@ export default function WeekRangeSelector({
           onClick={() => setRange(first, last)}
         >
           Todas
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 px-2 font-mono text-xs"
-          disabled={disabled}
-          onClick={() => {
-            const [from, to] = lastMonthRange(available, year);
-            setRange(from, to);
-          }}
-        >
-          Último mes
         </Button>
         <Button
           type="button"

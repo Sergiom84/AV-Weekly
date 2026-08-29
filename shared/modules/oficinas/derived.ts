@@ -315,6 +315,37 @@ export function rankedRows<T extends OficinasRow>(
 }
 
 /**
+ * Rows for a weekly pivot ordered by the same reported-week mean it displays.
+ * A partial or absent week therefore cannot lower a row's position.
+ */
+export function rankedRowsByAverage<T extends OficinasRow>(
+  rows: T[],
+  year: number,
+  weeks: number[]
+): T[] {
+  const averageOf = (row: T) =>
+    weeks.length === 0
+      ? 0
+      : weeks.reduce((sum, week) => sum + valueAt(row.values, year, week), 0) /
+        weeks.length;
+
+  return [...rows].sort(
+    (a, b) =>
+      averageOf(b) - averageOf(a) || a.label.localeCompare(b.label, "es")
+  );
+}
+
+/** Keeps the aggregate `OTROS` row immediately before the table total. */
+export function rowsWithOtrosLast<T extends { label?: string; dt?: string }>(
+  rows: T[]
+): T[] {
+  const isOtros = (row: T) =>
+    (row.label ?? row.dt ?? "").trim().toLocaleUpperCase("es-ES") === "OTROS";
+
+  return [...rows].sort((a, b) => Number(isOtros(a)) - Number(isOtros(b)));
+}
+
+/**
  * Share of each row in a week, recomputed rather than read.
  *
  * Sheets 14 and 17 ship the percentage inside the cell text (`"49 (39%)"`), but

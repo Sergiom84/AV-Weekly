@@ -256,7 +256,7 @@ describe("texto generado por el script de Drive", () => {
     ? it
     : it.skip;
 
-  run("genera las ocho secciones y el parser no descarta ninguna fila", () => {
+  run("genera todas las secciones verificables y el parser no descarta ninguna fila", () => {
     const texto = execFileSync(
       process.execPath,
       [verifier, sampleFolder, "2026-08-24"],
@@ -279,6 +279,7 @@ describe("texto generado por el script de Drive", () => {
 
     expect(meta).toMatchObject({
       week: "2026-08-24",
+      asOfDate: "2026-08-24",
       generated: "2026-08-24T00:00:00.000Z",
     });
     expect(dataset.sheetsFound).toEqual([
@@ -288,17 +289,31 @@ describe("texto generado por el script de Drive", () => {
       "workOrders",
       "peticiones",
       "peticionesProducto",
+      "peticionesAnual",
       "citas",
+      "citasAnual",
+      "hic",
+      "comparativas",
+      "slas",
       "imacs",
     ]);
 
-    for (const [key, sectionName] of Object.entries(INFORMATICA_TEXTO_SECTIONS)) {
+    const generated = [
+      "edificios", "incidencias", "encuestas", "workOrders", "peticiones",
+      "peticionesProducto", "peticionesAnual", "citas", "citasAnual", "hic",
+      "comparativas", "slas", "imacs",
+    ] as const;
+
+    for (const key of generated) {
+      const sectionName = INFORMATICA_TEXTO_SECTIONS[key];
       const parsed = dataset[key as keyof InformaticaDataset];
 
       expect(Array.isArray(parsed), key).toBe(true);
       expect((parsed as unknown[]).length, key).toBe(sectionRows.get(sectionName));
       expect((parsed as unknown[]).length, key).toBeGreaterThan(0);
     }
+    expect(dataset.wasp).toBeUndefined();
+    expect(dataset.renove).toBeUndefined();
   }, 30_000);
 });
 
@@ -317,8 +332,8 @@ describe("punto de entrada del deck", () => {
     expect(uploads.map((slot) => slot.id)).toContain("plano");
   });
 
-  it("declara las ocho secciones que el script de Drive escribe", () => {
-    expect(Object.values(INFORMATICA_TEXTO_SECTIONS)).toHaveLength(8);
+  it("declara todas las secciones del contrato, incluso las opcionales", () => {
+    expect(Object.values(INFORMATICA_TEXTO_SECTIONS)).toHaveLength(15);
   });
 });
 
@@ -330,6 +345,15 @@ function textoDeSemana(fecha: string, semana: number, total: number): string {
     "",
     "[PETICIONES]",
     [fecha, "2026/08", semana, "On Site", "En vuelo", "Peticiones", total].join("\t"),
+  ].join("\n");
+}
+
+function textoCompleto(sections: string[]): string {
+  return [
+    INFORMATICA_TEXTO_HEADER,
+    "semana\t2026-08-24",
+    "alcance\tcompleto",
+    ...sections,
   ].join("\n");
 }
 
@@ -461,5 +485,46 @@ describe("POST /api/informatica/upload/texto", () => {
       [34, 714],
     ]);
     expect(almacenado.data.sheetsFound).toContain("peticiones");
+  });
+
+  it("un TXT completo no conserva WASP ni Renove de una importacion anterior", async () => {
+    const primero = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        texto: textoCompleto([
+          "",
+          "[WASP]",
+          "2026-08-24\t2026/08\t35\tProveedor\tFinalizado\t10",
+          "",
+          "[RENOVE]",
+          "2026-08-24\t2026/08\t35\tEspaña\tFinalizado\t20",
+        ]),
+      }),
+    });
+
+    expect(primero.status).toBe(200);
+
+    const segunda = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        texto: textoCompleto([
+          "",
+          "[HIC]",
+          "SSCC\t2026/08\t\tResueltas\t722",
+        ]),
+      }),
+    });
+
+    expect(segunda.status).toBe(200);
+    const body = (await segunda.json()) as { data: InformaticaDataset };
+
+    expect(body.data.wasp).toBeUndefined();
+    expect(body.data.renove).toBeUndefined();
+    expect(body.data.hic).toEqual([
+      { ambito: "SSCC", mes: "2026/08", categoria: "", metrica: "Resueltas", total: 722 },
+    ]);
+    expect(body.data.sheetsFound).toEqual(["hic"]);
   });
 });

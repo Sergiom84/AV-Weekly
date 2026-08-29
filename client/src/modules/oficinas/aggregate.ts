@@ -158,7 +158,7 @@ export function oficinasColor(index: number): string {
 
 /** Colours of the year-on-year lines: the previous year muted, the current one dominant. */
 export const CURRENT_YEAR_COLOR = "var(--informe-serie-4)";
-export const PREVIOUS_YEAR_COLOR = "var(--informe-serie-2)";
+export const PREVIOUS_YEAR_COLOR = "var(--informe-serie-3)";
 
 /**
  * Colour of a year line on a multi-year chart (`1.1 Incidencias asignadas por
@@ -175,13 +175,12 @@ const OLDER_YEAR_COLORS = OFICINAS_SERIES_COLORS.filter(
 );
 
 export function yearColor(year: number, currentYear: number): string {
-  if (year === currentYear) {
-    return CURRENT_YEAR_COLOR;
-  }
+  if (year === 2024) return "var(--informe-serie-1)";
+  if (year === 2025) return "var(--informe-serie-3)";
+  if (year === 2026) return "var(--informe-serie-4)";
 
-  if (year === currentYear - 1) {
-    return PREVIOUS_YEAR_COLOR;
-  }
+  if (year === currentYear) return CURRENT_YEAR_COLOR;
+  if (year === currentYear - 1) return PREVIOUS_YEAR_COLOR;
 
   const age = currentYear - year - 2;
 

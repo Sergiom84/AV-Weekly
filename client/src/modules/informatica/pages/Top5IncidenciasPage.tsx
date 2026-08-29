@@ -1,16 +1,22 @@
-import CategoryBarChart, {
-  type CategorySeries,
-} from "@/components/deck/CategoryBarChart";
-import KpiRow from "@/components/deck/KpiRow";
+import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
+import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 import {
-  monthLabel,
-  percent,
-  reportMonth,
-  seriesColor,
-  sumBy,
-  topEntries,
-} from "../aggregate";
+  defaultMonthSelection,
+  resolveMonthSelection,
+} from "@shared/deck/core";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { monthLabel, reportMonth, seriesColor, sumBy, topEntries } from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface Top5IncidenciasPageProps extends InformaticaPageProps {
@@ -24,7 +30,9 @@ const TOP = 5;
 
 /**
  * `2.1.2 Top 5 de incidencias`: the five categories that resolved most tickets
- * in the reported month, with the subcategory that leads each one underneath.
+ * in the reported month, shown as their monthly evolution. The reference slide
+ * is a trend, not a single-month ranking: ranking chooses the five series and
+ * the complete selected range is retained on the chart.
  *
  * Grouped by `Categoria`, not `Subcategoria`, because that is the level the
  * original slide ranks — five names against the two hundred-odd subcategories
@@ -39,82 +47,113 @@ export default function Top5IncidenciasPage({
   dataset,
 }: Top5IncidenciasPageProps) {
   const rows = (dataset.incidencias ?? []).filter(
-    (row) => row.metrica === METRIC
+    row => row.metrica === METRIC
   );
-  const month = reportMonth(dataset, rows, (row) => row.mes);
-  const current = rows.filter((row) => row.mes === month);
+  const availableMonths = Array.from(new Set(rows.map(row => row.mes))).sort();
+  const monthSelection =
+    page.monthSelection ??
+    defaultMonthSelection(
+      reportMonth(dataset, rows, row => row.mes) ??
+        availableMonths[availableMonths.length - 1] ??
+        ""
+    );
+  const months = resolveMonthSelection(monthSelection, availableMonths);
+  const month = months[months.length - 1] ?? null;
+  const current = rows.filter(row => row.mes === month);
 
   const byCategory = sumBy(
     current,
-    (row) => row.categoria,
-    (row) => row.tickets
+    row => row.categoria,
+    row => row.tickets
   );
-  const top = topEntries(byCategory, TOP);
+  const allTop = topEntries(byCategory, TOP);
+  const hiddenRows = page.hiddenRows ?? [];
+  const top = allTop.filter(entry => !hiddenRows.includes(entry.label));
 
-  const monthTotal = Array.from(byCategory.values()).reduce(
-    (sum, value) => sum + value,
-    0
-  );
-  const topTotal = top.reduce((sum, entry) => sum + entry.value, 0);
-
-  const leadingSubcategory = (category: string) => {
-    const subcategories = sumBy(
-      current.filter((row) => row.categoria === category),
-      (row) => row.subcategoria,
-      (row) => row.tickets
+  const data = months.map(target => {
+    const values = sumBy(
+      rows.filter(row => row.mes === target),
+      row => row.categoria,
+      row => row.tickets
     );
 
-    return topEntries(subcategories, 1)[0] ?? null;
-  };
-
-  const series: CategorySeries[] = [
-    { key: "tickets", label: "Incidencias resueltas", color: seriesColor(0) },
-  ];
-  const data = top.map((entry) => ({
-    categoria: entry.label,
-    tickets: entry.value,
-  }));
-
-  const suffix = month ? ` ${monthLabel(month)}` : "";
+    return {
+      mes: monthLabel(target),
+      ...Object.fromEntries(top.map(entry => [entry.label, values.get(entry.label) ?? 0])),
+    };
+  });
+  const animate = usePresentationAnimation();
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
-      <KpiRow
-        items={[
-          {
-            label: `Resueltas${suffix}`,
-            value: monthTotal.toLocaleString("es-ES"),
-          },
-          { label: "En el top 5", value: topTotal.toLocaleString("es-ES") },
-          {
-            label: "Peso del top 5",
-            value: monthTotal > 0 ? percent(topTotal / monthTotal) : "",
-          },
-        ]}
-      />
+      {editing && (
+        <MonthRangeSelector
+          selection={monthSelection}
+          available={availableMonths}
+          format={monthLabel}
+          onChange={monthSelection => onChange({ monthSelection })}
+        />
+      )}
+      {editing && (
+        <RowFilterPanel
+          labels={allTop.map(entry => entry.label)}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <CategoryBarChart categoryKey="categoria" series={series} data={data} />
-      </div>
-
-      <ul className="shrink-0 space-y-[0.3cqi] border-t border-border pt-[0.8cqi] font-mono text-[1.15cqi] text-muted-foreground">
-        {top.map((entry) => {
-          const leader = leadingSubcategory(entry.label);
-
-          return (
-            <li key={entry.label} className="flex justify-between gap-[1cqi]">
-              <span className="truncate">
-                {entry.label}
-                {leader ? ` · ${leader.label}` : ""}
-              </span>
-              <span className="shrink-0 tabular-nums">
-                {entry.value.toLocaleString("es-ES")}
-                {leader ? ` (${leader.value.toLocaleString("es-ES")})` : ""}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <section
+        className="min-h-0 flex-1 border border-border/70 px-[0.7cqi] py-[0.5cqi]"
+        role="img"
+        aria-label="Evolución mensual de las cinco principales categorías de incidencias"
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 24, right: 16, bottom: 6, left: 0 }}>
+            <CartesianGrid stroke="var(--border)" vertical={false} />
+            <XAxis
+              dataKey="mes"
+              tickLine={false}
+              stroke="var(--border)"
+              tick={{ fill: "var(--muted-foreground)", fontSize: "1cqi" }}
+            />
+            <YAxis
+              tickLine={false}
+              stroke="var(--border)"
+              tick={{ fill: "var(--muted-foreground)", fontSize: "1cqi" }}
+              width={36}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "var(--popover)",
+                color: "var(--popover-foreground)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-sm)",
+                fontSize: "1cqi",
+              }}
+            />
+            <Legend
+              verticalAlign="top"
+              wrapperStyle={{ fontFamily: "JetBrains Mono, monospace", fontSize: "1cqi" }}
+            />
+            {top.map((entry, index) => (
+              <Line
+                key={entry.label}
+                type="linear"
+                dataKey={entry.label}
+                name={entry.label}
+                stroke={seriesColor(index)}
+                strokeWidth={2}
+                dot={{ r: 3, fill: seriesColor(index) }}
+                activeDot={{ r: 4 }}
+                isAnimationActive={animate}
+                animationDuration={700}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </section>
     </PageShell>
   );
 }

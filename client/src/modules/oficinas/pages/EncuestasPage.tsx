@@ -115,6 +115,7 @@ export default function EncuestasPage({
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
       <KpiRow
+        compact
         items={[
           { label: "Encuestas", value: totalResponses.toLocaleString("es-ES") },
           ...SCORES.map(score => ({
@@ -141,6 +142,8 @@ export default function EncuestasPage({
             categoryKey="nota"
             series={scoreSeries}
             data={distributionData}
+            fitGroupedValueLabels
+            centerGroupedValueLabels
           />
         </div>
       </div>

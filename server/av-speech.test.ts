@@ -4,6 +4,7 @@ import {
   createDefaultDeck,
   emptyWeeklyDataset,
   generateWeeklySpeech,
+  reportedWeekAvailability,
   resolutionValueAt,
   resolveWeekSelection,
 } from "../shared/informe.ts";
@@ -164,7 +165,7 @@ describe("totales de resolución", () => {
     ).toBe(0);
   });
 
-  it("mantiene el total anual al cambiar el rango y respeta overrides", () => {
+  it("mantiene el total acumulado al filtrar columnas y respeta overrides", () => {
     const byWeek = {
       "31": [resolution("SALA", "MONTAJE", 2)],
       "32": [resolution("SALA", "MONTAJE", 0)],
@@ -188,6 +189,9 @@ describe("totales de resolución", () => {
         weeks
       )
     ).toEqual([33, 34]);
+    expect(reportedWeekAvailability(Array.from({ length: 52 }, (_, index) => index + 1), weeks)).toEqual(
+      Array.from({ length: 34 }, (_, index) => index + 1)
+    );
 
     const totals = calculateResolutionTableTotals(
       weeks,

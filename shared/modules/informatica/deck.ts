@@ -39,18 +39,15 @@ interface PageSpec {
  * all present in the imported workbook renders the notice instead of a chart.
  */
 export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
-  /**
-   * Both 2.1.1 pages read the `Hic` sheet, not `Incidencias`.
-   *
-   * `Incidencias` is the daily ticket detail; the two volumetry slides of the
-   * original deck are the monthly series the provider reports, which is exactly
-   * what `Hic` carries. Recomputing them from the daily detail would give a
-   * number close to but not equal to the reported one — 754 against 722 for
-   * 2026/07 — and the report must print the figure the client signs off, not
-   * ours.
-   */
+  /** The original presentation has two distinct slides numbered 2.1.1. */
   {
     id: "volumetria-incidencias-wo",
+    kind: "itHic",
+    title: "2.1.1 Volumetría de Incidencias y Work Orders",
+    sections: ["hic", "workOrders"],
+  },
+  {
+    id: "volumetria-incidencias",
     kind: "itHic",
     title: "2.1.1 Volumetría de Incidencias",
     sections: ["hic"],
@@ -140,13 +137,6 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
     sections: ["imacs"],
   },
   { id: "wasp", kind: "itWasp", title: "2.6 WASP", sections: ["wasp"] },
-  { id: "renove", kind: "itRenove", title: "2.7 Renove", sections: ["renove"] },
-  {
-    id: "renove-acumulado",
-    kind: "itRenove",
-    title: "2.7.1 Renove",
-    sections: ["renove"],
-  },
 ];
 
 /** Sections a page needs, by page id. Empty for the pages with no dataset. */
@@ -201,7 +191,6 @@ export function createDefaultInformaticaDeck(): InformaticaDeckState {
         item3: "2.3 Citas SmartTech",
         item4: "2.4 IMACS OnSite",
         item5: "2.6 WASP",
-        item6: "2.7 Renove",
       },
       visible: true,
       weekSelection: null,
@@ -266,10 +255,9 @@ export function mergeInformaticaDeckTemplate(
   const reference = createDefaultInformaticaDeck().pages;
   const kinds = new Map(reference.map((page) => [page.id, page.kind]));
 
-  // This former fourth slide was folded into the preceding volumetry page.
-  // Removing it here also migrates already persisted decks; matching by the
-  // seeded id leaves user-created pages untouched.
-  const retiredIds = new Set(["volumetria-incidencias"]);
+  // Renove is intentionally outside the active presentation until a source is
+  // verified. Its types, parser support and historical data remain intact.
+  const retiredIds = new Set(["renove", "renove-acumulado"]);
 
   // A page whose spec changed kind — a placeholder promoted to a data page, or
   // an incident page re-pointed at the `hic`/`comparativas` sections — keeps its
@@ -287,8 +275,8 @@ export function mergeInformaticaDeckTemplate(
     // title. An editor's custom title remains authoritative.
     const text =
       page.id === "volumetria-incidencias-wo" &&
-      page.text.title === "2.1.1 Volumetría de Incidencias y Work Orders"
-        ? { ...page.text, title: "2.1.1 Volumetría de Incidencias" }
+      page.text.title === "2.1.1 Volumetría de Incidencias"
+        ? { ...page.text, title: "2.1.1 Volumetría de Incidencias y Work Orders" }
         : page.text;
 
     return [

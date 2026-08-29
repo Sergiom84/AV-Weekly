@@ -25,7 +25,10 @@ export type {
 export {
   MONTH_LABELS,
   defaultWeekSelection,
+  formatChartMetric,
   isPageVisible,
+  metricAxisWidth,
+  reportedWeekAvailability,
   resolveWeekSelection,
 } from "./deck/core.ts";
 

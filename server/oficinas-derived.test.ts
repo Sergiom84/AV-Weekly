@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   comparisonSeries,
+  rankedRowsByAverage,
   reportPeriod,
   reportWeek,
   rowTotal,
+  rowsWithOtrosLast,
   seriesYears,
 } from "../shared/modules/oficinas/derived.js";
 import { mergeOficinasDataset } from "./parseOficinasPlano.js";
@@ -64,9 +66,24 @@ describe("Oficinas report period", () => {
 const section: OficinasIncidencias = {
   totalsByWeek: [{ year: 2026, week: 33, value: 86 }],
   byDT: [
-    { variant: "con", rows: [{ label: "D.T. SUR", values: [{ year: 2026, week: 33, value: 86 }] }] },
-    { variant: "sin", rows: [{ label: "D.T. SUR", values: [{ year: 2026, week: 33, value: 74 }] }] },
-    { variant: "solo", rows: [{ label: "D.T. SUR", values: [{ year: 2026, week: 33, value: 12 }] }] },
+    {
+      variant: "con",
+      rows: [
+        { label: "D.T. SUR", values: [{ year: 2026, week: 33, value: 86 }] },
+      ],
+    },
+    {
+      variant: "sin",
+      rows: [
+        { label: "D.T. SUR", values: [{ year: 2026, week: 33, value: 74 }] },
+      ],
+    },
+    {
+      variant: "solo",
+      rows: [
+        { label: "D.T. SUR", values: [{ year: 2026, week: 33, value: 12 }] },
+      ],
+    },
   ],
   byElement: [],
   history: [
@@ -113,5 +130,47 @@ describe("Oficinas year comparison", () => {
     );
 
     expect(merged.asignadas?.history).toEqual(section.history);
+  });
+});
+
+describe("Oficinas table ordering", () => {
+  it("moves OTROS below every territorial row without changing their order", () => {
+    expect(
+      rowsWithOtrosLast([
+        { label: "OTROS" },
+        { label: "D.T. CANARIAS" },
+        { label: "D.T. SUR" },
+      ]).map(row => row.label)
+    ).toEqual(["D.T. CANARIAS", "D.T. SUR", "OTROS"]);
+  });
+
+  it("ranks the weekly table by its reported-week average", () => {
+    const rows = [
+      {
+        label: "BAJO",
+        values: [
+          { year: 2026, week: 1, value: 2 },
+          { year: 2026, week: 2, value: 4 },
+        ],
+      },
+      {
+        label: "ALTO",
+        values: [
+          { year: 2026, week: 1, value: 9 },
+          { year: 2026, week: 2, value: 7 },
+        ],
+      },
+      {
+        label: "MEDIO",
+        values: [
+          { year: 2026, week: 1, value: 5 },
+          { year: 2026, week: 2, value: 5 },
+        ],
+      },
+    ];
+
+    expect(
+      rankedRowsByAverage(rows, 2026, [1, 2]).map(row => row.label)
+    ).toEqual(["ALTO", "MEDIO", "BAJO"]);
   });
 });

@@ -2,14 +2,28 @@ import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
+import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
+import { resolveWeekSelection, type WeekSelection } from "@shared/deck/core";
 import {
   breakdownForWeeks,
-  lastTwoWeeks,
+  locationShareAt,
   topLocationShare,
 } from "@shared/modules/aga/managed";
 import type { AgaBreakdownRow, AgaDataset } from "@shared/modules/aga/types";
-import { COMPARE_COLORS, agaColor, variationLabel, weekLabel } from "../aggregate";
-import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
+import {
+  COMPARE_COLORS,
+  agaColor,
+  variationLabel,
+  weekLabel,
+  weekNumber,
+} from "../aggregate";
+import {
+  cellKey,
+  isOverridden,
+  overriddenValue,
+  withOverride,
+} from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
 import ValueGrid from "@/components/deck/ValueGrid";
 
@@ -51,11 +65,34 @@ export default function ManagedBreakdown({
   topShare = false,
   limit,
 }: ManagedBreakdownProps) {
-  const reported = new Set(rows.flatMap((row) => row.counts.map((c) => c.week)));
-  const weeks = lastTwoWeeks(dataset.managed).filter((week) => reported.has(week));
-  const imported = breakdownForWeeks(rows, weeks, limit);
+  const reported = new Set(rows.flatMap(row => row.counts.map(c => c.week)));
+  const allWeeks = Array.from(reported).sort();
+  const availableWeeks = allWeeks
+    .map(week => weekNumber(week))
+    .filter((week): week is number => week !== null);
+  const defaultSelection: WeekSelection = {
+    mode: "list",
+    from: availableWeeks[Math.max(0, availableWeeks.length - 2)] ?? 1,
+    to: availableWeeks[availableWeeks.length - 1] ?? 1,
+    weeks: availableWeeks.slice(-2),
+  };
+  const selection = page.weekSelection ?? defaultSelection;
+  const selectedWeeks = new Set(
+    resolveWeekSelection(selection, availableWeeks)
+  );
+  const weeks = allWeeks.filter(week => {
+    const number = weekNumber(week);
+    return number !== null && selectedWeeks.has(number);
+  });
+  const allImported = breakdownForWeeks(rows, weeks);
+  const labels = allImported.map(row => row.label);
+  const hiddenRows = page.hiddenRows ?? [];
+  const visibleImported = allImported.filter(
+    row => !hiddenRows.includes(row.label)
+  );
+  const imported = limit ? visibleImported.slice(0, limit) : visibleImported;
 
-  const entries = imported.map((row) => ({
+  const entries = imported.map(row => ({
     label: row.label,
     cells: weeks.map((week, index) => {
       const key = cellKey(row.label, week);
@@ -69,7 +106,9 @@ export default function ManagedBreakdown({
   }));
 
   const colorAt = (index: number) =>
-    weeks.length > 1 ? COMPARE_COLORS[index % COMPARE_COLORS.length] : agaColor(0);
+    weeks.length > 1
+      ? COMPARE_COLORS[index % COMPARE_COLORS.length]
+      : agaColor(0);
 
   const series: CategorySeries[] = weeks.map((week, index) => ({
     key: `w${index}`,
@@ -77,7 +116,7 @@ export default function ManagedBreakdown({
     color: colorAt(index),
   }));
 
-  const data = entries.map((entry) => {
+  const data = entries.map(entry => {
     const row: Record<string, number | string> = { [categoryKey]: entry.label };
 
     entry.cells.forEach((cell, index) => {
@@ -90,22 +129,35 @@ export default function ManagedBreakdown({
   const totalAt = (index: number) =>
     entries.reduce((sum, entry) => sum + (entry.cells[index]?.value ?? 0), 0);
 
-  const locationShare = topShare ? topLocationShare(dataset.managed) : null;
+  const locationShare =
+    topShare && weeks.length > 0
+      ? locationShareAt(dataset.managed, weeks[weeks.length - 1])
+      : topShare
+        ? topLocationShare(dataset.managed)
+        : null;
   const items = weeks.map((week, index) => {
-    const isLatestLocation = topShare && index === weeks.length - 1 && locationShare;
+    const isLatestLocation =
+      topShare && index === weeks.length - 1 && locationShare;
 
     return {
-      label: isLatestLocation && !locationShare.complete
-        ? `Subtotal ${weekLabel(week)}`
-        : weekLabel(week),
-      value: (isLatestLocation ? locationShare.total : totalAt(index)).toLocaleString("es-ES"),
+      label:
+        isLatestLocation && !locationShare.complete
+          ? `Subtotal ${weekLabel(week)}`
+          : weekLabel(week),
+      value: (isLatestLocation
+        ? locationShare.total
+        : totalAt(index)
+      ).toLocaleString("es-ES"),
     };
   });
 
   if (weeks.length > 1) {
     items.push({
       label: "Variación",
-      value: variationLabel(totalAt(weeks.length - 2), totalAt(weeks.length - 1)),
+      value: variationLabel(
+        totalAt(weeks.length - 2),
+        totalAt(weeks.length - 1)
+      ),
     });
   }
 
@@ -137,6 +189,24 @@ export default function ManagedBreakdown({
     <PageShell page={page} editing={editing} onChange={onChange}>
       <KpiRow items={items} />
 
+      {editing && (
+        <WeekRangeSelector
+          selection={selection}
+          available={availableWeeks}
+          onChange={weekSelection => onChange({ weekSelection })}
+        />
+      )}
+
+      {editing && (
+        <RowFilterPanel
+          labels={labels}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
+
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart
           categoryKey={categoryKey}
@@ -149,7 +219,7 @@ export default function ManagedBreakdown({
       {editing && (
         <ValueGrid
           columns={weeks.map(weekLabel)}
-          rows={entries.map((entry) => ({
+          rows={entries.map(entry => ({
             label: entry.label,
             cells: entry.cells,
           }))}

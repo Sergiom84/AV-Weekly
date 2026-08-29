@@ -9,6 +9,7 @@ import {
   defaultWeekSelection,
   resolutionCellKey,
   resolutionValueAt,
+  reportedWeekAvailability,
   resolveWeekSelection,
 } from "@shared/informe";
 import EditableNumber from "@/components/deck/EditableNumber";
@@ -59,11 +60,15 @@ export default function ResolutionDetailPage({
   // Weeks come from the support matrix, so the page can show weeks that have no
   // detail imported yet and let them be filled in by hand.
   const matrix = typeData ? (typeData.categories ?? typeData.locations) : null;
-  const available =
+  const allWeeks =
     matrix?.weeks ??
     Object.keys(byWeek)
       .map(Number)
       .sort((a, b) => a - b);
+  const available = reportedWeekAvailability(
+    allWeeks,
+    Object.keys(byWeek).map(Number)
+  );
   const hasData = available.length > 0;
 
   const selection: WeekSelection =
