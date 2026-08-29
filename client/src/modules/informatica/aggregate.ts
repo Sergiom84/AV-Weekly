@@ -282,6 +282,39 @@ export function reportMonths<T>(
   return closed === null ? [] : months.filter(month => month <= closed);
 }
 
+/**
+ * The `count` calendar months ending at `month`, oldest first.
+ *
+ * Built from the calendar rather than filtered out of the data, so a month
+ * nobody reported on still gets its slot instead of collapsing the axis: the
+ * reference chart is a fixed window, and a missing month there means zero, not
+ * "skip to the next one". It also drops the residual months the extracts drag
+ * behind them — a handful of orders from 2024 that the original report never
+ * showed and that flatten every real bar when they are plotted.
+ */
+export function monthsEndingAt(month: string, count: number): string[] {
+  const months: string[] = [];
+  let year = yearOf(month);
+  let index = monthIndexOf(month);
+
+  if (!Number.isFinite(year) || !Number.isFinite(index) || index < 1) {
+    return [];
+  }
+
+  for (let step = 0; step < count; step += 1) {
+    months.push(`${year}/${String(index).padStart(2, "0")}`);
+
+    index -= 1;
+
+    if (index === 0) {
+      index = 12;
+      year -= 1;
+    }
+  }
+
+  return months.reverse();
+}
+
 /** The `count` highest entries of a total map, ties broken by label. */
 export function topEntries(
   totals: Map<string, number>,

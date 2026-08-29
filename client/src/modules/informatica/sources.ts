@@ -164,6 +164,58 @@ export function hicScopeLabel(scope: string, scopes: HicScopes): string {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Work order scope                                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `Categorization Tier 2` values the published report counts as work orders.
+ *
+ * The extract carries every ON SITE SSCC ticket, but the report has never
+ * counted all of them: the matrix behind `2.1.6 Work Orders (Informe)!N43` — the
+ * cell the original 2.1.1 chart reads — spans exactly these eleven categories
+ * and the eighteen mapped buildings. Everything else in the extract (IMAC
+ * requests, software, peripherals, GSAM and WPM queries, devices) is reported on
+ * other slides and would be double counted here.
+ *
+ * Reconciled against the workbook for 2026/08: 585 rows in the extract, 576
+ * inside the matrix, which is the value the cell holds.
+ */
+const WORK_ORDER_CATEGORIES = new Set([
+  "ACOMPAÑAMIENTO",
+  "ASISTENCIA AUDIOVISUALES",
+  "CONSULTA USUARIOS",
+  "OTROS",
+  "PRÉSTAMO MATERIAL",
+  "RECEPCIÓN MATERIAL",
+  "REINSTALACIÓN",
+  "REPONER TÓNER",
+  "RETIRADA DE DISPOSITIVOS",
+  "REVISIÓN EQUIPAMIENTO",
+  "TRASLADO",
+]);
+
+/**
+ * Building of a row whose address matched no entry of the master.
+ *
+ * It is the literal `#N/A` the workbook lookup leaves behind, carried through
+ * the flat text on purpose so the gap stays visible instead of being silently
+ * folded into a real building.
+ */
+export const UNMAPPED_BUILDING = "#N/A";
+
+/** True when a work order belongs to the volume the report publishes. */
+export function isReportedWorkOrder(row: {
+  edificio: string;
+  tipo: string;
+}): boolean {
+  return (
+    row.edificio !== UNMAPPED_BUILDING &&
+    row.edificio !== "" &&
+    WORK_ORDER_CATEGORIES.has(row.tipo)
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Comparativa views                                                           */
 /* -------------------------------------------------------------------------- */
 
