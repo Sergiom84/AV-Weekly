@@ -4,7 +4,6 @@ import WeeklyBarChart, {
   type WeeklySeries,
 } from "@/components/deck/WeeklyBarChart";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
-import { useFitTableScale } from "@/hooks/useFitTableScale";
 import {
   defaultWeekSelection,
   reportedWeekAvailability,
@@ -18,35 +17,33 @@ import type {
 } from "@shared/modules/oficinas/types";
 import {
   ALL_ISO_WEEKS,
-  decimal,
   semanalCurrentAt,
   semanalHeadlineItems,
   semanalMediaWeeks,
   semanalReportWeeks,
-  semanalTableEntries,
-  semanalWeekTotal,
   weekLabel,
-  yearColor,
 } from "../aggregate";
+import { withOverride } from "../overrides";
 import {
-  TOTAL_ROW,
-  cellKey,
-  isOverridden,
-  overriddenValue,
-  weekColumn,
-  withOverride,
-} from "../overrides";
+  type SemanalLayout,
+  semanalLayoutRules,
+} from "../semanalLayout";
+import { semanalSeriesRows } from "../semanalSeries";
 import PageShell, { type OficinasPageProps } from "./PageShell";
+import SemanalTable from "./SemanalTable";
 import YearSelector, { type YearSelection } from "./YearSelector";
+
+export type { SemanalLayout };
 
 /**
  * The annual comparison slide of the published report: the weekly bars of the
  * current year against the past ones, and the source pivot underneath.
  *
  * Six printed slides share this anatomy and differ only in what they pivot —
- * the territorial, the element, the request type — so the layout lives here and
- * each page is a wrapper that answers three questions: which rows the table
- * lists, which series the bars draw, and which past years are on offer.
+ * the territorial, the element, the request type. Each wrapper answers which
+ * rows, which series and which years; the visual family is a named contract
+ * in `semanalLayout.ts`, so a correction for one family does not spill into
+ * the others.
  *
  * Two rules decide what the chart is allowed to say:
  *
@@ -59,19 +56,6 @@ import YearSelector, { type YearSelection } from "./YearSelector";
  *   zero-filled bar would claim a week that was measured and empty instead of
  *   one that was not measured at all.
  */
-
-/**
- * Visual contracts for annual weekly comparisons.
- *
- * The data mechanics remain shared, while layout changes are opt-in by family
- * so a correction for the requested comparison slides does not spill into the
- * recycler or request-type slides that use the same renderer.
- */
-export type SemanalLayout =
-  | "standard-semanal"
-  | "comparativas-semanales"
-  | "peticiones-territorial-semanal"
-  | "volumetrias-semanales";
 
 interface SemanalPageProps extends OficinasPageProps {
   /** Rows of the pivot underneath the chart, in the order the slide prints them. */
@@ -131,21 +115,10 @@ export default function SemanalPage({
   layout = "standard-semanal",
   headlineLabel,
 }: SemanalPageProps) {
-  const isComparisonLayout = layout === "comparativas-semanales";
-  const isPeticionesTerritorial = layout === "peticiones-territorial-semanal";
-  const hasWideAverage = layout === "volumetrias-semanales";
-  // Dimension names are read as a list, including the long request types, so
-  // they stay anchored to the left edge while all numeric columns are centred.
-  const centersRowHeader = false;
-  const highlightsTotal =
-    isPeticionesTerritorial || layout === "volumetrias-semanales";
-  const usesComparisonLabels =
-    isComparisonLayout || isPeticionesTerritorial || hasWideAverage;
+  const rules = semanalLayoutRules(layout);
   const extraYears = yearSelector
     ? [...yearSelector.selected].sort((a, b) => a - b)
     : [];
-  // The line is the published series when the page has one, and the column
-  // total of its own rows otherwise.
   const currentReported = new Set(
     totals
       ? seriesWeeks(totals, year)
@@ -154,7 +127,8 @@ export default function SemanalPage({
   const currentAt = (week: number) =>
     semanalCurrentAt(rows, year, week, totals);
   const weekSelection: WeekSelection =
-    page.weekSelection ?? defaultWeekSelection(ALL_ISO_WEEKS[ALL_ISO_WEEKS.length - 1]);
+    page.weekSelection ??
+    defaultWeekSelection(ALL_ISO_WEEKS[ALL_ISO_WEEKS.length - 1]);
   const currentReportWeeks = semanalReportWeeks(
     rows,
     year,
@@ -167,63 +141,20 @@ export default function SemanalPage({
       ? reportedWeekAvailability(ALL_ISO_WEEKS, currentReportWeeks)
       : ALL_ISO_WEEKS
   );
-
-  // Past years first, so the bars group oldest to newest inside a week and the
-  // legend reads in the same order the printed slide does.
-  const seriesRows = [
-    ...extraYears.map(comparisonYear => {
-      const reported = new Set(
-        comparison ? seriesWeeks(comparison, comparisonYear) : []
-      );
-      const rowId = `y${comparisonYear}`;
-
-      return {
-        key: rowId,
-        label: String(comparisonYear),
-        color: yearColor(comparisonYear, year),
-        cells: ALL_ISO_WEEKS.map(week => {
-          const key = cellKey(rowId, weekColumn(week));
-          const imported =
-            comparison && reported.has(week)
-              ? valueAt(comparison, comparisonYear, week)
-              : null;
-
-          return {
-            key,
-            value: overriddenValue(page, key, imported),
-            overridden: isOverridden(page, key),
-          };
-        }),
-      };
-    }),
-    {
-      key: "actual",
-      label: String(year),
-      color: yearColor(year, year),
-      cells: ALL_ISO_WEEKS.map(week => {
-        const key = cellKey(TOTAL_ROW, weekColumn(week));
-        const closed =
-          throughWeek === null || throughWeek === undefined
-            ? true
-            : week <= throughWeek;
-        const imported =
-          currentReported.has(week) && closed ? currentAt(week) : null;
-
-        return {
-          key,
-          value: overriddenValue(page, key, imported),
-          overridden: isOverridden(page, key),
-        };
-      }),
-    },
-  ];
-
+  const seriesRows = semanalSeriesRows({
+    page,
+    year,
+    extraYears,
+    comparison,
+    throughWeek,
+    currentReported,
+    currentAt,
+  });
   const series: WeeklySeries[] = seriesRows.map(entry => ({
     key: entry.key,
     label: entry.label,
     color: entry.color,
   }));
-
   const data = ALL_ISO_WEEKS.map((week, index) => {
     const point: Record<string, number | string | null> = {
       semana: weekLabel(week),
@@ -238,7 +169,6 @@ export default function SemanalPage({
   const chartData = data.filter((_, index) =>
     selectedWeeks.includes(ALL_ISO_WEEKS[index])
   );
-
   const lastWeek = currentReportWeeks.at(-1) ?? null;
   const compareYear = extraYears.length > 0 ? Math.max(...extraYears) : null;
   const previous =
@@ -254,11 +184,6 @@ export default function SemanalPage({
     compareYear,
     previous,
   });
-
-  // Denominator of the `Media` column: the weeks the current year reports up to
-  // and including the closed one. The trailing partial column of the source is
-  // excluded, which is the rule `dtStats` applies to the same figure on the
-  // directorate pages — and the one that reproduces the printed medias.
   const mediaWeeks = semanalMediaWeeks(rows, year, throughWeek);
 
   return (
@@ -282,7 +207,7 @@ export default function SemanalPage({
           weeks={selectedWeeks}
           series={series}
           data={chartData}
-          labels={usesComparisonLabels}
+          labels={rules.comparisonLabels}
         />
       </div>
 
@@ -301,11 +226,7 @@ export default function SemanalPage({
           mediaWeeks={mediaWeeks}
           totalRow={totalRow}
           rankByAverage={rankByAverage}
-          showGroupDividers={usesComparisonLabels}
-          peticionesTerritorial={isPeticionesTerritorial}
-          highlightTotal={highlightsTotal}
-          centerRowHeader={centersRowHeader}
-          wideAverage={hasWideAverage}
+          layout={rules}
         />
       </div>
 
@@ -321,186 +242,5 @@ export default function SemanalPage({
         />
       )}
     </PageShell>
-  );
-}
-
-interface SemanalTableProps {
-  rowHeader: string;
-  rows: OficinasRow[];
-  year: number;
-  /** Week columns currently visible in the chart. */
-  visibleWeeks: number[];
-  /** Weeks the `Media` column averages over. */
-  mediaWeeks: number[];
-  totalRow: boolean;
-  rankByAverage: boolean;
-  /** Thin separators after the dimension and average columns. */
-  showGroupDividers: boolean;
-  /** Keeps the catch-all territorial category as the final row. */
-  peticionesTerritorial: boolean;
-  /** Marks a complete pivot total with the report's orange band. */
-  highlightTotal: boolean;
-  /** Centre the dimension labels in the volumetry pivots. */
-  centerRowHeader: boolean;
-  /** Gives the weekly volumetry slides a little more room for their average. */
-  wideAverage: boolean;
-}
-
-/**
- * The source pivot as the slide prints it: the dimension, its weekly mean and
- * the fifty-two week columns, blank past the week the year reports.
- *
- * Fifty-four columns only fit because font and padding shrink to the box the
- * slide gives the table, like every other deck table. The week headers are bare
- * numbers rather than the `S33` form the charts use: at this density the two
- * extra glyphs per column are the difference between a legible table and one
- * pinned to the minimum scale.
- */
-function SemanalTable({
-  rowHeader,
-  rows,
-  year,
-  visibleWeeks,
-  mediaWeeks,
-  totalRow,
-  rankByAverage,
-  showGroupDividers,
-  peticionesTerritorial,
-  highlightTotal,
-  centerRowHeader,
-  wideAverage,
-}: SemanalTableProps) {
-  const { containerRef, tableRef } = useFitTableScale<
-    HTMLDivElement,
-    HTMLTableElement
-  >({ deps: [rows.length, visibleWeeks.length, mediaWeeks.length, totalRow] });
-
-  const entries = semanalTableEntries(rows, year, mediaWeeks, {
-    rankByAverage,
-    peticionesTerritorial,
-  });
-
-  const totalMedia = entries.reduce(
-    (sum, entry) => sum + (entry.media ?? 0),
-    0
-  );
-  const cellClass =
-    "truncate px-[0.1cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center";
-  const leadingColumnWidth = centerRowHeader
-    ? "12%"
-    : wideAverage
-      ? "12%"
-      : "13%";
-  // The weekly columns share whatever remains, so giving the average a firm
-  // readable width only tightens their unused gaps. Element comparisons need
-  // room for decimals; territorial pivots have an even narrower average in
-  // the source template, so they get the same minimum without touching the
-  // territorial name column.
-  const averageColumnWidth =
-    showGroupDividers || centerRowHeader || wideAverage ? "7.5%" : "4.5%";
-
-  return (
-    <div ref={containerRef} className="h-full max-h-full w-full overflow-auto">
-      <table
-        ref={tableRef}
-        className="w-full min-w-full table-fixed border-collapse font-mono text-[length:calc(var(--fit-scale,1)*1.15cqi)] leading-none tabular-nums"
-      >
-        <thead>
-          <tr className="border-b border-border text-muted-foreground">
-            <th
-              scope="col"
-              className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] ${centerRowHeader ? "text-center" : "text-left"} font-normal ${
-                showGroupDividers ? "border-r border-border" : ""
-              }`}
-              style={{ width: leadingColumnWidth }}
-            >
-              {rowHeader}
-            </th>
-            <th
-              scope="col"
-              className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal ${
-                showGroupDividers ? "border-r border-border" : ""
-              }`}
-              style={{ width: averageColumnWidth }}
-            >
-              Media
-            </th>
-            {visibleWeeks.map(week => (
-              <th
-                key={week}
-                scope="col"
-                className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
-              >
-                {week}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map(entry => (
-            <tr key={entry.label} className="border-b border-border/60">
-              <th
-                scope="row"
-                className={`truncate py-[calc(var(--fit-scale,1)*0.25cqi)] ${centerRowHeader ? "text-center" : "text-left"} font-normal ${
-                  showGroupDividers ? "border-r border-border" : ""
-                }`}
-                title={entry.label}
-              >
-                {entry.label}
-              </th>
-              <td
-                className={`${cellClass} ${
-                  showGroupDividers ? "border-r border-border" : ""
-                }`}
-              >
-                {decimal(entry.media)}
-              </td>
-              {visibleWeeks.map(week => (
-                <td key={week} className={cellClass}>
-                  {entry.weekly.get(week) ?? ""}
-                </td>
-              ))}
-            </tr>
-          ))}
-
-          {totalRow && (
-            <tr
-              className={
-                highlightTotal
-                  ? "bg-[var(--informe-serie-4)] font-medium text-white"
-                  : "border-t border-border font-medium"
-              }
-            >
-              <th
-                scope="row"
-                className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] ${centerRowHeader ? "text-center" : "text-left"} ${
-                  showGroupDividers ? "border-r border-border" : ""
-                }`}
-              >
-                Total general
-              </th>
-              <td
-                className={`${cellClass} ${
-                  showGroupDividers ? "border-r border-border" : ""
-                }`}
-              >
-                {decimal(totalMedia)}
-              </td>
-              {visibleWeeks.map(week => {
-                // A week no row reported stays blank, like the columns past the
-                // reported one on the printed slide.
-                const total = semanalWeekTotal(entries, week);
-
-                return (
-                  <td key={week} className={cellClass}>
-                    {total === null ? "" : total}
-                  </td>
-                );
-              })}
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
   );
 }

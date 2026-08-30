@@ -6,6 +6,8 @@ import {
   semanalTableEntries,
   semanalWeekTotal,
 } from "../client/src/modules/oficinas/aggregate.ts";
+import { semanalSeriesRows } from "../client/src/modules/oficinas/semanalSeries.ts";
+import type { OficinasDeckPage } from "../shared/modules/oficinas/types.ts";
 import type {
   OficinasRow,
   OficinasWeekValue,
@@ -87,5 +89,33 @@ describe("SemanalPage aggregation", () => {
       { label: "2025", value: "100" },
       { label: "Variación", value: "+10,0%" },
     ]);
+  });
+
+  it("deja hueco en una semana no medida y respeta un override", () => {
+    const page = {
+      id: "oficinas-asignadas-semanal",
+      kind: "ofiAsignadasSemanal",
+      supportType: null,
+      text: {},
+      visible: true,
+      weekSelection: null,
+      years: null,
+      overrides: { "total:S32": 99 },
+    } as OficinasDeckPage;
+    const series = semanalSeriesRows({
+      page,
+      year: 2026,
+      extraYears: [],
+      comparison: undefined,
+      throughWeek: 33,
+      currentReported: new Set([32, 33]),
+      currentAt: week => (week === 32 ? 20 : week === 33 ? 30 : 0),
+    });
+    const actual = series.find(entry => entry.key === "actual");
+
+    expect(actual?.cells[30]?.value).toBeNull();
+    expect(actual?.cells[31]?.value).toBe(99);
+    expect(actual?.cells[31]?.overridden).toBe(true);
+    expect(actual?.cells[32]?.value).toBe(30);
   });
 });
