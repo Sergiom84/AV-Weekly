@@ -1,3 +1,4 @@
+import { mergeDeckTemplate } from "../../deck/merge.ts";
 import type {
   OficinasDataset,
   OficinasDeckPage,
@@ -318,63 +319,9 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
 /**
  * Brings a stored deck up to date with the pages the default deck declares.
  *
- * The deck is persisted whole, so a deck saved before a page existed would never
- * show it again. This adds only what is missing, by id, and never touches a page
- * that is already there: titles, bodies, images, visibility and the order the
- * user chose survive untouched, and pages the user added by hand stay put.
- *
- * A missing page is inserted right after the nearest preceding default page the
- * stored deck still has, which puts it in its intended place without assuming
- * the rest of the deck kept the default order. It is never placed after the
- * closing slide.
- *
- * Deliberately a copy of `mergeAgaDeckTemplate` and not a shared helper: making
- * it generic would mean changing the AGA module, whose deck is the one already
- * in production. Generalising both is worth doing once a third module needs it.
+ * Generic over `createDefaultOficinasDeck`: adding a page to the specs is
+ * enough. The insert and kind-realignment rules live in `mergeDeckTemplate`.
  */
 export function mergeOficinasDeckTemplate(deck: OficinasDeckState): OficinasDeckState {
-  const reference = createDefaultOficinasDeck().pages;
-  const kinds = new Map(reference.map((page) => [page.id, page.kind]));
-
-  // A page the specs promoted from a placeholder to a data page keeps its stored
-  // id, so a deck saved before the promotion carries the old kind and would
-  // render as a placeholder forever. Only the kind is realigned; the text, the
-  // images, the visibility and the position are the user's, not the template's.
-  const pages = deck.pages.map((page) => {
-    const kind = kinds.get(page.id);
-
-    return kind && kind !== page.kind ? { ...page, kind } : page;
-  });
-
-  const present = new Set(pages.map((page) => page.id));
-
-  reference.forEach((refPage, refIndex) => {
-    if (present.has(refPage.id)) {
-      return;
-    }
-
-    let insertAt = 0;
-
-    for (let i = refIndex - 1; i >= 0; i -= 1) {
-      const anchor = pages.findIndex((page) => page.id === reference[i].id);
-
-      if (anchor !== -1) {
-        insertAt = anchor + 1;
-        break;
-      }
-    }
-
-    if (refPage.kind !== "closing") {
-      const closingIndex = pages.findIndex((page) => page.kind === "closing");
-
-      if (closingIndex !== -1 && insertAt > closingIndex) {
-        insertAt = closingIndex;
-      }
-    }
-
-    pages.splice(insertAt, 0, refPage);
-    present.add(refPage.id);
-  });
-
-  return { ...deck, pages };
+  return mergeDeckTemplate(deck, createDefaultOficinasDeck().pages);
 }

@@ -1,3 +1,4 @@
+import { mergeDeckTemplate } from "../../deck/merge.ts";
 import type {
   InformaticaDataset,
   InformaticaDeckPage,
@@ -229,95 +230,36 @@ export function createDefaultInformaticaDeck(): InformaticaDeckState {
   return { pages, updatedAt: null };
 }
 
+const OLD_WO_TITLE = "2.1.1 Volumetría de Incidencias";
+const NEW_WO_TITLE = "2.1.1 Volumetría de Incidencias y Work Orders";
+
+/**
+ * Adopt the restored 2.1.1 title only while the stored page still has the old
+ * seeded one. An editor's custom title remains authoritative. Kind realignment
+ * and missing-page insert live in `mergeDeckTemplate`.
+ */
+function migrateInformaticaPage(page: InformaticaDeckPage): InformaticaDeckPage {
+  if (page.id === "volumetria-incidencias-wo" && page.text.title === OLD_WO_TITLE) {
+    return { ...page, text: { ...page.text, title: NEW_WO_TITLE } };
+  }
+
+  return page;
+}
+
 /**
  * Brings a stored deck up to date with the pages the specs declare.
  *
- * The deck is persisted whole, so the first time anybody edits it the saved
- * copy freezes the page list of that moment: a page added to
- * `INFORMATICA_PAGE_SPECS` afterwards would never appear again without a manual
- * reset. This adds only what is missing, matched by id, and never touches a page
- * that is already stored — titles, footnotes, visibility, overrides, week and
- * year selections and the order the user chose all survive, and pages the user
- * added by hand stay where they are.
- *
- * A missing page is inserted right after the nearest preceding reference page
- * the stored deck still has, so it lands in its intended slot without assuming
- * the rest of the deck kept the default order. When none of its predecessors
- * survive it goes to the front, which is the only position that is still
- * defensible.
- *
- * Unlike AGA and Oficinas, this deck has no closing page: the reference ends on
- * the last data page. The clamp that keeps an inserted page ahead of the closing
- * slide is kept anyway because it is guarded by "is there one at all", so it
- * costs nothing today and does the right thing the day a closing page is seeded.
- *
- * Deliberately a copy of `mergeAgaDeckTemplate` and `mergeOficinasDeckTemplate`
- * rather than a shared helper: the three decks are typed over different page
- * kinds, and the note left in the Oficinas copy — generalise once a third module
- * needs it — is now due. Doing it here would mean touching the two modules
- * already in production in the same change that fixes this one, so it is left as
- * the next step instead of bundled in.
+ * Generic over `createDefaultInformaticaDeck`: adding a page to the specs is
+ * enough. The insert and kind-realignment rules live in `mergeDeckTemplate`.
+ * This deck still has no closing page: the reference ends on the last data
+ * page, so merge does not invent one.
  */
 export function mergeInformaticaDeckTemplate(
   deck: InformaticaDeckState
 ): InformaticaDeckState {
-  const reference = createDefaultInformaticaDeck().pages;
-  const kinds = new Map(reference.map((page) => [page.id, page.kind]));
-
-  // A page whose spec changed kind — a placeholder promoted to a data page, or
-  // an incident page re-pointed at the `hic`/`comparativas` sections — keeps its
-  // stored id, so a deck saved before the change carries the old kind and would
-  // render the old page forever. Only the kind is realigned; everything the user
-  // wrote or moved is theirs, not the template's.
-  const pages = deck.pages.flatMap((page) => {
-    const kind = kinds.get(page.id);
-
-    // Adopt the new title only while the stored page still has the old seeded
-    // title. An editor's custom title remains authoritative.
-    const text =
-      page.id === "volumetria-incidencias-wo" &&
-      page.text.title === "2.1.1 Volumetría de Incidencias"
-        ? { ...page.text, title: "2.1.1 Volumetría de Incidencias y Work Orders" }
-        : page.text;
-
-    return [
-      kind && kind !== page.kind
-        ? { ...page, kind, text }
-        : text !== page.text
-          ? { ...page, text }
-          : page,
-    ];
-  });
-
-  const present = new Set(pages.map((page) => page.id));
-
-  reference.forEach((refPage, refIndex) => {
-    if (present.has(refPage.id)) {
-      return;
-    }
-
-    let insertAt = 0;
-
-    for (let i = refIndex - 1; i >= 0; i -= 1) {
-      const anchor = pages.findIndex((page) => page.id === reference[i].id);
-
-      if (anchor !== -1) {
-        insertAt = anchor + 1;
-        break;
-      }
-    }
-
-    if (refPage.kind !== "closing") {
-      const closingIndex = pages.findIndex((page) => page.kind === "closing");
-
-      if (closingIndex !== -1 && insertAt > closingIndex) {
-        insertAt = closingIndex;
-      }
-    }
-
-    pages.splice(insertAt, 0, refPage);
-    present.add(refPage.id);
-  });
-
-  return { ...deck, pages };
+  return mergeDeckTemplate(
+    deck,
+    createDefaultInformaticaDeck().pages,
+    migrateInformaticaPage
+  );
 }
