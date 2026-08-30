@@ -813,6 +813,13 @@ function utcDate(year, month, day) {
  * 00:40 shifts the day when the sheet renders it in another timezone, and with
  * the day goes the week the row is counted in.
  */
+/**
+ * Excel serials below this are not report dates: survey counts (91, 285)
+ * would otherwise become March 1900 and trigger a month close for year 1900.
+ * 36526 is 2000-01-01.
+ */
+var MIN_EXCEL_SERIAL = 36526;
+
 function toDate(value) {
   if (value instanceof Date) {
     if (isNaN(value.getTime())) return null;
@@ -821,6 +828,8 @@ function toDate(value) {
   }
 
   if (typeof value === 'number' && isFinite(value)) {
+    if (value < MIN_EXCEL_SERIAL) return null;
+
     return new Date(EXCEL_EPOCH + Math.floor(value) * 86400000);
   }
 
@@ -831,6 +840,12 @@ function toDate(value) {
     return utcDate(Number(us[3]), Number(us[1]), Number(us[2]));
   }
 
+  var eu = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
+
+  if (eu) {
+    return utcDate(Number(eu[3]), Number(eu[2]), Number(eu[1]));
+  }
+
   var month = MONTH_TEXT.exec(raw);
 
   if (month) {
@@ -838,6 +853,34 @@ function toDate(value) {
   }
 
   return null;
+}
+
+/** True for months the Informatica book actually reports. */
+function fechaOperativa(date) {
+  if (!date) return false;
+
+  var year = date.getUTCFullYear();
+
+  return year >= 2022 && year <= 2030;
+}
+
+/** Year headers may be a number, the text "2026", or 01/01/2026. */
+function yearFromCell(value) {
+  if (typeof value === 'number' && isFinite(value) && value >= 2000 && value <= 2100) {
+    if (Math.floor(value) === value) return value;
+  }
+
+  var asText = Number(text(value));
+
+  if (asText >= 2000 && asText <= 2100 && asText === Math.floor(asText)) return asText;
+
+  if (value instanceof Date) {
+    var date = toDate(value);
+
+    if (date && fechaOperativa(date)) return date.getUTCFullYear();
+  }
+
+  return 0;
 }
 
 /** '6,380' and '6.380' are the same number: the template writes separators. */
@@ -1092,16 +1135,19 @@ function cerrarMes() {
 function cerrarMesesPendientes(extraction, windowMonths) {
   var target = monthBounds(extraction).first;
   var details = [];
+  var live = mesVivoEncuestas();
   var guard = 0;
 
-  while (!mesYaCerrado(target) && guard < 24) {
-    var live = mesVivoEncuestas();
+  if (!live || !fechaOperativa(live) || live.getTime() >= target.getTime()) return details;
 
-    if (!live) break;
+  while (!mesYaCerrado(target) && guard < 24) {
+    live = mesVivoEncuestas();
+
+    if (!live || !fechaOperativa(live)) break;
 
     var next = mesSiguiente(live);
 
-    if (next.getTime() > target.getTime()) break;
+    if (next.getTime() > target.getTime() || !fechaOperativa(next)) break;
 
     var frozenCells = abrirMesNuevo(next, windowMonths);
 
@@ -1234,10 +1280,13 @@ function cerrarHistoricoIncidencias(month) {
 }
 
 function columnaAnual(sheet, year) {
-  var values = sheet.getRange(3, 1, 1, sheet.getMaxColumns()).getValues()[0];
+  var width = sheet.getMaxColumns();
+  var grid = sheet.getRange(1, 1, 3, width).getValues();
 
-  for (var index = 0; index < values.length; index += 1) {
-    if (Number(values[index]) === year) return index + 1;
+  for (var row = 0; row < grid.length; row += 1) {
+    for (var index = 0; index < grid[row].length; index += 1) {
+      if (yearFromCell(grid[row][index]) === year) return index + 1;
+    }
   }
 
   return 0;

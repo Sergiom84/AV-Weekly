@@ -36,6 +36,9 @@ function loadCodigo() {
     ) => { citas: number; vuelo: number };
     monthBounds: (extraction: Date) => { first: Date };
     mesSiguiente: (month: Date) => Date;
+    toDate: (value: unknown) => Date | null;
+    yearFromCell: (value: unknown) => number;
+    fechaOperativa: (date: Date | null) => boolean;
   };
 }
 
@@ -76,6 +79,19 @@ describe("Codigo.gs weekly safeguards", () => {
     );
 
     expect(totals.citas).toBe(7);
+  });
+
+  it("no trata recuentos de encuestas como fechas de 1900", () => {
+    expect(gs.toDate(91)).toBeNull();
+    expect(gs.toDate(285)).toBeNull();
+    expect(gs.fechaOperativa(new Date(Date.UTC(1900, 2, 31)))).toBe(false);
+    expect(gs.fechaOperativa(new Date(Date.UTC(2026, 7, 1)))).toBe(true);
+  });
+
+  it("lee el año de Hoja 14 aunque venga como número, texto o fecha", () => {
+    expect(gs.yearFromCell(2026)).toBe(2026);
+    expect(gs.yearFromCell("2026")).toBe(2026);
+    expect(gs.yearFromCell(new Date(2026, 0, 1))).toBe(2026);
   });
 
   it("el cierre automático apunta al mes de extracción, no al siguiente", () => {
