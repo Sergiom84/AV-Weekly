@@ -36,13 +36,21 @@ por el equipo.
    gestionadas, peticiones IMAC y el template semanal. El template contiene
    encuestas, work orders y citas.
 2. Escribir en `Configuración` la fecha de extracción de la semana.
-3. Ejecutar `⭐ Informática Weekly > Procesar semana`.
+3. Ejecutar `⭐ Informática Weekly > Procesar semana` **una sola vez**.
 4. Revisar las siete líneas de `Comprobación`: archivo leído, fecha de
-   modificación, filas leídas y escritas, desconocidos y celdas actualizadas.
-5. Copiar la pestaña `PLANO` completa y subirla en
-   `Informática > Texto plano (Drive)` de AV Weekly. Como alternativa, usar
-   `Guardar PLANO como .txt en la carpeta` y subir ese fichero. El TXT se guarda
-   en `Carpeta salida PLANO`, nunca junto a los Excel de `Carpeta Drive`.
+   modificación, filas leídas y escritas, desconocidos, cierre de meses
+   pendientes, citas de **esa** semana y el nombre del TXT generado.
+5. Subir el TXT que el propio proceso deja en `Carpeta salida PLANO`
+   (`Informatica YYYY-MM-DD.txt`) en `Informática > Texto plano (Drive)`.
+   El menú `Guardar PLANO como .txt` sigue existiendo por si hay que
+   regenerarlo a mano. El TXT nunca se guarda junto a los Excel de
+   `Carpeta Drive`.
+
+Si se vuelve a pulsar `Procesar semana` con la misma fecha de extracción, la
+columna *Semana anterior* se conserva: no se vuelve a copiar `H4:H6` sobre
+`I4:I6`. Cuando la extracción pasa a un mes nuevo, el proceso cierra solo
+los meses que ya quedaron atrás (agosto se congela al informar septiembre).
+`Cerrar mes` sigue en el menú para congelar el mes en curso a propósito.
 
 Los ficheros se reconocen por cabeceras. Solo backlog, liberadas y gestionadas
 se distinguen por nombre porque comparten exactamente el mismo formato. Si
@@ -50,7 +58,13 @@ falta un origen obligatorio, el proceso se detiene antes de escribir datos.
 
 ## Cierre de mes
 
-1. Procesar primero la última semana del mes y comprobarla.
+El cierre automático ocurre dentro de `Procesar semana` cuando la fecha de
+extracción ya pertenece a un mes posterior al que sigue vivo en encuestas.
+
+Para congelar el mes en curso sin esperar (última semana de agosto, extracción
+todavía en agosto):
+
+1. Procesar primero esa semana y comprobarla.
 2. Ejecutar `⭐ Informática Weekly > Cerrar mes` una sola vez.
 3. Confirmar en `Comprobación` las celdas cerradas y el mes nuevo abierto.
 

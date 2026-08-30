@@ -10,7 +10,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["server/**/*.test.ts"],
+    include: ["server/**/*.test.ts", "scripts/informatica-drive/**/*.test.ts"],
     testTimeout: 30_000,
     hookTimeout: 30_000,
   },

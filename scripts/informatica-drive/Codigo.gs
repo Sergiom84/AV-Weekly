@@ -103,6 +103,7 @@ var CONFIG_KEYS = {
   folder: 'Carpeta Drive',
   outputFolder: 'Carpeta salida PLANO',
   extraction: 'Fecha de extracción',
+  lastProcessed: 'Última extracción procesada',
   windowMonths: 'Meses en la ventana de encuestas'
 };
 
@@ -715,8 +716,47 @@ function readConfig() {
     folderId: folderId,
     outputFolderId: outputFolderId,
     extraction: extraction,
+    lastProcessed: configDate(config[CONFIG_KEYS.lastProcessed]),
     windowMonths: isFinite(windowMonths) && windowMonths > 0 ? Math.round(windowMonths) : DEFAULT_WINDOW_MONTHS
   };
+}
+
+/** Writes or appends one Configuración row without touching the other keys. */
+function writeConfigValue(key, value) {
+  var sheet = sheetByName(TAB.config, false);
+  var last = Math.max(sheet.getLastRow(), 1);
+  var keys = sheet.getRange(1, 1, last, 1).getValues();
+  var row = 0;
+
+  for (var index = 0; index < keys.length; index += 1) {
+    if (text(keys[index][0]) === key) {
+      row = index + 1;
+      break;
+    }
+  }
+
+  if (row === 0) {
+    row = last + 1;
+    sheet.getRange(row, 1).setValue(key).setFontWeight('bold');
+  }
+
+  sheet.getRange(row, 2).setValue(value);
+
+  if (key === CONFIG_KEYS.extraction || key === CONFIG_KEYS.lastProcessed) {
+    sheet.getRange(row, 2).setNumberFormat('dd/mm/yyyy');
+  }
+}
+
+function ensureConfigKey(key, value) {
+  var sheet = sheetByName(TAB.config, false);
+  var last = Math.max(sheet.getLastRow(), 1);
+  var keys = sheet.getRange(1, 1, last, 1).getValues();
+
+  for (var index = 0; index < keys.length; index += 1) {
+    if (text(keys[index][0]) === key) return;
+  }
+
+  writeConfigValue(key, value);
 }
 
 /**
@@ -842,17 +882,35 @@ function monthBounds(extraction) {
 }
 
 /**
+ * True when this run is a new extraction date.
+ *
+ * Re-running the same Monday would copy the already-new H4:H6 onto
+ * "Semana anterior" and zero the variation. The first run after an upgrade
+ * has no stored date, so it still rolls — the same as today.
+ */
+function debeRodarSemanaAnterior(extraction, lastProcessed) {
+  if (!extraction) return false;
+  if (!lastProcessed) return true;
+
+  return isoDate(extraction) !== isoDate(lastProcessed);
+}
+
+/**
  * This week's totals become next week's "Semana anterior".
  *
  * Must run BEFORE the data tabs are rewritten: H4:H6 are COUNTIF formulas, so
  * the moment the new rows land they recalculate and the old figure is gone.
  * The percentage in column J divides by these three cells.
  */
-function rodarSemanaAnterior() {
+function rodarSemanaAnterior(extraction, lastProcessed) {
+  if (!debeRodarSemanaAnterior(extraction, lastProcessed)) return false;
+
   var sheet = sheetByName(TAB.peticionesInforme, false);
   var actual = sheet.getRange('H4:H6').getValues();
 
   sheet.getRange('I4:I6').setValues(actual);
+
+  return true;
 }
 
 /** Writes every marker that changes as part of the weekly processing. */
@@ -968,37 +1026,92 @@ function mesYaCerrado(month) {
   return date ? date.getTime() >= month.getTime() : false;
 }
 
+/** First day of the live survey-history month, or null. */
+function mesVivoEncuestas() {
+  var sheet = sheetByName(TAB.encuestasInforme, false);
+  var liveRow = ultimaFilaFecha(sheet, 2, 4);
+
+  if (liveRow === 0) return null;
+
+  var date = toDate(sheet.getRange(liveRow, 2).getValue());
+
+  return date ? monthStart(date) : null;
+}
+
+/**
+ * Freezes the current live month and opens `month`. Returns the frozen cells,
+ * or null when that month is already open.
+ */
+function abrirMesNuevo(month, windowMonths) {
+  if (mesYaCerrado(month)) return null;
+
+  var frozenCells = describirCeldasCierre(month);
+
+  cerrarVolumetria(month);
+  cerrarHistoricoIncidencias(month);
+  cerrarSeriesMensuales(month);
+  cerrarImacs(month);
+  cerrarBloqueTeclado(month);
+
+  // This is deliberately last: its new live row is the idempotency marker.
+  cerrarEncuestas(month, windowMonths);
+
+  return frozenCells;
+}
+
 /**
  * Closes the extraction month and opens the following month exactly once.
  *
  * The guard compares the survey history with the NEW month. Closing August,
  * for example, opens 01/09/2026; comparing with August would skip the first
  * legitimate close because the live row already represents August.
+ *
+ * Weekly processing does not call this: it only catches up months that are
+ * already behind the extraction date, so August stays live while August is
+ * still being reported.
  */
 function cerrarMes() {
   var config = readConfig();
-  var currentMonth = monthBounds(config.extraction).first;
-  var nextMonth = mesSiguiente(currentMonth);
+  var nextMonth = mesSiguiente(monthBounds(config.extraction).first);
+  var frozenCells = abrirMesNuevo(nextMonth, config.windowMonths);
 
-  if (mesYaCerrado(nextMonth)) {
+  if (!frozenCells) {
     actualizarComprobacionCierre('Sin cambios', 'El mes ' + fechaLegible(nextMonth) + ' ya estaba abierto.');
     return false;
   }
 
-  var frozenCells = describirCeldasCierre(nextMonth);
-
-  cerrarVolumetria(nextMonth);
-  cerrarHistoricoIncidencias(nextMonth);
-  cerrarSeriesMensuales(nextMonth);
-  cerrarImacs(nextMonth);
-  cerrarBloqueTeclado(nextMonth);
-
-  // This is deliberately last: its new live row is the idempotency marker.
-  cerrarEncuestas(nextMonth, config.windowMonths);
-
   actualizarComprobacionCierre('OK', frozenCells.join('; '));
 
   return true;
+}
+
+/**
+ * When extraction has moved into a later month, freeze every live month that
+ * is now in the past. August stays live while extraction is still in August.
+ */
+function cerrarMesesPendientes(extraction, windowMonths) {
+  var target = monthBounds(extraction).first;
+  var details = [];
+  var guard = 0;
+
+  while (!mesYaCerrado(target) && guard < 24) {
+    var live = mesVivoEncuestas();
+
+    if (!live) break;
+
+    var next = mesSiguiente(live);
+
+    if (next.getTime() > target.getTime()) break;
+
+    var frozenCells = abrirMesNuevo(next, windowMonths);
+
+    if (!frozenCells) break;
+
+    details.push('Abierto ' + fechaLegible(next) + ' (' + frozenCells.join('; ') + ')');
+    guard += 1;
+  }
+
+  return details;
 }
 
 function columnLetters(column) {
@@ -2618,13 +2731,23 @@ function agregarImacs(found, imacs) {
       var date = imacDate(row[dateAt]);
       var city = text(row[buildingAt]);
 
-      if (!date || city === '') continue;
+      if (!date || city === '' || esAliasEdificioBasura(city)) continue;
 
       date = monthStart(date);
       bump(imacs, [isoDate(date), monthLabel(date), city, 'Solicitudes'], toNumber(row[requestsAt]));
       bump(imacs, [isoDate(date), monthLabel(date), city, 'Intervenciones'], toNumber(row[jobsAt]));
     }
   }
+}
+
+/**
+ * Pivot leftovers that are not sites. Drive materialises "Grand Total" as a
+ * building because the IMAC workbook carries a pivot tab with that label.
+ */
+function esAliasEdificioBasura(name) {
+  var key = normalize(name);
+
+  return key === 'GRAND TOTAL' || key === 'TOTAL' || key === 'TOTAL GENERAL';
 }
 
 /** Emits only workbook masters; it never modifies them or infers cross-master aliases. */
@@ -2634,7 +2757,7 @@ function agregarEdificios(found) {
   function add(building, dt, smartTech, workOrder, imac, peticion) {
     var cells = [text(building), text(dt), text(smartTech), text(workOrder), text(imac), text(peticion)];
 
-    if (cells[0] === '') return;
+    if (cells[0] === '' || esAliasEdificioBasura(cells[0])) return;
 
     tuples[cells.join('\u0000')] = cells;
   }
@@ -2877,6 +3000,10 @@ function sumarFilas(rowsValue, predicate) {
 /** Key figures from aggregate tuples only; no raw identifiers or descriptions. */
 function totalesComprobacion(agregado, extraction) {
   var month = monthLabel(extraction);
+  var week = weekBounds(extraction);
+  var monday = isoDate(week.monday);
+  var sunday = isoDate(week.sunday);
+  var cutoff = isoDate(extraction);
 
   function requestState(state) {
     return sumarFilas(agregado.peticiones || [], function (row) {
@@ -2891,8 +3018,10 @@ function totalesComprobacion(agregado, extraction) {
     workOrders: sumarFilas(agregado.workOrders || [], function (row) {
       return row[1] === month;
     }),
-    citas: sumarFilas(agregado.citas || [], function () {
-      return true;
+    citas: sumarFilas(agregado.citas || [], function (row) {
+      var day = String(row[0] || '');
+
+      return day >= monday && day <= sunday && day <= cutoff;
     }),
     incidenciasResueltas: sumarFilas(agregado.incidencias || [], function (row) {
       return row[1] === month && / - Resueltas$/.test(row[5]);
@@ -2957,7 +3086,10 @@ function detalleMarcadores(informe) {
     physicalSheetName(TAB.workOrdersInforme) + '!H1:I1 ' + fechaLegible(informe.marcadores.monthFirst) + '–' +
     fechaLegible(informe.marcadores.monthLast) + '; ' + physicalSheetName(TAB.citasInforme) + '!J2:K2 ' +
     fechaLegible(informe.marcadores.weekMonday) + '–' + fechaLegible(informe.marcadores.weekSunday) + '; ' +
-    physicalSheetName(TAB.encuestasInforme) + '!L24 ' + fechaLegible(informe.marcadores.monthFirst)
+    physicalSheetName(TAB.encuestasInforme) + '!L24 ' + fechaLegible(informe.marcadores.monthFirst) +
+    '; semana anterior ' + (informe.semanaRodada ? 'rodada' : 'conservada') +
+    (informe.planoTxt ? '; TXT ' + informe.planoTxt : '') +
+    (informe.planoTxtError ? '; TXT error: ' + informe.planoTxtError : '')
   );
 }
 
@@ -3061,7 +3193,21 @@ function procesarSemana() {
       throw new Error('Faltan ficheros o pestañas requeridos: ' + informe.faltan.join(', '));
     }
 
-    rodarSemanaAnterior();
+    // Freeze months that extraction has already left behind, using the data
+    // still in the book. Writing the new dumps first would freeze August with
+    // September's backlog snapshot.
+    var cerrados = cerrarMesesPendientes(config.extraction, config.windowMonths);
+
+    if (cerrados.length > 0) {
+      informe.cierreStatus = 'OK';
+      informe.cierre = cerrados.join('; ');
+    } else {
+      informe.cierreStatus = 'No ejecutado';
+      informe.cierre = 'Sin meses pendientes detrás de la extracción.';
+    }
+
+    informe.semanaRodada = rodarSemanaAnterior(config.extraction, config.lastProcessed);
+    writeConfigValue(CONFIG_KEYS.lastProcessed, config.extraction);
     escribirDatos(clasificacion.found, informe);
     repararFormulas(informe);
     escribirMarcadores(config.extraction);
@@ -3079,7 +3225,7 @@ function procesarSemana() {
     var agregado = agregar(clasificacion.found, config.extraction);
     var textoPlano = serializarPlano(agregado, {
       week: isoDate(config.extraction),
-    generated: new Date().toISOString(),
+      generated: new Date().toISOString(),
       source: clasificacion.nombres.join('; '),
       asOfDate: isoDate(config.extraction),
       scope: 'completo'
@@ -3088,6 +3234,13 @@ function procesarSemana() {
     escribirPlano(textoPlano);
     registrarArchivosLeidos(clasificacion, informe);
     informe.totales = totalesComprobacion(agregado, config.extraction);
+
+    try {
+      informe.planoTxt = escribirPlanoTxt(false);
+    } catch (err) {
+      informe.planoTxtError = err && err.message ? String(err.message) : String(err);
+    }
+
     escribirComprobacion(informe);
 
     return informe;
@@ -3100,14 +3253,17 @@ function procesarSemana() {
   }
 }
 
-/** The PLANO tab as a text file in its configured output folder. */
-function guardarPlanoTxt() {
-  var ui = SpreadsheetApp.getUi();
+/**
+ * Writes the PLANO tab as `Informatica YYYY-MM-DD.txt` in the output folder.
+ *
+ * `notify` is only for the menu item. Weekly processing saves silently and
+ * records the file name on Comprobación instead of opening a dialog.
+ */
+function escribirPlanoTxt(notify) {
   var sheet = sheetByName(TAB.plano, false);
 
   if (!sheet || sheet.getLastRow() < 1) {
-    ui.alert('Informática Weekly', 'La pestaña "' + TAB.plano + '" está vacía. Ejecuta antes "Procesar semana".', ui.ButtonSet.OK);
-    return null;
+    throw new Error('La pestaña "' + TAB.plano + '" está vacía. Ejecuta antes "Procesar semana".');
   }
 
   var config = readConfig();
@@ -3124,7 +3280,7 @@ function guardarPlanoTxt() {
 
   while (existing.hasNext()) existing.next().setTrashed(true);
 
-  var file = folder.createFile(name, lines.join('\n'), MimeType.PLAIN_TEXT);
+  folder.createFile(name, lines.join('\n'), MimeType.PLAIN_TEXT);
 
   // Versions created by the previous script lived beside the raw uploads.
   // Remove that misplaced copy only after the correct file exists.
@@ -3135,9 +3291,29 @@ function guardarPlanoTxt() {
     while (misplaced.hasNext()) misplaced.next().setTrashed(true);
   }
 
-  ui.alert('Informática Weekly', 'Guardado "' + name + '" en la carpeta de salida PLANO.', ui.ButtonSet.OK);
+  if (notify) {
+    SpreadsheetApp.getUi().alert(
+      'Informática Weekly',
+      'Guardado "' + name + '" en la carpeta de salida PLANO.',
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
 
-  return file.getId();
+  return name;
+}
+
+/** Menu wrapper: save the current PLANO and tell the operator the file name. */
+function guardarPlanoTxt() {
+  try {
+    return escribirPlanoTxt(true);
+  } catch (err) {
+    SpreadsheetApp.getUi().alert(
+      'Informática Weekly',
+      err && err.message ? String(err.message) : String(err),
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+    return null;
+  }
 }
 
 /** Creates only the three script-owned tabs; existing workbook content is kept. */
@@ -3179,6 +3355,8 @@ function inicializarHoja() {
     ]);
     liveConfig.getRange(outputRow, 1).setFontWeight('bold');
   }
+
+  ensureConfigKey(CONFIG_KEYS.lastProcessed, '');
 
   if (!sheetByName(TAB.check, false)) {
     escribirComprobacion({});
