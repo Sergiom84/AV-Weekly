@@ -1,14 +1,22 @@
 import { MONTH_LABELS } from "@shared/deck/core";
-import type { OficinasValidadoras } from "@shared/modules/oficinas/types";
+import {
+  rankedRowsByAverage,
+  rowsWithOtrosLast,
+  seriesWeeks,
+  valueAt,
+} from "@shared/modules/oficinas/derived";
+import type {
+  OficinasRow,
+  OficinasValidadoras,
+  OficinasWeekValue,
+} from "@shared/modules/oficinas/types";
 
 /**
- * Formatting and palette helpers of the Oficinas deck.
+ * Formatting, palette and the annual-comparison view model of Oficinas.
  *
- * Nothing is aggregated here: every figure the pages draw comes from
- * `shared/modules/oficinas/derived.ts`, which is the single reader of the
- * dataset. What lives here is the axis vocabulary — week and month labels,
- * percentages, the series colours — and the small ranking helper the element
- * pages need to pick the rows a slide can hold.
+ * Dataset readers stay in `shared/modules/oficinas/derived.ts`. What lives
+ * here is the axis vocabulary plus the series/table shape `SemanalPage`
+ * used to compute inside React.
  */
 
 /** Axis label of a week: `S33`, the form the source workbook names them by. */
@@ -185,4 +193,170 @@ export function yearColor(year: number, currentYear: number): string {
   const age = currentYear - year - 2;
 
   return OLDER_YEAR_COLORS[age % OLDER_YEAR_COLORS.length];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Annual weekly comparison (SemanalPage)                                      */
+/* -------------------------------------------------------------------------- */
+
+/** The axis of every annual comparison: the full ISO year, as the slides print it. */
+export const ALL_ISO_WEEKS = Array.from({ length: 52 }, (_, index) => index + 1);
+
+/** Every week the rows report for one year, deduplicated. */
+export function currentYearWeeks(rows: OficinasRow[], year: number): Set<number> {
+  const weeks = new Set<number>();
+
+  for (const row of rows) {
+    for (const week of seriesWeeks(row.values, year)) {
+      weeks.add(week);
+    }
+  }
+
+  return weeks;
+}
+
+/**
+ * Weeks the `Media` column averages over.
+ *
+ * When `throughWeek` is unset the trailing partial column of the source is
+ * dropped, which is the rule `dtStats` applies to the same figure on the
+ * directorate pages.
+ */
+export function semanalMediaWeeks(
+  rows: OficinasRow[],
+  year: number,
+  throughWeek?: number | null
+): number[] {
+  const reportedWeeks = Array.from(currentYearWeeks(rows, year)).sort(
+    (a, b) => a - b
+  );
+
+  return throughWeek === null || throughWeek === undefined
+    ? reportedWeeks.slice(0, -1)
+    : reportedWeeks.filter(week => week <= throughWeek);
+}
+
+/** Weeks the current-year bars may still point at. */
+export function semanalReportWeeks(
+  rows: OficinasRow[],
+  year: number,
+  totals: OficinasWeekValue[] | undefined,
+  throughWeek?: number | null
+): number[] {
+  const currentReported = new Set(
+    totals
+      ? seriesWeeks(totals, year)
+      : rows.flatMap(row => seriesWeeks(row.values, year))
+  );
+
+  return Array.from(currentReported).filter(
+    week =>
+      throughWeek === null || throughWeek === undefined || week <= throughWeek
+  );
+}
+
+/** Current-year total of one week: published series, or the sum of the table rows. */
+export function semanalCurrentAt(
+  rows: OficinasRow[],
+  year: number,
+  week: number,
+  totals?: OficinasWeekValue[]
+): number {
+  return totals
+    ? valueAt(totals, year, week)
+    : rows.reduce((sum, row) => sum + valueAt(row.values, year, week), 0);
+}
+
+export function semanalHeadlineItems(input: {
+  headlineLabel: string | undefined;
+  lastWeek: number | null;
+  current: number;
+  compareYear: number | null;
+  previous: number | null;
+}): { label: string; value: string }[] {
+  if (input.headlineLabel === undefined || input.lastWeek === null) {
+    return [];
+  }
+
+  const items = [
+    {
+      label: `${input.headlineLabel} S${input.lastWeek}`,
+      value: input.current.toLocaleString("es-ES"),
+    },
+  ];
+
+  if (input.compareYear === null || input.previous === null) {
+    return items;
+  }
+
+  items.push(
+    {
+      label: String(input.compareYear),
+      value: input.previous.toLocaleString("es-ES"),
+    },
+    {
+      label: "Variación",
+      value: variationLabel(input.previous, input.current),
+    }
+  );
+
+  return items;
+}
+
+export interface SemanalTableEntry {
+  label: string;
+  weekly: Map<number, number>;
+  media: number | null;
+}
+
+/** Pivot rows of the annual comparison table, including ranking and OTROS. */
+export function semanalTableEntries(
+  rows: OficinasRow[],
+  year: number,
+  mediaWeeks: number[],
+  options: { rankByAverage?: boolean; peticionesTerritorial?: boolean } = {}
+): SemanalTableEntry[] {
+  const rankedRows = options.rankByAverage
+    ? rankedRowsByAverage(rows, year, mediaWeeks)
+    : rows;
+  const orderedRows = options.peticionesTerritorial
+    ? rowsWithOtrosLast(rankedRows)
+    : rankedRows;
+
+  return orderedRows.map(row => {
+    const weekly = new Map<number, number>();
+
+    for (const entry of row.values) {
+      if (entry.year === year) {
+        weekly.set(entry.week, entry.value);
+      }
+    }
+
+    return {
+      label: row.label,
+      weekly,
+      media:
+        mediaWeeks.length === 0
+          ? null
+          : mediaWeeks.reduce((sum, week) => sum + (weekly.get(week) ?? 0), 0) /
+            mediaWeeks.length,
+    };
+  });
+}
+
+/**
+ * Column total of the pivot. Null when no row reported that week, so the
+ * printed slide can leave the cell blank instead of writing a zero.
+ */
+export function semanalWeekTotal(
+  entries: SemanalTableEntry[],
+  week: number
+): number | null {
+  const reported = entries.some(entry => entry.weekly.has(week));
+
+  if (!reported) {
+    return null;
+  }
+
+  return entries.reduce((sum, entry) => sum + (entry.weekly.get(week) ?? 0), 0);
 }

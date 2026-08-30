@@ -11,17 +11,23 @@ import {
   resolveWeekSelection,
   type WeekSelection,
 } from "@shared/deck/core";
-import {
-  rankedRowsByAverage,
-  rowsWithOtrosLast,
-  seriesWeeks,
-  valueAt,
-} from "@shared/modules/oficinas/derived";
+import { seriesWeeks, valueAt } from "@shared/modules/oficinas/derived";
 import type {
   OficinasRow,
   OficinasWeekValue,
 } from "@shared/modules/oficinas/types";
-import { decimal, variationLabel, weekLabel, yearColor } from "../aggregate";
+import {
+  ALL_ISO_WEEKS,
+  decimal,
+  semanalCurrentAt,
+  semanalHeadlineItems,
+  semanalMediaWeeks,
+  semanalReportWeeks,
+  semanalTableEntries,
+  semanalWeekTotal,
+  weekLabel,
+  yearColor,
+} from "../aggregate";
 import {
   TOTAL_ROW,
   cellKey,
@@ -53,9 +59,6 @@ import YearSelector, { type YearSelection } from "./YearSelector";
  *   zero-filled bar would claim a week that was measured and empty instead of
  *   one that was not measured at all.
  */
-
-/** The axis of every annual comparison: the full ISO year, as the slides print it. */
-const ALL_WEEKS = Array.from({ length: 52 }, (_, index) => index + 1);
 
 /**
  * Visual contracts for annual weekly comparisons.
@@ -149,20 +152,20 @@ export default function SemanalPage({
       : rows.flatMap(row => seriesWeeks(row.values, year))
   );
   const currentAt = (week: number) =>
-    totals
-      ? valueAt(totals, year, week)
-      : rows.reduce((sum, row) => sum + valueAt(row.values, year, week), 0);
+    semanalCurrentAt(rows, year, week, totals);
   const weekSelection: WeekSelection =
-    page.weekSelection ?? defaultWeekSelection(ALL_WEEKS[ALL_WEEKS.length - 1]);
-  const currentReportWeeks = Array.from(currentReported).filter(
-    week =>
-      throughWeek === null || throughWeek === undefined || week <= throughWeek
+    page.weekSelection ?? defaultWeekSelection(ALL_ISO_WEEKS[ALL_ISO_WEEKS.length - 1]);
+  const currentReportWeeks = semanalReportWeeks(
+    rows,
+    year,
+    totals,
+    throughWeek
   );
   const selectedWeeks = resolveWeekSelection(
     weekSelection,
     weekSelection.mode === "window"
-      ? reportedWeekAvailability(ALL_WEEKS, currentReportWeeks)
-      : ALL_WEEKS
+      ? reportedWeekAvailability(ALL_ISO_WEEKS, currentReportWeeks)
+      : ALL_ISO_WEEKS
   );
 
   // Past years first, so the bars group oldest to newest inside a week and the
@@ -178,7 +181,7 @@ export default function SemanalPage({
         key: rowId,
         label: String(comparisonYear),
         color: yearColor(comparisonYear, year),
-        cells: ALL_WEEKS.map(week => {
+        cells: ALL_ISO_WEEKS.map(week => {
           const key = cellKey(rowId, weekColumn(week));
           const imported =
             comparison && reported.has(week)
@@ -197,7 +200,7 @@ export default function SemanalPage({
       key: "actual",
       label: String(year),
       color: yearColor(year, year),
-      cells: ALL_WEEKS.map(week => {
+      cells: ALL_ISO_WEEKS.map(week => {
         const key = cellKey(TOTAL_ROW, weekColumn(week));
         const closed =
           throughWeek === null || throughWeek === undefined
@@ -221,7 +224,7 @@ export default function SemanalPage({
     color: entry.color,
   }));
 
-  const data = ALL_WEEKS.map((week, index) => {
+  const data = ALL_ISO_WEEKS.map((week, index) => {
     const point: Record<string, number | string | null> = {
       semana: weekLabel(week),
     };
@@ -233,7 +236,7 @@ export default function SemanalPage({
     return point;
   });
   const chartData = data.filter((_, index) =>
-    selectedWeeks.includes(ALL_WEEKS[index])
+    selectedWeeks.includes(ALL_ISO_WEEKS[index])
   );
 
   const lastWeek = currentReportWeeks.at(-1) ?? null;
@@ -244,39 +247,19 @@ export default function SemanalPage({
       : seriesWeeks(comparison, compareYear).includes(lastWeek)
         ? valueAt(comparison, compareYear, lastWeek)
         : null;
-  const headlineItems =
-    headlineLabel === undefined || lastWeek === null
-      ? []
-      : [
-          {
-            label: `${headlineLabel} S${lastWeek}`,
-            value: currentAt(lastWeek).toLocaleString("es-ES"),
-          },
-          ...(compareYear === null || previous === null
-            ? []
-            : [
-                {
-                  label: String(compareYear),
-                  value: previous.toLocaleString("es-ES"),
-                },
-                {
-                  label: "Variación",
-                  value: variationLabel(previous, currentAt(lastWeek)),
-                },
-              ]),
-        ];
+  const headlineItems = semanalHeadlineItems({
+    headlineLabel,
+    lastWeek,
+    current: lastWeek === null ? 0 : currentAt(lastWeek),
+    compareYear,
+    previous,
+  });
 
   // Denominator of the `Media` column: the weeks the current year reports up to
   // and including the closed one. The trailing partial column of the source is
   // excluded, which is the rule `dtStats` applies to the same figure on the
   // directorate pages — and the one that reproduces the printed medias.
-  const reportedWeeks = Array.from(currentYearWeeks(rows, year)).sort(
-    (a, b) => a - b
-  );
-  const mediaWeeks =
-    throughWeek === null || throughWeek === undefined
-      ? reportedWeeks.slice(0, -1)
-      : reportedWeeks.filter(week => week <= throughWeek);
+  const mediaWeeks = semanalMediaWeeks(rows, year, throughWeek);
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
@@ -287,7 +270,7 @@ export default function SemanalPage({
       {editing && (
         <WeekRangeSelector
           selection={weekSelection}
-          available={ALL_WEEKS}
+          available={ALL_ISO_WEEKS}
           onChange={next => onChange({ weekSelection: next })}
         />
       )}
@@ -328,7 +311,7 @@ export default function SemanalPage({
 
       {editing && (
         <ValueGrid
-          columns={ALL_WEEKS.map(weekLabel)}
+          columns={ALL_ISO_WEEKS.map(weekLabel)}
           rows={seriesRows.map(entry => ({
             label: entry.label,
             color: entry.color,
@@ -339,19 +322,6 @@ export default function SemanalPage({
       )}
     </PageShell>
   );
-}
-
-/** Every week the rows report for one year, deduplicated. */
-function currentYearWeeks(rows: OficinasRow[], year: number): Set<number> {
-  const weeks = new Set<number>();
-
-  for (const row of rows) {
-    for (const week of seriesWeeks(row.values, year)) {
-      weeks.add(week);
-    }
-  }
-
-  return weeks;
 }
 
 interface SemanalTableProps {
@@ -405,30 +375,9 @@ function SemanalTable({
     HTMLTableElement
   >({ deps: [rows.length, visibleWeeks.length, mediaWeeks.length, totalRow] });
 
-  const rankedRows = rankByAverage
-    ? rankedRowsByAverage(rows, year, mediaWeeks)
-    : rows;
-  const orderedRows = peticionesTerritorial
-    ? rowsWithOtrosLast(rankedRows)
-    : rankedRows;
-  const entries = orderedRows.map(row => {
-    const weekly = new Map<number, number>();
-
-    for (const entry of row.values) {
-      if (entry.year === year) {
-        weekly.set(entry.week, entry.value);
-      }
-    }
-
-    return {
-      label: row.label,
-      weekly,
-      media:
-        mediaWeeks.length === 0
-          ? null
-          : mediaWeeks.reduce((sum, week) => sum + (weekly.get(week) ?? 0), 0) /
-            mediaWeeks.length,
-    };
+  const entries = semanalTableEntries(rows, year, mediaWeeks, {
+    rankByAverage,
+    peticionesTerritorial,
   });
 
   const totalMedia = entries.reduce(
@@ -540,16 +489,11 @@ function SemanalTable({
               {visibleWeeks.map(week => {
                 // A week no row reported stays blank, like the columns past the
                 // reported one on the printed slide.
-                const reported = entries.some(entry => entry.weekly.has(week));
+                const total = semanalWeekTotal(entries, week);
 
                 return (
                   <td key={week} className={cellClass}>
-                    {reported
-                      ? entries.reduce(
-                          (sum, entry) => sum + (entry.weekly.get(week) ?? 0),
-                          0
-                        )
-                      : ""}
+                    {total === null ? "" : total}
                   </td>
                 );
               })}
