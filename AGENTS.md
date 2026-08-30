@@ -19,7 +19,7 @@ The code is split in three areas that must stay separated:
 - Use July for operational context and access pointers. `.env` is a local fallback for configuration only; never expose or commit secrets. By default the app runs on a local file database (`data/av-weekly.db`).
 - User-facing UI must not use emojis or explanatory microcopy. Prefer Lucide/Radix icons with accessible labels.
 - Typography is limited to Cormorant Garamond for titles/headings and JetBrains Mono for body, labels, controls, tables, and metrics. Use title, subtitle, and body size tiers; body is the smallest.
-- Keep deck pages and data visualizations isolated in components under `client/src/components/informe/`. Reuse existing design tokens and Radix primitives before adding new UI patterns.
+- Keep deck pages in `client/src/modules/<module>/pages/`. Reuse `client/src/components/deck/` and Radix primitives before adding new UI patterns.
 - Imported datasets are immutable; manual corrections live in the deck state. Do not fabricate business metrics or alter the meaning of imported values.
 - Preserve loading, empty, error, and print states. The deck must stay legible when printed.
 - Commits are allowed for a finished scoped change. After three consecutive commits, pause and review the full diff before another commit.

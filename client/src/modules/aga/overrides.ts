@@ -4,7 +4,7 @@ import type { AgaDeckPage } from "@shared/modules/aga/types";
  * Manual corrections of the charted figures, on the `page.overrides` map the
  * deck chassis already persists (see `CellOverrides` in `shared/deck/core.ts`).
  *
- * The precedent is the AV deck (`components/informe/MonthlyTrendPage`), which
+ * The precedent is the AV deck (`modules/av/pages/MonthlyTrendPage`), which
  * keys a cell by row and column and falls back to the imported value when the
  * key is absent. The AGA pages of sections 2 and 3 do the same, with keys built
  * from the identity of the datum rather than from its position:
