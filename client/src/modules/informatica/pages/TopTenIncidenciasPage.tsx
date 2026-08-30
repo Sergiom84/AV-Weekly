@@ -12,26 +12,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  monthLabel,
-  pivot,
-  reportMonth,
-  reportMonths,
-  seriesColor,
-  sumBy,
-  topEntries,
-} from "../aggregate";
-import { comparativaViews } from "../sources";
+import { seriesColor, topTenComparison } from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface TopTenIncidenciasPageProps extends InformaticaPageProps {
   dataset: InformaticaDataset;
-}
-
-interface ComparisonView {
-  view: string;
-  label: string;
-  rows: MatrixRow[];
 }
 
 function DetailTable({
@@ -122,11 +107,6 @@ function DetailTable({
     </section>
   );
 }
-
-/** The "ten" of the title: rows kept per view, ranked by the latest month. */
-const TOP = 10;
-
-const DETAIL_ORDER = ["Portátil", "Software", "Sistema Operativo"];
 
 const AXIS_TICK = {
   fill: "var(--muted-foreground)",
@@ -231,50 +211,7 @@ export default function TopTenIncidenciasPage({
   onChange,
   dataset,
 }: TopTenIncidenciasPageProps) {
-  const rows = dataset.comparativas ?? [];
-  const views = comparativaViews(rows);
-  const months = reportMonths(dataset, rows, row => row.mes);
-  const columns = months.map(monthLabel);
-  const ranked = reportMonth(dataset, rows, row => row.mes);
-
-  const tables: ComparisonView[] = views.map(({ view, label }) => {
-    const viewRows = rows.filter(
-      row => row.vista === view && months.includes(row.mes)
-    );
-    const ranking = topEntries(
-      sumBy(
-        viewRows.filter(row => row.mes === ranked),
-        row => row.elemento,
-        row => row.total
-      ),
-      TOP
-    ).map(entry => entry.label);
-    const order =
-      ranking.length > 0
-        ? ranking
-        : topEntries(
-            sumBy(
-              viewRows,
-              row => row.elemento,
-              row => row.total
-            ),
-            TOP
-          ).map(entry => entry.label);
-    const matrix = pivot(
-      viewRows,
-      row => row.elemento,
-      row => row.mes,
-      row => row.total,
-      { columns: months, rowOrder: order }
-    );
-
-    return { view, label, rows: matrix.rows };
-  });
-
-  const components = tables.find(table => table.label === "Componentes");
-  const detailTables = DETAIL_ORDER.map(label =>
-    tables.find(table => table.label === label)
-  ).filter((table): table is ComparisonView => Boolean(table));
+  const { columns, components, details } = topTenComparison(dataset);
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
@@ -286,7 +223,7 @@ export default function TopTenIncidenciasPage({
         </div>
 
         <div className="grid min-h-0 content-start gap-[0.7cqi]">
-          {detailTables.map(table => (
+          {details.map(table => (
             <DetailTable
               key={table.view}
               label={table.label}

@@ -5,6 +5,7 @@ import type {
   InformaticaDataset,
   InformaticaDateCell,
 } from "@shared/modules/informatica/types";
+import { comparativaViews } from "./sources";
 
 /**
  * Aggregation helpers for the Informatica dataset.
@@ -530,6 +531,81 @@ export const SERIES_COLORS = [
 
 export function seriesColor(index: number): string {
   return SERIES_COLORS[index % SERIES_COLORS.length];
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2.1.3 Top Ten                                                               */
+/* -------------------------------------------------------------------------- */
+
+/** Rows kept per view, ranked by the latest closed month. */
+const TOP_TEN = 10;
+
+/** Detail tables of the 2.1.3 slide, in the order the page prints them. */
+const TOP_TEN_DETAILS = ["Portátil", "Software", "Sistema Operativo"] as const;
+
+export interface TopTenView {
+  view: string;
+  label: string;
+  rows: MatrixRow[];
+}
+
+/**
+ * Matrices of the 2.1.3 slide: components for the chart, then the three
+ * detail tables.
+ *
+ * Ranking uses the last closed month so an in-flight extract cannot reorder
+ * the ten. When that month has no positive totals the window as a whole is
+ * the fallback, which is the same rule the page used while this lived in
+ * the component.
+ */
+export function topTenComparison(dataset: InformaticaDataset): {
+  columns: string[];
+  components: TopTenView | undefined;
+  details: TopTenView[];
+} {
+  const rows = dataset.comparativas ?? [];
+  const views = comparativaViews(rows);
+  const months = reportMonths(dataset, rows, row => row.mes);
+  const columns = months.map(monthLabel);
+  const ranked = reportMonth(dataset, rows, row => row.mes);
+
+  const tables: TopTenView[] = views.map(({ view, label }) => {
+    const viewRows = rows.filter(
+      row => row.vista === view && months.includes(row.mes)
+    );
+    const ranking = topEntries(
+      sumBy(
+        viewRows.filter(row => row.mes === ranked),
+        row => row.elemento,
+        row => row.total
+      ),
+      TOP_TEN
+    ).map(entry => entry.label);
+    const order =
+      ranking.length > 0
+        ? ranking
+        : topEntries(
+            sumBy(viewRows, row => row.elemento, row => row.total),
+            TOP_TEN
+          ).map(entry => entry.label);
+    const matrix = pivot(
+      viewRows,
+      row => row.elemento,
+      row => row.mes,
+      row => row.total,
+      { columns: months, rowOrder: order }
+    );
+
+    return { view, label, rows: matrix.rows };
+  });
+
+  return {
+    columns,
+    components: tables.find(table => table.label === "Componentes"),
+    details: TOP_TEN_DETAILS.map(label =>
+      tables.find(table => table.label === label)
+    ).filter((table): table is TopTenView => Boolean(table)),
+  };
 }
 
 /**
