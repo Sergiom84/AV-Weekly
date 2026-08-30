@@ -1111,6 +1111,13 @@ function cerrarMesesPendientes(extraction, windowMonths) {
     guard += 1;
   }
 
+  if (guard >= 24 && !mesYaCerrado(target)) {
+    throw new Error(
+      'No se pudieron cerrar los meses pendientes hasta ' + fechaLegible(target) +
+        '. No se escriben los volcados de esta semana.'
+    );
+  }
+
   return details;
 }
 
@@ -3123,7 +3130,12 @@ function filasComprobacion(informe) {
     [runAt, 'Filas escritas frente a leídas', comparacionCorrecta(informe) ? 'OK' : 'AVISO', detalleComparacion(informe)],
     [runAt, 'Desconocidos', unknown.length > 0 ? 'AVISO' : 'OK', unknown.length > 0 ? unknown.join('; ') : 'Ninguno'],
     [runAt, 'Caída IMAC', imacStatus, imacDetail],
-    [runAt, 'Marcadores de periodo', informe.marcadores ? 'OK' : 'Sin cambios', detalleMarcadores(informe)],
+    [
+      runAt,
+      'Marcadores de periodo',
+      informe.planoTxtError ? 'AVISO' : informe.marcadores ? 'OK' : 'Sin cambios',
+      detalleMarcadores(informe)
+    ],
     [runAt, 'Cierre mensual', informe.cierreStatus || 'No ejecutado', informe.cierre || 'No ejecutado en esta ejecución.'],
     [runAt, 'Totales clave', informe.totales ? 'OK' : 'Sin datos', detalleTotales(informe)]
   ];
@@ -3276,11 +3288,15 @@ function escribirPlanoTxt(notify) {
 
   var name = 'Informatica ' + isoDate(config.extraction) + '.txt';
   var folder = DriveApp.getFolderById(config.outputFolderId);
+  var created = folder.createFile(name, lines.join('\n'), MimeType.PLAIN_TEXT);
+  var createdId = created.getId();
   var existing = folder.getFilesByName(name);
 
-  while (existing.hasNext()) existing.next().setTrashed(true);
+  while (existing.hasNext()) {
+    var candidate = existing.next();
 
-  folder.createFile(name, lines.join('\n'), MimeType.PLAIN_TEXT);
+    if (candidate.getId() !== createdId) candidate.setTrashed(true);
+  }
 
   // Versions created by the previous script lived beside the raw uploads.
   // Remove that misplaced copy only after the correct file exists.
