@@ -290,6 +290,57 @@ export function smartTechSite(building: string): string {
   return site === "" ? building : site;
 }
 
+/**
+ * SmartTech points the report does not publish.
+ *
+ * Neither is in the master, so `siteLabels` cannot hide them: an unmapped point
+ * is kept and pushed to the end of the table on purpose, which is right for a
+ * site nobody has named yet and wrong for one the service does not report. They
+ * are matched on a marker rather than the full name because the extract writes
+ * the address after it and has already changed the case of `OPPLUS`.
+ */
+const UNREPORTED_SMARTTECH = ["ANILLO", "OPPLUS"];
+
+/**
+ * Points the extract still names by their previous name.
+ *
+ * Zelandia became Seguros: the two overlap for three months at the end of 2025
+ * while the move was under way, and the master maps only the new name. The
+ * value is the alias of the new site, not its label, so the row goes on to be
+ * named and ordered by the master like any other.
+ */
+const RENAMED_SMARTTECH: { marker: string; alias: string }[] = [
+  { marker: "ZELANDIA", alias: "Smart Tech Seguros Tablas I" },
+];
+
+/**
+ * Appointment rows as the report publishes them: unreported points dropped and
+ * renamed ones folded into their current site.
+ *
+ * Applied before anything is counted, so the totals and the headline figures
+ * come out of the same rows as the table. Filtering the table alone would leave
+ * a total that does not add up to what is shown.
+ */
+export function reportedSmartTechRows<T extends { edificio: string }>(
+  rows: T[]
+): T[] {
+  const kept: T[] = [];
+
+  for (const row of rows) {
+    const key = normalise(row.edificio);
+
+    if (UNREPORTED_SMARTTECH.some(marker => key.includes(marker))) {
+      continue;
+    }
+
+    const renamed = RENAMED_SMARTTECH.find(entry => key.includes(entry.marker));
+
+    kept.push(renamed === undefined ? row : { ...row, edificio: renamed.alias });
+  }
+
+  return kept;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Work order scope                                                            */
 /* -------------------------------------------------------------------------- */

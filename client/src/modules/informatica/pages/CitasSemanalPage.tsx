@@ -16,7 +16,7 @@ import {
   seriesColor,
   uniqueSorted,
 } from "../aggregate";
-import { siteLabels, smartTechSite } from "../sources";
+import { reportedSmartTechRows, siteLabels, smartTechSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface CitasSemanalPageProps extends InformaticaPageProps {
@@ -45,7 +45,7 @@ export default function CitasSemanalPage({
   onChange,
   dataset,
 }: CitasSemanalPageProps) {
-  const rows = dataset.citas ?? [];
+  const rows = reportedSmartTechRows(dataset.citas ?? []);
   const window = lastClosedWeek(rows, row => row.fecha, coverageEnd(dataset));
   const current = rows.filter(row => inWeek(row.fecha, window));
   const week = current[0]?.semana ?? null;

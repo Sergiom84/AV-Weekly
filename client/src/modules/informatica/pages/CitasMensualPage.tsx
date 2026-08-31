@@ -1,7 +1,7 @@
 import MatrixTable from "@/components/deck/MatrixTable";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { monthLabel, pivot, reportMonths } from "../aggregate";
-import { siteLabels, smartTechSite } from "../sources";
+import { reportedSmartTechRows, siteLabels, smartTechSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface CitasMensualPageProps extends InformaticaPageProps {
@@ -18,7 +18,7 @@ export default function CitasMensualPage({
   onChange,
   dataset,
 }: CitasMensualPageProps) {
-  const rows = dataset.citas ?? [];
+  const rows = reportedSmartTechRows(dataset.citas ?? []);
   const months = reportMonths(dataset, rows, row => row.mes);
 
   // Same naming as the weekly slide, so both citas tables read the same rows.
