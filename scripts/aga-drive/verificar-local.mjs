@@ -262,8 +262,8 @@ const diagnostics = [
   office && office.corregidas > 0
     ? `office: ${office.corregidas} fechas con día y mes intercambiados, corregidas`
     : "",
-  office && office.futuras > 0
-    ? `office: ${office.futuras} posiciones con un mes posterior a la extracción, descartadas`
+  office && office.fueraDeVentana > 0
+    ? `office: ${office.fueraDeVentana} posiciones fuera del mes informado y el anterior, descartadas`
     : "",
   skipped.length > 0 ? `ignorados: ${skipped.join(", ")}` : "",
   managed && Object.keys(managed.unknownBuildings).length > 0

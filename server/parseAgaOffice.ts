@@ -408,6 +408,66 @@ export function parseAgaOfficeWorkbook(workbook: XLSX.WorkBook): AgaOfficeParseR
   };
 }
 
+/**
+ * Months a weekly import is allowed to write: the month it reports and the one
+ * before it.
+ *
+ * The Office export lists the licences handled in the current month, and at the
+ * start of a month it still drags the closing of the previous one. Anything
+ * older is history, and history is only rewritten on purpose, through the
+ * workbook route.
+ *
+ * This is what keeps a mangled date column from reaching the stored series at
+ * all: a week whose dates land in March cannot write March, whatever made them
+ * land there.
+ */
+export function agaOfficeWritableMonths(week: string): string[] {
+  const match = /^(\d{4})-(\d{2})/.exec(week.trim());
+
+  if (!match) return [];
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const previous = new Date(Date.UTC(year, month - 2, 1));
+
+  return [
+    isoMonth(previous.getUTCFullYear(), previous.getUTCMonth() + 1) ?? "",
+    isoMonth(year, month) ?? "",
+  ].filter(Boolean);
+}
+
+/**
+ * The section reduced to the months the reported week may write, plus the names
+ * of the months left out so the import can say what it ignored.
+ */
+export function restrictAgaOfficeToWindow(
+  office: AgaOfficeSection,
+  week: string
+): { office: AgaOfficeSection; ignoredMonths: string[] } {
+  const writable = new Set(agaOfficeWritableMonths(week));
+
+  if (writable.size === 0) {
+    return { office, ignoredMonths: [] };
+  }
+
+  const keep = office.months
+    .map((month, index) => ({ month, index }))
+    .filter((entry) => writable.has(entry.month));
+  const ignoredMonths = office.months.filter((month) => !writable.has(month));
+
+  return {
+    office: {
+      ...office,
+      months: keep.map((entry) => entry.month),
+      families: office.families.map((family) => ({
+        ...family,
+        values: keep.map((entry) => family.values[entry.index] ?? null),
+      })),
+    },
+    ignoredMonths,
+  };
+}
+
 /** Replaces only incoming months and preserves every other historical value. */
 export function mergeAgaOfficeSection(
   existing: AgaOfficeSection | undefined,

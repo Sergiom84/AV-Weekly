@@ -44,6 +44,21 @@ cada fichero de la carpeta y mira qué columnas trae. Así sigue funcionando
 aunque cada semana lleguen con un nombre distinto. Si hay dos ficheros del mismo
 tipo, gana el más reciente.
 
+**Una semana sólo escribe en Office su mes y el anterior.** El export de
+licencias lista lo gestionado del mes en curso, y a principio de mes arrastra el
+cierre del anterior. Todo lo demás es histórico y sólo se reescribe a propósito,
+subiendo el libro Office desde el panel de AV Weekly. Sin ese límite, un fichero
+con las fechas mal convertidas escribe en meses que ya nadie va a volver a
+escribir. Las posiciones que caen fuera se descartan y se cuentan en
+`Comprobación`.
+
+**Las fechas americanas se corrigen sólo cuando el fichero lo demuestra.**
+Si una columna mezcla fechas de verdad con texto de día 13 o mayor, es que un
+Excel en inglés convirtió las que podía y les cambió el día por el mes; entonces
+se deshace el cambio y `Comprobación` dice cuántas celdas se corrigieron. Una
+columna homogénea no se toca: sin la mezcla no hay prueba, y adivinar el formato
+es peor que dejar el dato fuera.
+
 **El GPS en bruto no trae la columna `semana`.** El script le pone la fecha de
 extracción de `Configuración`. Si el fichero sí trae la columna, manda la
 columna, de forma que un GPS montado a la manera antigua sigue importándose.

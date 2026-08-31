@@ -5,8 +5,10 @@ import {
   AGA_OFFICE_FAMILIES,
   agaOfficeFamily,
   agaOfficeMonth,
+  agaOfficeWritableMonths,
   mergeAgaOfficeSection,
   parseAgaOfficeWorkbook,
+  restrictAgaOfficeToWindow,
 } from "./parseAgaOffice.ts";
 
 const HEADERS = [
@@ -142,6 +144,36 @@ describe("parser Office AGA", () => {
     expect(parsed.report).toMatchObject({ rows: 3, imported: 1, skipped: 2 });
     expect(parsed.report.unknownProducts).toEqual([{ value: "LICENCIA DESCONOCIDA", count: 1 }]);
     expect(parsed.report.unknownDates).toEqual([{ value: "(en blanco)", count: 1 }]);
+  });
+});
+
+describe("ventana de escritura Office AGA", () => {
+  const section: AgaOfficeSection = {
+    months: ["2026-03", "2026-07", "2026-08", "2026-12"],
+    families: [
+      { label: "MICROSOFT ACCESS", values: [4, 5, 3, 1] },
+      { label: "MICROSOFT WORD", values: [1, 2, 13, 2] },
+    ],
+  };
+
+  it("una semana sólo escribe su mes y el anterior", () => {
+    expect(agaOfficeWritableMonths("2026-08-31")).toEqual(["2026-07", "2026-08"]);
+    expect(agaOfficeWritableMonths("2026-01-05")).toEqual(["2025-12", "2026-01"]);
+  });
+
+  it("deja fuera los meses de histórico y los imposibles, y los nombra", () => {
+    const { office, ignoredMonths } = restrictAgaOfficeToWindow(section, "2026-08-31");
+
+    expect(office.months).toEqual(["2026-07", "2026-08"]);
+    expect(office.families.map((family) => family.values)).toEqual([
+      [5, 3],
+      [2, 13],
+    ]);
+    expect(ignoredMonths).toEqual(["2026-03", "2026-12"]);
+  });
+
+  it("sin semana en el preámbulo no recorta nada", () => {
+    expect(restrictAgaOfficeToWindow(section, "").office.months).toEqual(section.months);
   });
 });
 

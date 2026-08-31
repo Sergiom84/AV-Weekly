@@ -75,6 +75,7 @@ import { mergeAgaAnnualSection, parseAgaTexto } from "./parseAgaTexto.js";
 import {
   mergeAgaOfficeSection,
   parseAgaOfficeWorkbook,
+  restrictAgaOfficeToWindow,
 } from "./parseAgaOffice.js";
 import {
   mergeAgaManagedSection,
@@ -1367,6 +1368,14 @@ router.post("/api/aga/upload/texto", upload.single("file"), async (req, res) => 
       uploadedAt: new Date().toISOString(),
     };
 
+    // A weekly text writes its own month and the previous one. The Office
+    // history predates the Drive flow and is only rewritten on purpose, through
+    // the workbook route; without this bound, one mangled date column reaches
+    // months nothing will ever write again.
+    const office = parsed.office
+      ? restrictAgaOfficeToWindow(parsed.office, parsed.report.meta.week ?? "")
+      : null;
+
     const stored: AgaDataset = {
       ...existing,
       ...(parsed.weeks.length > 0
@@ -1380,8 +1389,8 @@ router.post("/api/aga/upload/texto", upload.single("file"), async (req, res) => 
             }),
           }
         : {}),
-      ...(parsed.office
-        ? { office: mergeAgaOfficeSection(existing.office, { ...parsed.office, source: stamp }) }
+      ...(office && office.office.months.length > 0
+        ? { office: mergeAgaOfficeSection(existing.office, { ...office.office, source: stamp }) }
         : {}),
       ...(parsed.annual
         ? { annual: mergeAgaAnnualSection(existing.annual, { ...parsed.annual, source: stamp }) }
@@ -1405,7 +1414,11 @@ router.post("/api/aga/upload/texto", upload.single("file"), async (req, res) => 
 
     res.json({
       ...(await buildAgaPayload()),
-      report: { ...parsed.report, file: stamp.sourceFile },
+      report: {
+        ...parsed.report,
+        file: stamp.sourceFile,
+        officeIgnoredMonths: office?.ignoredMonths ?? [],
+      },
     });
   } catch (err) {
     const message =

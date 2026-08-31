@@ -887,13 +887,25 @@ function mesIntercambiado(value) {
   return parts && parts[2] <= 12 ? parts[0] + '-' + pad2(parts[2]) : null;
 }
 
+/** `YYYY-MM` of the month before the given one. */
+function mesAnterior(month) {
+  var year = Number(month.slice(0, 4));
+  var number = Number(month.slice(5, 7));
+  var date = new Date(Date.UTC(year, number - 2, 1));
+
+  return date.getUTCFullYear() + '-' + pad2(date.getUTCMonth() + 1);
+}
+
 /**
  * The Office export: licences per month and family.
  *
- * `extraction` bounds the months: the export lists licences already handled, so
- * a month after the reported week cannot exist. Such a row is dropped and
- * counted instead of imported, because a month written into the future
- * overwrites a month of the stored history that nothing will write again.
+ * `extraction` bounds the months to the reported one and the one before it. The
+ * export lists the licences handled in the current month, and at the start of a
+ * month it still drags the closing of the previous one; anything else is
+ * history. A row outside that window is dropped and counted instead of
+ * imported, because writing it would overwrite a month of the stored series
+ * that nothing will write again — which is exactly what a mangled date column
+ * does when nobody bounds it.
  */
 function readOffice(entry, extraction) {
   var counts = {};
@@ -901,8 +913,9 @@ function readOffice(entry, extraction) {
   var rows = 0;
   var skipped = 0;
   var corregidas = 0;
-  var futuras = 0;
+  var fueraDeVentana = 0;
   var limite = extraction ? toIsoMonth(extraction) : null;
+  var anterior = limite ? mesAnterior(limite) : null;
 
   for (var sheetIndex = 0; sheetIndex < entry.sheets.length; sheetIndex += 1) {
     var sheet = entry.sheets[sheetIndex];
@@ -929,8 +942,8 @@ function readOffice(entry, extraction) {
         continue;
       }
 
-      if (limite && month > limite) {
-        futuras += 1;
+      if (limite && (month > limite || month < anterior)) {
+        fueraDeVentana += 1;
         skipped += 1;
         continue;
       }
@@ -951,7 +964,7 @@ function readOffice(entry, extraction) {
     rows: rows,
     skipped: skipped,
     corregidas: corregidas,
-    futuras: futuras,
+    fueraDeVentana: fueraDeVentana,
     counts: counts,
     unknownProducts: unknownProducts
   };
@@ -1214,10 +1227,11 @@ function procesarSemana() {
         );
       }
 
-      if (office.futuras > 0) {
+      if (office.fueraDeVentana > 0) {
         summary.push(
-          'Posiciones Office con un mes posterior a la extracción, descartadas: ' + office.futuras +
-            '. Revisa las fechas del fichero antes de presentar la 2.8.'
+          'Posiciones Office fuera del mes informado y el anterior, descartadas: ' +
+            office.fueraDeVentana +
+            '. Revisa las fechas del fichero antes de presentar la 2.8: el histórico no se toca.'
         );
       }
 
@@ -1327,8 +1341,13 @@ function writeCheck(gps, managed, office, config) {
       rows.push(['Office · fechas', '', 'Día y mes intercambiados, corregidos', office.corregidas]);
     }
 
-    if (office.futuras > 0) {
-      rows.push(['Office · fechas', '', 'Mes posterior a la extracción, descartadas', office.futuras]);
+    if (office.fueraDeVentana > 0) {
+      rows.push([
+        'Office · fechas',
+        '',
+        'Fuera del mes informado y el anterior, descartadas',
+        office.fueraDeVentana
+      ]);
     }
   }
 
