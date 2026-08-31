@@ -1203,6 +1203,19 @@ router.post("/api/aga/upload/office", upload.single("file"), async (req, res) =>
       });
     }
 
+    // A month after the current one cannot hold licences already handled. It
+    // means the dates are wrong, and importing them would overwrite months of
+    // the stored history that nothing else will write again.
+    if (parsed.report.futureMonths.length > 0) {
+      return res.status(400).json({
+        error:
+          `El export Office sitúa posiciones en ${parsed.report.futureMonths.join(", ")}, ` +
+          "posterior al mes en curso. Revisa las fechas del fichero: no se ha guardado " +
+          "para no sobrescribir el histórico.",
+        report: parsed.report,
+      });
+    }
+
     const existing = (await readStoredAgaDataset()) ?? emptyAgaDataset();
     const stamp = {
       sourceFile: req.file.originalname,

@@ -87,6 +87,48 @@ describe("parser Office AGA", () => {
     expect(agaOfficeMonth("2026-08-14")).toBe("2026-08");
   });
 
+  it("devuelve día y mes a su sitio cuando el libro llegó en formato americano", () => {
+    // The August export as the team delivers it: the positions dated from the
+    // 13th on stay text, because 13 cannot be read as a month, and the earlier
+    // ones arrive as dates with the day and the month exchanged.
+    const parsed = parseAgaOfficeWorkbook(
+      workbook([
+        // 2026-03-08 and 2026-12-08: 08/03 and 08/12 read as month/day.
+        row("G0", 1, "MICROSOFT ACCESS LTSC 2024", 46089),
+        row("G1", 1, "MICROSOFT ACCESS LTSC 2024", 46364),
+        row("G2", 1, "MICROSOFT ACCESS LTSC 2024", "13/08/2026"),
+      ])
+    );
+
+    expect(parsed.office.months).toEqual(["2026-08"]);
+    expect(parsed.office.families[3].values).toEqual([3]);
+    expect(parsed.report).toMatchObject({ imported: 3, skipped: 0, repairedDates: 2 });
+    expect(parsed.report.futureMonths).toEqual([]);
+  });
+
+  it("no toca una columna homogénea de fechas", () => {
+    const parsed = parseAgaOfficeWorkbook(
+      workbook([
+        row("G0", 1, "MICROSOFT WORD LTSC 2024", 46089),
+        row("G1", 1, "MICROSOFT WORD LTSC 2024", 46248),
+      ])
+    );
+
+    expect(parsed.office.months).toEqual(["2026-03", "2026-08"]);
+    expect(parsed.report.repairedDates).toBe(0);
+  });
+
+  it("señala los meses posteriores al mes en curso en vez de importarlos a ciegas", () => {
+    const future = new Date();
+    future.setMonth(future.getMonth() + 2);
+
+    const parsed = parseAgaOfficeWorkbook(
+      workbook([row("G0", 1, "MICROSOFT WORD LTSC 2024", future)])
+    );
+
+    expect(parsed.report.futureMonths).toEqual(parsed.office.months);
+  });
+
   it("informa productos y fechas desconocidos sin perderlos en silencio", () => {
     const parsed = parseAgaOfficeWorkbook(
       workbook([

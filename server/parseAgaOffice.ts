@@ -44,6 +44,16 @@ export interface AgaOfficeImportReport {
   skipped: number;
   unknownProducts: AgaOfficeUnknownValue[];
   unknownDates: AgaOfficeUnknownValue[];
+  /** Cells whose day and month arrived exchanged and were put back in place. */
+  repairedDates: number;
+  /**
+   * Months later than the month of the import, ascending.
+   *
+   * The export lists licences already handled, so such a month cannot exist. It
+   * means the dates are still wrong in a way the repair above does not explain,
+   * and importing it would overwrite a month of the stored history.
+   */
+  futureMonths: string[];
 }
 
 export interface AgaOfficeParseResult {
@@ -157,6 +167,74 @@ export function agaOfficeMonth(value: unknown): string | null {
   return Number.isFinite(serial) ? agaOfficeMonth(serial) : null;
 }
 
+/** `dd/mm/yyyy` or `dd.mm.yyyy` text, as day, month and year. */
+const TEXT_DATE = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/;
+
+/**
+ * Whether a date column was converted by a spreadsheet reading `dd/mm/yyyy` as
+ * `mm/dd/yyyy`.
+ *
+ * The tell is a column that mixes text and dates. A day of 13 or higher cannot
+ * be read as a month, so those cells stay text; the rest become real dates with
+ * the day and the month exchanged. A column that is all text or all dates is
+ * left alone, and so is one where some date cell has a day above 12, because
+ * then the exchange does not explain what is in the column and repairing it
+ * would be a guess.
+ *
+ * Mirrors `columnaConFechasIntercambiadas` in `scripts/aga-drive/Codigo.gs`.
+ */
+export function agaOfficeDatesAreSwapped(values: unknown[]): boolean {
+  let texts = 0;
+  let dates = 0;
+  let swappable = 0;
+
+  for (const value of values) {
+    const parts = dateCellParts(value);
+
+    if (parts) {
+      dates += 1;
+      if (parts.day <= 12) swappable += 1;
+      continue;
+    }
+
+    const match = TEXT_DATE.exec(String(value ?? "").trim());
+    if (match && Number(match[1]) > 12) texts += 1;
+  }
+
+  return texts > 0 && dates > 0 && swappable === dates;
+}
+
+/**
+ * A cell the spreadsheet already resolved into a date: a `Date` or the Excel
+ * serial the same cell becomes when the workbook is read without `cellDates`.
+ * Textual dates are not included: those are the ones the conversion left alone.
+ */
+function dateCellParts(value: unknown): { year: number; month: number; day: number } | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime())
+      ? null
+      : { year: value.getFullYear(), month: value.getMonth() + 1, day: value.getDate() };
+  }
+
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    const date = new Date(EXCEL_EPOCH + Math.floor(value) * 86400000);
+    return {
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+    };
+  }
+
+  return null;
+}
+
+/** `YYYY-MM` of a swapped cell, reading its day as the month. Null if it is not one. */
+export function agaOfficeRepairedMonth(value: unknown): string | null {
+  const parts = dateCellParts(value);
+
+  return parts && parts.day <= 12 ? isoMonth(parts.year, parts.day) : null;
+}
+
 function headerIndexes(row: unknown[]): Map<string, number> {
   const result = new Map<string, number>();
 
@@ -205,6 +283,7 @@ export function parseAgaOfficeWorkbook(workbook: XLSX.WorkBook): AgaOfficeParseR
   let rowsRead = 0;
   let imported = 0;
   let skipped = 0;
+  let repaired = 0;
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
@@ -237,8 +316,10 @@ export function parseAgaOfficeWorkbook(workbook: XLSX.WorkBook): AgaOfficeParseR
     let sheetRows = 0;
     let sheetImported = 0;
     let sheetSkipped = 0;
+    const dataRows = rows.slice(header.row + 1);
+    const swapped = agaOfficeDatesAreSwapped(dataRows.map((row) => row[dateIndex]));
 
-    for (const row of rows.slice(header.row + 1)) {
+    for (const row of dataRows) {
       if (!row.some((cell) => cell !== null && String(cell).trim() !== "")) {
         continue;
       }
@@ -252,7 +333,12 @@ export function parseAgaOfficeWorkbook(workbook: XLSX.WorkBook): AgaOfficeParseR
         continue;
       }
 
-      const month = agaOfficeMonth(row[dateIndex]);
+      const cell = row[dateIndex];
+      const repairedMonth = swapped ? agaOfficeRepairedMonth(cell) : null;
+
+      if (repairedMonth) repaired += 1;
+
+      const month = repairedMonth ?? agaOfficeMonth(cell);
       if (!month) {
         addUnknown(unknownDates, row[dateIndex]);
         sheetSkipped += 1;
@@ -293,6 +379,9 @@ export function parseAgaOfficeWorkbook(workbook: XLSX.WorkBook): AgaOfficeParseR
   }
 
   const months = Array.from(counts.keys()).sort();
+  const now = new Date();
+  const currentMonth = isoMonth(now.getFullYear(), now.getMonth() + 1) ?? "";
+  const futureMonths = months.filter((month) => month > currentMonth);
   const office: AgaOfficeSection = {
     months,
     families: AGA_OFFICE_FAMILIES.map((label) => ({
@@ -313,6 +402,8 @@ export function parseAgaOfficeWorkbook(workbook: XLSX.WorkBook): AgaOfficeParseR
       skipped,
       unknownProducts: unknownValues(unknownProducts),
       unknownDates: unknownValues(unknownDates),
+      repairedDates: repaired,
+      futureMonths,
     },
   };
 }

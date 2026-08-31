@@ -832,28 +832,105 @@ function readManaged(entry, mappings) {
   };
 }
 
-/** The Office export: licences per month and family. */
-function readOffice(entry) {
+/** `dd/mm/yyyy` or `dd.mm.yyyy` text, as `[day, month, year]`. */
+var TEXT_DATE = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/;
+
+/**
+ * Whether a date column was converted by a spreadsheet reading `dd/mm/yyyy` as
+ * `mm/dd/yyyy`.
+ *
+ * The tell is a column that mixes text and dates. A day of 13 or higher cannot
+ * be read as a month, so those cells stay text; the rest become real dates with
+ * the day and the month exchanged. A column that is all text or all dates is
+ * left alone, and so is one where some date cell has a day above 12, because
+ * then the exchange does not explain what is in the column and repairing it
+ * would be a guess.
+ */
+function columnaConFechasIntercambiadas(sheet, at) {
+  var textos = 0;
+  var fechas = 0;
+  var intercambiables = 0;
+
+  for (var index = sheet.headerRow + 1; index < sheet.grid.length; index += 1) {
+    var value = (sheet.grid[index] || [])[at];
+    var parts = celdaDeFecha(value);
+
+    if (parts) {
+      fechas += 1;
+      if (parts[2] <= 12) intercambiables += 1;
+      continue;
+    }
+
+    var match = TEXT_DATE.exec(text(value));
+
+    if (match && Number(match[1]) > 12) textos += 1;
+  }
+
+  return textos > 0 && fechas > 0 && intercambiables === fechas;
+}
+
+/**
+ * A cell the spreadsheet already resolved into a date: a `Date` or the Excel
+ * serial the same cell becomes in a converted workbook. Textual dates are left
+ * out: those are the ones the American conversion could not touch.
+ */
+function celdaDeFecha(value) {
+  if (value instanceof Date || typeof value === 'number') return dateParts(value);
+
+  return null;
+}
+
+/** `YYYY-MM` of a swapped cell, reading its day as the month. */
+function mesIntercambiado(value) {
+  var parts = celdaDeFecha(value);
+
+  return parts && parts[2] <= 12 ? parts[0] + '-' + pad2(parts[2]) : null;
+}
+
+/**
+ * The Office export: licences per month and family.
+ *
+ * `extraction` bounds the months: the export lists licences already handled, so
+ * a month after the reported week cannot exist. Such a row is dropped and
+ * counted instead of imported, because a month written into the future
+ * overwrites a month of the stored history that nothing will write again.
+ */
+function readOffice(entry, extraction) {
   var counts = {};
   var unknownProducts = {};
   var rows = 0;
   var skipped = 0;
+  var corregidas = 0;
+  var futuras = 0;
+  var limite = extraction ? toIsoMonth(extraction) : null;
 
   for (var sheetIndex = 0; sheetIndex < entry.sheets.length; sheetIndex += 1) {
     var sheet = entry.sheets[sheetIndex];
     var requestAt = sheet.columns[normalize('Nº Petición de sistemas')];
     var productAt = sheet.columns[normalize('Denominación Producto')];
     var dateAt = sheet.columns[normalize('Fecha de inicio de la gestión')];
+    var intercambiadas = columnaConFechasIntercambiadas(sheet, dateAt);
 
     for (var index = sheet.headerRow + 1; index < sheet.grid.length; index += 1) {
       var row = sheet.grid[index];
 
       if (text(row[requestAt]) === '') continue;
 
-      var month = toIsoMonth(row[dateAt]);
+      var cell = row[dateAt];
+      var corregido = intercambiadas ? mesIntercambiado(cell) : null;
+
+      if (corregido) corregidas += 1;
+
+      var month = corregido || toIsoMonth(cell);
       var family = officeFamily(row[productAt]);
 
       if (!month) {
+        skipped += 1;
+        continue;
+      }
+
+      if (limite && month > limite) {
+        futuras += 1;
         skipped += 1;
         continue;
       }
@@ -870,7 +947,14 @@ function readOffice(entry) {
     }
   }
 
-  return { rows: rows, skipped: skipped, counts: counts, unknownProducts: unknownProducts };
+  return {
+    rows: rows,
+    skipped: skipped,
+    corregidas: corregidas,
+    futuras: futuras,
+    counts: counts,
+    unknownProducts: unknownProducts
+  };
 }
 
 /**
@@ -1054,7 +1138,7 @@ function procesarSemana() {
 
     var gps = found.gps ? readGps(found.gps, config.extraction, mappings) : null;
     var managed = found.managed ? readManaged(found.managed, mappings) : null;
-    var office = found.office ? readOffice(found.office) : null;
+    var office = found.office ? readOffice(found.office, config.extraction) : null;
     var annual = readAnnual();
 
     var lines = [TEXTO_HEADER];
@@ -1122,6 +1206,20 @@ function procesarSemana() {
     if (office) {
       appendSection(lines, SECTION.office, breakdownLines(office.counts, 0));
       summary.push('Office: ' + office.rows + ' posiciones desde "' + found.office.file.getName() + '".');
+
+      if (office.corregidas > 0) {
+        summary.push(
+          'Fechas Office con día y mes intercambiados, corregidas: ' + office.corregidas +
+            '. El fichero llegó convertido en formato americano.'
+        );
+      }
+
+      if (office.futuras > 0) {
+        summary.push(
+          'Posiciones Office con un mes posterior a la extracción, descartadas: ' + office.futuras +
+            '. Revisa las fechas del fichero antes de presentar la 2.8.'
+        );
+      }
 
       var unknownProducts = sortedLabels(office.unknownProducts);
       if (unknownProducts.length > 0) {
@@ -1224,6 +1322,14 @@ function writeCheck(gps, managed, office, config) {
 
   if (office) {
     rows = rows.concat(checkBreakdown('Office · familia', office.counts));
+
+    if (office.corregidas > 0) {
+      rows.push(['Office · fechas', '', 'Día y mes intercambiados, corregidos', office.corregidas]);
+    }
+
+    if (office.futuras > 0) {
+      rows.push(['Office · fechas', '', 'Mes posterior a la extracción, descartadas', office.futuras]);
+    }
   }
 
   sheet.clear();

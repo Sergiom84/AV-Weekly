@@ -191,7 +191,7 @@ const mappings = {
 
 const gps = entries.gps ? script.readGps(entries.gps, extractionArg, mappings) : null;
 const managed = entries.managed ? script.readManaged(entries.managed, mappings) : null;
-const office = entries.office ? script.readOffice(entries.office) : null;
+const office = entries.office ? script.readOffice(entries.office, extractionArg) : null;
 
 const lines = [script.TEXTO_HEADER];
 lines.push(`semana\t${extractionArg}`);
@@ -259,6 +259,12 @@ const diagnostics = [
   office
     ? `office: ${office.rows} filas, ${office.skipped} descartadas (${entries.office.file})`
     : "office: no encontrado",
+  office && office.corregidas > 0
+    ? `office: ${office.corregidas} fechas con día y mes intercambiados, corregidas`
+    : "",
+  office && office.futuras > 0
+    ? `office: ${office.futuras} posiciones con un mes posterior a la extracción, descartadas`
+    : "",
   skipped.length > 0 ? `ignorados: ${skipped.join(", ")}` : "",
   managed && Object.keys(managed.unknownBuildings).length > 0
     ? `edificios sin ubicación: ${Object.keys(managed.unknownBuildings).join(", ")}`
