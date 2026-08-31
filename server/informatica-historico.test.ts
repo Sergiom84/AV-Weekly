@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   historicoByMonth,
   monthsEndingAt,
+  publishedMonthlyTotals,
   publishedTotal,
 } from "../client/src/modules/informatica/aggregate.ts";
 import { isReportedWorkOrder } from "../client/src/modules/informatica/sources.ts";
@@ -82,6 +83,60 @@ describe("series congeladas de Informática", () => {
     expect(months.at(-1)).toBe("2026/08");
     expect(months).toContain("2025/12");
     expect(months).toContain("2026/01");
+  });
+});
+
+/**
+ * The yearly citas chart: the extract starts halfway through May 2025 and the
+ * frozen series carries the whole year. Figures read off the clean workbook,
+ * Hoja 18.
+ */
+describe("serie anual de citas publicada", () => {
+  const citas: InformaticaDataset = {
+    source: { sourceFile: null, uploadedAt: null },
+    historico: [
+      { serie: "citas", mes: "2024/12", total: 1435 },
+      { serie: "citas", mes: "2025/04", total: 2273 },
+      { serie: "citas", mes: "2025/05", total: 2465 },
+      { serie: "citas", mes: "2025/06", total: 2503 },
+    ],
+  };
+  const extracto = [
+    { mes: "2025/05", citas: 4 },
+    { mes: "2025/06", citas: 2469 },
+    { mes: "2025/07", citas: 2219 },
+  ];
+
+  it("completa los meses que el extracto no alcanza y respeta la frontera", () => {
+    const monthly = publishedMonthlyTotals(
+      citas,
+      "citas",
+      extracto,
+      row => row.mes,
+      row => row.citas
+    );
+
+    expect(monthly).toEqual([
+      // Abril no está en el extracto y el histórico manda hasta mayo.
+      { mes: "2025/04", total: 2273 },
+      // Mayo a medias en el extracto: 4 frente a las 2465 publicadas.
+      { mes: "2025/05", total: 2465 },
+      // Junio ya es del extracto aunque el histórico lo tenga.
+      { mes: "2025/06", total: 2469 },
+      { mes: "2025/07", total: 2219 },
+    ]);
+  });
+
+  it("no resucita un año que el extracto no cubre", () => {
+    const monthly = publishedMonthlyTotals(
+      citas,
+      "citas",
+      extracto,
+      row => row.mes,
+      row => row.citas
+    );
+
+    expect(monthly.some(row => row.mes.startsWith("2024"))).toBe(false);
   });
 });
 

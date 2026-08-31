@@ -343,6 +343,13 @@ export interface InformaticaHistoricoRow {
  *   to 171 against the 788 that was published — and earlier months are absent
  *   entirely. From 2025/06 the extract reproduces the published series (604
  *   against 604 in 2025/07, 1289 against 1289 in 2025/11).
+ * - `citas`: the appointment extract starts halfway through May 2025 — it
+ *   computes to 4 against the 2465 that was published — and the months before
+ *   it are absent entirely. From 2025/06 the extract stands on its own, and
+ *   July to November reproduce the published series exactly (2219 against 2219,
+ *   3302 against 3302, 3521 against 3521). June, September and December differ
+ *   by 34, 1 and 2, which is the extract counting a handful of appointments the
+ *   frozen copy was cut before, not a change of definition.
  * - `workOrders`: the extract covers whole months from 2025/02, so there is no
  *   month where the frozen copy is better. It is absent from this map on
  *   purpose. The frozen values were captured week by week through a sliding
@@ -355,6 +362,7 @@ export interface InformaticaHistoricoRow {
  */
 export const INFORMATICA_HISTORICO_UNTIL: Record<string, string> = {
   incidencias: "2025/05",
+  citas: "2025/05",
 };
 
 /* -------------------------------------------------------------------------- */

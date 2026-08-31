@@ -5,7 +5,7 @@ import KpiRow from "@/components/deck/KpiRow";
 import YearSelector from "@/components/deck/YearSelector";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { yearSeriesColor } from "@/lib/yearSeries";
-import { yearlyComparison } from "../aggregate";
+import { publishedMonthlyTotals, yearlyComparison } from "../aggregate";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface CitasAnualPageProps extends InformaticaPageProps {
@@ -19,10 +19,20 @@ export default function CitasAnualPage({
   onChange,
   dataset,
 }: CitasAnualPageProps) {
-  const { years, data, totals } = yearlyComparison(
+  // The extract starts halfway through May 2025, so the first months of that
+  // year come from the frozen series. Without them the 2025 bars stop at June
+  // and the headline figure reads as the year while it is only half of it.
+  const monthly = publishedMonthlyTotals(
+    dataset,
+    "citas",
     dataset.citasAnual ?? [],
     row => row.mes,
     row => row.citas
+  );
+  const { years, data, totals } = yearlyComparison(
+    monthly,
+    row => row.mes,
+    row => row.total
   );
 
   const availableYears = years.filter(year => year >= 2024);

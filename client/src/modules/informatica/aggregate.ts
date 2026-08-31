@@ -395,6 +395,55 @@ export function publishedTotal(
 }
 
 /**
+ * Monthly totals of a series as the report publishes them.
+ *
+ * The extract decides which months exist; the frozen copy only fills the ones
+ * it still outranks. That is the rule that keeps a yearly chart honest in both
+ * directions: a year the extract covers gets completed with the months it
+ * cannot reach, and a year nobody is extracting any more does not reappear on
+ * the slide because the history table happens to remember it.
+ */
+export function publishedMonthlyTotals<T>(
+  dataset: InformaticaDataset,
+  serie: string,
+  rows: T[],
+  monthOf: (row: T) => string,
+  valueOf: (row: T) => number
+): { mes: string; total: number }[] {
+  const computed = new Map<string, number>();
+
+  for (const row of rows) {
+    const month = monthOf(row);
+
+    if (month === "") {
+      continue;
+    }
+
+    computed.set(month, (computed.get(month) ?? 0) + valueOf(row));
+  }
+
+  const frozen = historicoByMonth(dataset, serie);
+  const until = INFORMATICA_HISTORICO_UNTIL[serie];
+  const years = new Set(Array.from(computed.keys(), month => month.slice(0, 4)));
+  const months = new Set(computed.keys());
+
+  if (until !== undefined) {
+    for (const month of Array.from(frozen.keys())) {
+      if (month <= until && years.has(month.slice(0, 4))) {
+        months.add(month);
+      }
+    }
+  }
+
+  return Array.from(months)
+    .sort()
+    .map(mes => ({
+      mes,
+      total: publishedTotal(serie, mes, frozen, computed.get(mes) ?? 0),
+    }));
+}
+
+/**
  * The `count` calendar months ending at `month`, oldest first.
  *
  * Built from the calendar rather than filtered out of the data, so a month

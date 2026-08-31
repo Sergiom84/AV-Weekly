@@ -3,10 +3,13 @@
 # Origen: SSCC- Informe Semanal limpio.xlsx, extraido el 2026-08-29.
 #   incidencias -> Hoja 13, pivote W6:AB18 (anos 2022-2026).
 #   workOrders  -> Hoja 14, tabla B3:D15, rotulada "Datos historicos - No del Template".
+#   citas       -> Hoja 18, tabla AW3:BB15 (anos 2022-2026), la que el informe pinta en 2.3.2.
 #
 # Son cifras publicadas que los extractos semanales no reproducen: la serie de
 # incidencias empieza en 2022 y el template solo cubre desde mayo de 2025, y el
-# historico de Work Orders se congelo con un maestro de edificios anterior.
+# historico de Work Orders se congelo con un maestro de edificios anterior. El
+# extracto de citas no llega antes de mayo de 2025 y ese mes trae 4 citas frente
+# a las 2465 publicadas.
 # Solo los meses hasta INFORMATICA_HISTORICO_UNTIL mandan sobre el calculo.
 #
 # serie	mes	total
@@ -85,3 +88,59 @@ workOrders	2026/05	1179
 workOrders	2026/06	1481
 workOrders	2026/07	1095
 workOrders	2026/08	576
+citas	2022/01	598
+citas	2022/02	1041
+citas	2022/03	1916
+citas	2022/04	1183
+citas	2022/05	1043
+citas	2022/06	1404
+citas	2022/07	1214
+citas	2022/08	769
+citas	2022/09	1615
+citas	2022/10	1318
+citas	2022/11	2211
+citas	2022/12	1607
+citas	2023/01	1972
+citas	2023/02	1900
+citas	2023/03	2005
+citas	2023/04	1829
+citas	2023/05	2311
+citas	2023/06	2766
+citas	2023/07	2582
+citas	2023/08	1355
+citas	2023/09	3224
+citas	2023/10	2532
+citas	2023/11	2870
+citas	2023/12	1651
+citas	2024/01	2625
+citas	2024/02	2598
+citas	2024/03	2421
+citas	2024/04	3027
+citas	2024/05	2641
+citas	2024/06	2571
+citas	2024/07	2089
+citas	2024/08	927
+citas	2024/09	2672
+citas	2024/10	2483
+citas	2024/11	2053
+citas	2024/12	1435
+citas	2025/01	2276
+citas	2025/02	2476
+citas	2025/03	2250
+citas	2025/04	2273
+citas	2025/05	2465
+citas	2025/06	2503
+citas	2025/07	2219
+citas	2025/08	1243
+citas	2025/09	3169
+citas	2025/10	3302
+citas	2025/11	3521
+citas	2025/12	1984
+citas	2026/01	1984
+citas	2026/02	1854
+citas	2026/03	2571
+citas	2026/04	2448
+citas	2026/05	2581
+citas	2026/06	2547
+citas	2026/07	3306
+citas	2026/08	1151
