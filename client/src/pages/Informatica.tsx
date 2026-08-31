@@ -306,7 +306,7 @@ export default function Informatica() {
       <MainNav rightSlot={<HomeLink />} />
 
       <main className="container py-8" data-deck-root>
-        <div className="flex flex-col gap-8 lg:flex-row">
+        <div className="flex flex-col gap-5 lg:flex-row lg:gap-6">
           <ResizableSidebar storagePrefix={MODULE.deck?.storagePrefix ?? ""}>
             <DeckSidebar
               deck={deck}

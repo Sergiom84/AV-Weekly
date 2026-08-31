@@ -223,10 +223,10 @@ function UploadZone({
 
   return (
     <div className="rounded-lg border border-border bg-background p-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <Label
           htmlFor={id}
-          className="font-mono text-sm font-semibold text-foreground"
+          className="min-w-0 flex-1 basis-[7rem] font-mono text-sm font-semibold leading-snug text-foreground"
         >
           {label}
         </Label>
@@ -234,6 +234,7 @@ function UploadZone({
           type="button"
           variant="outline"
           size="sm"
+          className="shrink-0"
           disabled={disabled || busy}
           onClick={() => inputRef.current?.click()}
         >
@@ -251,7 +252,7 @@ function UploadZone({
         onChange={handleChange}
       />
 
-      <p className="mt-2 font-mono text-xs text-muted-foreground">
+      <p className="mt-2 min-w-0 break-all font-mono text-xs text-muted-foreground">
         {sourceFile ?? "Sin fichero"}
         {uploadedLabel ? ` · ${uploadedLabel}` : ""}
         {countLabel ? ` · ${countLabel}` : ""}
