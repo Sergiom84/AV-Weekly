@@ -38,6 +38,19 @@ export const MONTH_LABELS = [
   "Dic",
 ];
 
+/**
+ * Calendar-month keys (`01`–`12`) for year-on-year charts. Filtering those
+ * charts by `YYYY-MM` would drop a whole previous-year series; the index is
+ * the dimension that stays aligned across years.
+ */
+export const CALENDAR_MONTH_KEYS = MONTH_LABELS.map((_, index) =>
+  String(index + 1).padStart(2, "0")
+);
+
+export function calendarMonthLabel(key: string): string {
+  return MONTH_LABELS[Number(key) - 1] ?? key;
+}
+
 /** Full Spanish month names used on cover period lines. */
 export const MONTH_NAMES_ES = [
   "enero",
@@ -222,7 +235,13 @@ export function reportedWeekAvailability(
     : available;
 }
 
-/** Selection of `YYYY/MM` reporting months for monthly charts and tables. */
+/**
+ * Selection of reporting months for monthly charts and tables.
+ *
+ * Trend pages keyed `YYYY-MM` (or `YYYY/MM`) store those keys in `from`/`to`.
+ * Year-on-year pages store calendar-month keys `01`–`12` instead, so a YTD
+ * cut keeps every compared year instead of zeroing the previous one.
+ */
 export interface MonthSelection {
   mode: "range" | "list" | "window";
   from: string;
@@ -244,6 +263,16 @@ export function defaultMonthSelection(maxMonth: string): MonthSelection {
  */
 export function defaultMonthWindow(size: number): MonthSelection {
   return { mode: "window", from: "", to: "", months: [], size };
+}
+
+/** Full January–December range. The default for overlapping annual charts. */
+export function defaultCalendarMonthRange(): MonthSelection {
+  return {
+    mode: "range",
+    from: CALENDAR_MONTH_KEYS[0],
+    to: CALENDAR_MONTH_KEYS[CALENDAR_MONTH_KEYS.length - 1],
+    months: [],
+  };
 }
 
 export function resolveMonthSelection(

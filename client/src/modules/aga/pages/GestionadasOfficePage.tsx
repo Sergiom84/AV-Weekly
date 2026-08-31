@@ -1,4 +1,9 @@
-import { MONTH_LABELS } from "@shared/deck/core";
+import {
+  MONTH_LABELS,
+  defaultMonthWindow,
+  resolveMonthSelection,
+} from "@shared/deck/core";
+import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { AgaDataset } from "@shared/modules/aga/types";
 import { agaColor } from "../aggregate";
@@ -37,7 +42,9 @@ export default function GestionadasOfficePage({
   onChange,
   dataset,
 }: GestionadasOfficePageProps) {
-  const months = dataset.office?.months ?? [];
+  const availableMonths = dataset.office?.months ?? [];
+  const monthSelection = page.monthSelection ?? defaultMonthWindow(12);
+  const months = resolveMonthSelection(monthSelection, availableMonths);
   const families = dataset.office?.families ?? [];
   const labels = families.map(family => family.label);
   const hiddenRows = page.hiddenRows ?? [];
@@ -49,7 +56,8 @@ export default function GestionadasOfficePage({
     label: family.label,
     key: `f${index}`,
     color: agaColor(index),
-    cells: months.map((month, position) => {
+    cells: months.map(month => {
+      const position = availableMonths.indexOf(month);
       const key = cellKey(family.label, month);
 
       return {
@@ -80,6 +88,15 @@ export default function GestionadasOfficePage({
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
+      {editing && (
+        <MonthRangeSelector
+          selection={monthSelection}
+          available={availableMonths}
+          format={monthLabel}
+          onChange={monthSelection => onChange({ monthSelection })}
+        />
+      )}
+
       {editing && (
         <RowFilterPanel
           labels={labels}

@@ -13,6 +13,12 @@ interface MonthRangeSelectorProps {
   available: string[];
   format: (month: string) => string;
   onChange: (selection: MonthSelection) => void;
+  /**
+   * Trailing-window presets (`Últimos 12/18 meses`). Year-on-year charts that
+   * filter by calendar-month index leave this off: those buttons would not
+   * mean a trailing window of `YYYY-MM` rows.
+   */
+  windows?: boolean;
 }
 
 /** Compact period filter for monthly charts. */
@@ -21,6 +27,7 @@ export default function MonthRangeSelector({
   available,
   format,
   onChange,
+  windows = true,
 }: MonthRangeSelectorProps) {
   if (available.length === 0) return null;
 
@@ -97,48 +104,52 @@ export default function MonthRangeSelector({
         >
           Todos
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={
-            selection.mode === "window" && (selection.size ?? 12) === 12
-              ? "default"
-              : "outline"
-          }
-          className="h-7 px-2 font-mono text-xs"
-          onClick={() =>
-            onChange({
-              mode: "window",
-              from: first,
-              to: last,
-              months: [],
-              size: 12,
-            })
-          }
-        >
-          Últimos 12 meses
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={
-            selection.mode === "window" && selection.size === 18
-              ? "default"
-              : "outline"
-          }
-          className="h-7 px-2 font-mono text-xs"
-          onClick={() =>
-            onChange({
-              mode: "window",
-              from: first,
-              to: last,
-              months: [],
-              size: 18,
-            })
-          }
-        >
-          Últimos 18 meses
-        </Button>
+        {windows && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant={
+                selection.mode === "window" && (selection.size ?? 12) === 12
+                  ? "default"
+                  : "outline"
+              }
+              className="h-7 px-2 font-mono text-xs"
+              onClick={() =>
+                onChange({
+                  mode: "window",
+                  from: first,
+                  to: last,
+                  months: [],
+                  size: 12,
+                })
+              }
+            >
+              Últimos 12 meses
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={
+                selection.mode === "window" && selection.size === 18
+                  ? "default"
+                  : "outline"
+              }
+              className="h-7 px-2 font-mono text-xs"
+              onClick={() =>
+                onChange({
+                  mode: "window",
+                  from: first,
+                  to: last,
+                  months: [],
+                  size: 18,
+                })
+              }
+            >
+              Últimos 18 meses
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

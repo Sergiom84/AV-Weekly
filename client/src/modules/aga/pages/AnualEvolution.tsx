@@ -1,7 +1,14 @@
-import { MONTH_LABELS } from "@shared/deck/core";
+import {
+  CALENDAR_MONTH_KEYS,
+  MONTH_LABELS,
+  calendarMonthLabel,
+  defaultCalendarMonthRange,
+  resolveMonthSelection,
+} from "@shared/deck/core";
 import type { AgaYearSeries } from "@shared/modules/aga/types";
 import KpiRow from "@/components/deck/KpiRow";
 import { yearSeriesColor } from "@/lib/yearSeries";
+import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import YearSelector from "@/components/deck/YearSelector";
 import {
   cellKey,
@@ -41,6 +48,9 @@ export default function AnualEvolution({
   const selectedYears = page.years
     ? page.years.filter(year => availableYears.includes(year))
     : availableYears;
+  const monthSelection = page.monthSelection ?? defaultCalendarMonthRange();
+  const monthKeys = resolveMonthSelection(monthSelection, CALENDAR_MONTH_KEYS);
+  const monthIndexes = monthKeys.map(key => Number(key) - 1);
   const entries = years
     .filter(serie => selectedYears.includes(serie.year))
     .sort((a, b) => a.year - b.year)
@@ -48,7 +58,7 @@ export default function AnualEvolution({
       year: serie.year,
       key: `y${serie.year}`,
       color: yearSeriesColor(serie.year),
-      cells: MONTH_LABELS.map((_, monthIndex) => {
+      cells: monthIndexes.map(monthIndex => {
         const key = cellKey(String(serie.year), String(monthIndex));
 
         return {
@@ -65,11 +75,13 @@ export default function AnualEvolution({
     color: entry.color,
   }));
 
-  const data = MONTH_LABELS.map((label, monthIndex) => {
-    const row: Record<string, number | string | null> = { mes: label };
+  const data = monthIndexes.map((monthIndex, position) => {
+    const row: Record<string, number | string | null> = {
+      mes: MONTH_LABELS[monthIndex],
+    };
 
     for (const entry of entries) {
-      row[entry.key] = entry.cells[monthIndex].value;
+      row[entry.key] = entry.cells[position].value;
     }
 
     return row;
@@ -97,6 +109,16 @@ export default function AnualEvolution({
         />
       )}
 
+      {editing && (
+        <MonthRangeSelector
+          selection={monthSelection}
+          available={CALENDAR_MONTH_KEYS}
+          format={calendarMonthLabel}
+          windows={false}
+          onChange={monthSelection => onChange({ monthSelection })}
+        />
+      )}
+
       <KpiRow items={items} />
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -105,7 +127,7 @@ export default function AnualEvolution({
 
       {editing && (
         <ValueGrid
-          columns={MONTH_LABELS}
+          columns={monthIndexes.map(monthIndex => MONTH_LABELS[monthIndex])}
           rows={entries.map(entry => ({
             label: String(entry.year),
             color: entry.color,
