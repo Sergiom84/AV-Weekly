@@ -36,10 +36,11 @@ const CONFIG_MENSUAL = {
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  const menu = ui.createMenu('⭐ Informes Unificados');
+  const menu = ui.createMenu('⭐ AV Weekly');
 
-  menu.addItem('📥 Importar Datos Semanales', 'importarDatosSemanales');
-  menu.addItem('📊 Actualizar Looker Studio', 'volcarDatosLookerStudio');
+  menu.addItem('Procesar semana', 'importarDatosSemanales');
+  menu.addItem('Guardar PLANO como .txt en la carpeta', 'guardarPlanoTxt');
+  menu.addItem('Actualizar Looker Studio', 'volcarDatosLookerStudio');
   menu.addSeparator();
   menu.addItem('Speech Sergio - Semanal', 'speechSergioSemanal');
   menu.addItem('Speech Sergio - Mensual', 'speechSergioMensual');
@@ -1637,10 +1638,11 @@ function importarDatosSemanales() {
     }
 
     volcarDatosLookerStudio();
+    const archivoTxt = escribirPlanoTxt(numSemanaGlobal);
 
     ui.alert(
-      '🌟 ¡SISTEMA AUTOMATIZADO CON ÉXITO! 🌟',
-      `Todos los datos de la SEMANA ${numSemanaGlobal} se han procesado perfectamente:\n\n${resumenImportacion}\n¡Buen trabajo!`,
+      'AV Weekly',
+      `Semana ${numSemanaGlobal} procesada.\n\n${resumenImportacion}\nTXT: ${archivoTxt.getName()}\nSúbelo en AV Weekly > Audiovisuales > Texto plano (Drive).`,
       ui.ButtonSet.OK
     );
 
@@ -1777,6 +1779,169 @@ function volcarDatosLookerStudio() {
   }
 
   return true;
+}
+
+function columnaAIndice(letra) {
+  var n = 0;
+  var texto = String(letra || '').toUpperCase();
+  for (var i = 0; i < texto.length; i++) {
+    n = n * 26 + (texto.charCodeAt(i) - 64);
+  }
+  return n;
+}
+
+function anioInformeActual() {
+  var hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Remotos');
+  if (!hoja) return new Date().getFullYear();
+  var valor = Number(hoja.getRange(5, 1).getValue());
+  return valor >= 2000 && valor <= 2100 ? valor : new Date().getFullYear();
+}
+
+function maxSemanaConDato() {
+  var hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Remotos');
+  if (!hoja) return 0;
+  var fila = hoja.getRange(5, 1, 1, 55).getValues()[0];
+  var valores = hoja.getRange(6, 1, 1, 55).getValues()[0];
+  var max = 0;
+  for (var i = 0; i < fila.length; i++) {
+    var semana = Number(fila[i]);
+    var tickets = Number(valores[i]);
+    if (semana >= 1 && semana <= 53 && tickets > 0) max = Math.max(max, semana);
+  }
+  return max;
+}
+
+function serializarPlanoAv(numSemana) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var anio = anioInformeActual();
+  var semana = Number(numSemana) || maxSemanaConDato();
+  var lineas = [
+    'AV TEXTO PLANO v1',
+    'semana\t' + semana,
+    'anio\t' + anio,
+    'generado\t' + new Date().toISOString(),
+    'origen\tTendencias AV'
+  ];
+
+  var hojaUbicacion = ss.getSheetByName('Ubicacion');
+  if (hojaUbicacion && hojaUbicacion.getLastRow() > 1) {
+    lineas.push('', '[UBICACION]');
+    var ubic = hojaUbicacion.getRange(2, 1, hojaUbicacion.getLastRow() - 1, 5).getValues();
+    for (var i = 0; i < ubic.length; i++) {
+      var semanaU = Number(ubic[i][1]);
+      var tipoU = String(ubic[i][2] || '').trim();
+      var edificio = String(ubic[i][3] || '').trim();
+      var ticketsU = Number(ubic[i][4]);
+      if (!semanaU || !tipoU || !edificio) continue;
+      lineas.push([semanaU, tipoU, edificio, ticketsU].join('\t'));
+    }
+  }
+
+  var hojaResolucion = ss.getSheetByName('Resolucion');
+  if (hojaResolucion && hojaResolucion.getLastRow() > 1) {
+    lineas.push('', '[RESOLUCION]');
+    var reso = hojaResolucion.getRange(2, 1, hojaResolucion.getLastRow() - 1, 6).getValues();
+    for (var r = 0; r < reso.length; r++) {
+      var semanaR = Number(reso[r][1]);
+      var tipoR = String(reso[r][2] || '').trim();
+      var categoria = String(reso[r][3] || '').trim();
+      var accion = String(reso[r][4] || '').trim();
+      var ticketsR = Number(reso[r][5]);
+      if (!semanaR || !tipoR) continue;
+      lineas.push([semanaR, tipoR, categoria, accion, ticketsR].join('\t'));
+    }
+  }
+
+  var tipoPorClave = {
+    REMOTOS: 'REMOTO',
+    PROGRAMADOS: 'PROGRAMADO',
+    PRESENCIALES: 'PRESENCIAL',
+    INCIDENCIAS: 'INCIDENCIA',
+    CORRECTIVOS: 'CORRECTIVO'
+  };
+  lineas.push('', '[MENSUAL]');
+  Object.keys(CONFIG_MENSUAL).forEach(function (clave) {
+    var conf = CONFIG_MENSUAL[clave];
+    var hoja = ss.getSheetByName(conf.hoja);
+    if (!hoja) return;
+    var colActual = columnaAIndice(conf.colActual);
+    var colPasado = columnaAIndice(conf.colPasado);
+    var tipo = tipoPorClave[clave];
+    for (var mes = 0; mes < 12; mes++) {
+      var fila = conf.rangoFilas[0] + mes;
+      var actual = hoja.getRange(fila, colActual).getValue();
+      var pasado = hoja.getRange(fila, colPasado).getValue();
+      if (actual !== '' && actual !== null && !isNaN(Number(actual))) {
+        lineas.push([anio, mes + 1, tipo, Number(actual)].join('\t'));
+      }
+      if (pasado !== '' && pasado !== null && !isNaN(Number(pasado))) {
+        lineas.push([anio - 1, mes + 1, tipo, Number(pasado)].join('\t'));
+      }
+    }
+  });
+
+  lineas.push('', '[COMPARATIVA]');
+  var hojasComp = [
+    { hoja: 'Remotos', tipo: 'REMOTO' },
+    { hoja: 'Programados', tipo: 'PROGRAMADO' },
+    { hoja: 'Presenciales', tipo: 'PRESENCIAL' },
+    { hoja: 'Incidencias', tipo: 'INCIDENCIA' },
+    { hoja: 'Correctivos', tipo: 'CORRECTIVO' }
+  ];
+  var anioPasado = anio - 1;
+  hojasComp.forEach(function (item) {
+    var hoja = ss.getSheetByName(item.hoja);
+    if (!hoja) return;
+    var valores = hoja.getRange(1, 1, hoja.getLastRow(), 55).getValues();
+    for (var fila = 0; fila < valores.length; fila++) {
+      var marca = Number(valores[fila][0]);
+      if (marca !== anioPasado) continue;
+      var siguiente = valores[fila + 1] || [];
+      for (var col = 1; col < valores[fila].length; col++) {
+        var semanaC = Number(valores[fila][col]);
+        if (semanaC < 1 || semanaC > 53) continue;
+        var ticketsC = Number(siguiente[col]);
+        if (isNaN(ticketsC)) continue;
+        lineas.push([anioPasado, semanaC, item.tipo, ticketsC].join('\t'));
+      }
+      break;
+    }
+  });
+
+  return lineas.join('\n') + '\n';
+}
+
+function escribirPlanoTxt(numSemana) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss.getSheetByName('Ubicacion') || !ss.getSheetByName('Resolucion')) {
+    volcarDatosLookerStudio();
+  }
+  var semana = Number(numSemana) || maxSemanaConDato();
+  var anio = anioInformeActual();
+  var name = 'AV ' + anio + '-S' + semana + '.txt';
+  var texto = serializarPlanoAv(semana);
+  var folder = DriveApp.getFolderById(ID_CARPETA_BUZON);
+  var existing = folder.getFilesByName(name);
+  while (existing.hasNext()) {
+    existing.next().setTrashed(true);
+  }
+  return folder.createFile(name, texto, MimeType.PLAIN_TEXT);
+}
+
+function guardarPlanoTxt() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    volcarDatosLookerStudio();
+    var archivo = escribirPlanoTxt();
+    ui.alert(
+      'AV Weekly',
+      'Guardado "' + archivo.getName() + '" en la carpeta.\n\nSúbelo en AV Weekly > Audiovisuales > Texto plano (Drive).',
+      ui.ButtonSet.OK
+    );
+    return archivo.getId();
+  } catch (e) {
+    ui.alert('AV Weekly', e.message, ui.ButtonSet.OK);
+  }
 }
 
 

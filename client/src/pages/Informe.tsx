@@ -122,6 +122,7 @@ export default function Informe() {
       string,
       { sourceFile: string | null; uploadedAt: string | null }
     > = {
+      texto: { sourceFile: weekly.sourceFile, uploadedAt: weekly.uploadedAt },
       semanal: { sourceFile: weekly.sourceFile, uploadedAt: weekly.uploadedAt },
       tendencia: {
         sourceFile: monthly.sourceFile,

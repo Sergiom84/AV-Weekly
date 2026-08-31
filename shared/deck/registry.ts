@@ -221,22 +221,12 @@ export const DECK_MODULES: DeckModule[] = [
       apiBase: "/api/informe",
       uploads: [
         {
-          id: "semanal",
-          label: "Plantilla semanal",
-          path: "/api/informe/upload/semanal",
-          error: "No se pudo cargar la plantilla semanal",
-        },
-        {
-          id: "tendencia",
-          label: "Tendencia mensual",
-          path: "/api/informe/upload/tendencia",
-          error: "No se pudo cargar la tendencia mensual",
-        },
-        {
-          id: "plano",
-          label: "Detalle por resolución",
-          path: "/api/informe/upload/plano",
-          error: "No se pudo cargar el fichero plano",
+          id: "texto",
+          label: "Texto plano (Drive)",
+          path: "/api/informe/upload/texto",
+          error: "No se pudo cargar el texto plano de Audiovisuales",
+          multiple: false,
+          accept: ".txt,.tsv,.csv",
         },
       ],
       artwork: {

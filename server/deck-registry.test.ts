@@ -23,3 +23,15 @@ describe("informatica sources", () => {
     expect(uploads.some(slot => slot.id === "plano")).toBe(false);
   });
 });
+
+describe("av sources", () => {
+  it("offers the Drive text as the weekly input", () => {
+    const uploads = getDeckModule("av").deck?.uploads ?? [];
+
+    expect(uploads.map(slot => slot.id)).toEqual(["texto"]);
+    expect(uploads[0]).toMatchObject({
+      path: "/api/informe/upload/texto",
+      accept: ".txt,.tsv,.csv",
+    });
+  });
+});

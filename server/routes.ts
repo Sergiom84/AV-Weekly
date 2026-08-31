@@ -102,6 +102,7 @@ import {
   parseInformeWeeklyWorkbook,
 } from "./parseInformeWeekly.js";
 import { parseInformePlanoWorkbook } from "./parseInformePlano.js";
+import { parseAvTexto } from "./parseAvTexto.js";
 import {
   mergeMonthlyDatasets,
   mergeWeeklyHistory,
@@ -470,6 +471,105 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Error al procesar el libro semanal del Informe";
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post("/api/informe/upload/texto", upload.single("file"), async (req, res) => {
+  try {
+    const body = req.body as { texto?: unknown } | undefined;
+    const pasted = typeof body?.texto === "string" ? body.texto : "";
+    const input = req.file ? req.file.buffer.toString("utf8") : pasted;
+
+    if (input.trim() === "") {
+      return res
+        .status(400)
+        .json({ error: "Debes adjuntar o pegar el texto plano de la hoja de Drive." });
+    }
+
+    const parsed = parseAvTexto(input);
+    const stamp = {
+      sourceFile: req.file?.originalname ?? "Texto plano (Drive)",
+      uploadedAt: new Date().toISOString(),
+    };
+    const year =
+      parsed.document.meta.year ??
+      String(new Date().getUTCFullYear());
+
+    const storedWeekly: InformeWeeklyDataset = {
+      ...parsed.weekly,
+      sourceFile: stamp.sourceFile,
+      uploadedAt: stamp.uploadedAt,
+    };
+
+    const writes: Array<{ sql: string; args: Array<string | null> }> = [
+      {
+        sql: `INSERT INTO informe_weekly (id, data, source_file, uploaded_at)
+              VALUES (1, ?, ?, datetime('now'))
+              ON CONFLICT(id) DO UPDATE
+              SET data = excluded.data,
+                  source_file = excluded.source_file,
+                  uploaded_at = excluded.uploaded_at`,
+        args: [JSON.stringify(storedWeekly), storedWeekly.sourceFile],
+      },
+    ];
+
+    if (parsed.document.resolucion.length > 0) {
+      const previous = await readStoredResolutionHistory();
+      writes.push({
+        sql: `INSERT INTO informe_resolution_history (id, data, uploaded_at)
+              VALUES (1, ?, datetime('now'))
+              ON CONFLICT(id) DO UPDATE
+              SET data = excluded.data, uploaded_at = excluded.uploaded_at`,
+        args: [
+          JSON.stringify({
+            byYear: { ...previous.byYear, [year]: parsed.resolutions },
+            sourceFile: stamp.sourceFile,
+            uploadedAt: stamp.uploadedAt,
+          }),
+        ],
+      });
+    }
+
+    if (parsed.document.mensual.length > 0) {
+      const previousMonthly = (await readStoredInformeMonthly()) ?? emptyMonthlyDataset();
+      const monthly = mergeMonthlyDatasets(previousMonthly, {
+        ...parsed.monthly,
+        sourceFile: stamp.sourceFile,
+        uploadedAt: stamp.uploadedAt,
+      });
+      writes.push({
+        sql: `INSERT INTO informe_monthly (id, data, source_file, uploaded_at)
+              VALUES (1, ?, ?, datetime('now'))
+              ON CONFLICT(id) DO UPDATE
+              SET data = excluded.data,
+                  source_file = excluded.source_file,
+                  uploaded_at = excluded.uploaded_at`,
+        args: [JSON.stringify(monthly), monthly.sourceFile],
+      });
+    }
+
+    if (parsed.document.comparativa.length > 0) {
+      const history = mergeWeeklyHistory(
+        await readStoredWeeklyHistory(),
+        parsed.comparisons
+      );
+      writes.push({
+        sql: `INSERT INTO informe_weekly_history (id, data, source_file, uploaded_at)
+              VALUES (1, ?, ?, datetime('now'))
+              ON CONFLICT(id) DO UPDATE
+              SET data = excluded.data,
+                  source_file = excluded.source_file,
+                  uploaded_at = excluded.uploaded_at`,
+        args: [JSON.stringify(history), stamp.sourceFile],
+      });
+    }
+
+    await client.batch(writes, "write");
+    res.json(await buildInformePayload());
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Error al procesar el texto plano de Audiovisuales";
     res.status(500).json({ error: message });
   }
 });
