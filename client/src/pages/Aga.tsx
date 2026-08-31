@@ -312,7 +312,7 @@ export default function Aga() {
     <div className="min-h-screen bg-background">
       <MainNav rightSlot={<HomeLink />} />
 
-      <main className="container py-8" data-deck-root>
+      <main className="deck-shell py-6" data-deck-root>
         <div className="flex flex-col gap-5 lg:flex-row lg:gap-6">
           <ResizableSidebar storagePrefix={MODULE.deck?.storagePrefix ?? ""}>
             <DeckSidebar

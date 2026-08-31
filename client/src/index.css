@@ -190,7 +190,21 @@
     .container {
       padding-left: 1.25rem;
       padding-right: 1.25rem;
-      max-width: 1920px;
+    }
+  }
+
+  /* Full-width workspace of the decks. Do not use Tailwind `container` here:
+     that utility caps at the 2xl breakpoint and leaves empty side bands. */
+  .deck-shell {
+    width: 100%;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  @media (min-width: 1024px) {
+    .deck-shell {
+      padding-left: 1rem;
+      padding-right: 1rem;
     }
   }
 
