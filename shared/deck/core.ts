@@ -192,6 +192,22 @@ export function defaultWeekSelection(maxWeek: number): WeekSelection {
   return { mode: "range", from: 1, to: Math.max(1, maxWeek), weeks: [] };
 }
 
+/** Trailing window used by "Últimas 20 semanas". Follows each new report week. */
+export const TRAILING_WEEK_WINDOW = 20;
+
+/**
+ * Window large enough to cover an ISO year. Used by "Todas" so the end is
+ * not pinned the way an absolute `range` is.
+ */
+export const ALL_REPORTED_WEEKS_WINDOW = 53;
+
+/** Trailing window that recomputes against the latest available weeks. */
+export function followLatestWeekSelection(
+  size: number = TRAILING_WEEK_WINDOW
+): WeekSelection {
+  return { mode: "window", from: 1, to: 1, weeks: [], size };
+}
+
 /** Resolves a selection into the concrete, ordered list of weeks to render. */
 export function resolveWeekSelection(
   selection: WeekSelection | undefined,

@@ -6,7 +6,7 @@ import type {
 } from "@shared/informe";
 import {
   calculateResolutionTableTotals,
-  defaultWeekSelection,
+  followLatestWeekSelection,
   resolutionCellKey,
   resolutionValueAt,
   reportedWeekAvailability,
@@ -72,8 +72,7 @@ export default function ResolutionDetailPage({
   const hasData = available.length > 0;
 
   const selection: WeekSelection =
-    page.weekSelection ??
-    defaultWeekSelection(available[available.length - 1] ?? 1);
+    page.weekSelection ?? followLatestWeekSelection();
   const weeks = hasData ? resolveWeekSelection(selection, available) : [];
 
   // Row set: every group and resolution seen in any imported week, plus the

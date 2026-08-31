@@ -168,3 +168,24 @@ export function parseInformePlanoWorkbook(workbook: XLSX.WorkBook): PlanoResult 
     years: Object.keys(result).map(Number).sort((a, b) => a - b),
   };
 }
+
+/**
+ * Fills weeks that the stored year does not yet have. Weeks that already
+ * carry rows stay as they are: a later weekly upload is the more specific
+ * source for that week.
+ */
+export function fillResolutionHistoryGaps(
+  stored: Record<string, ResolutionRow[]>,
+  incoming: Record<string, ResolutionRow[]>
+): Record<string, ResolutionRow[]> {
+  const merged = { ...stored };
+
+  for (const [week, rows] of Object.entries(incoming)) {
+    const current = merged[week];
+    if (!current || current.length === 0) {
+      merged[week] = rows;
+    }
+  }
+
+  return merged;
+}

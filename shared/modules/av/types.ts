@@ -5,7 +5,7 @@ import type {
   DeckState,
   WeeklyMatrix,
 } from "../../deck/core.ts";
-import { defaultWeekSelection } from "../../deck/core.ts";
+import { followLatestWeekSelection } from "../../deck/core.ts";
 
 /**
  * Contract for the "Informe" AV deck: a slide-based weekly report.
@@ -315,7 +315,7 @@ export function createDefaultDeck(): AvDeckState {
         footnote: TYPE_FOOTNOTE[type],
       },
       visible: true,
-      weekSelection: defaultWeekSelection(31),
+      weekSelection: followLatestWeekSelection(),
       years: null,
       overrides: {},
       // hiddenRows stays absent so the page opens on its default rows.
@@ -332,7 +332,7 @@ export function createDefaultDeck(): AvDeckState {
           footnote: "",
         },
         visible: true,
-        weekSelection: defaultWeekSelection(31),
+        weekSelection: followLatestWeekSelection(),
         years: null,
         overrides: {},
       });

@@ -2,8 +2,7 @@ import type { DeckPage, InformeWeeklyDataset, WeekSelection } from "@shared/info
 import {
   comparisonValue,
   defaultHiddenRows,
-  defaultWeekSelection,
-  reportedWeekAvailability,
+  followLatestWeekSelection,
   resolveWeekSelection,
 } from "@shared/informe";
 import EditableText from "@/components/deck/EditableText";
@@ -63,13 +62,12 @@ export default function WeeklySupportPage({
     );
   }
 
-  const availableWeeks = reportedWeekAvailability(
-    matrix.weeks,
-    Object.keys(typeData?.resolutionsByWeek ?? {}).map(Number)
-  );
+  // Availability comes from the support matrix. Resolution history belongs to
+  // the detail slides; using it here froze Remotos on whatever week the last
+  // plano file happened to carry.
+  const availableWeeks = matrix.weeks;
   const selection: WeekSelection =
-    page.weekSelection ??
-    defaultWeekSelection(availableWeeks[availableWeeks.length - 1]);
+    page.weekSelection ?? followLatestWeekSelection();
   const weeks = resolveWeekSelection(selection, availableWeeks);
 
   // A page that has never been filtered opens on its default rows.

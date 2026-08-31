@@ -17,6 +17,7 @@ import {
   emptyMonthlyDataset,
   emptyWeeklyDataset,
   INFORME_SUPPORT_TYPES,
+  migrateAvDeckWeekSelections,
 } from "../shared/informe.ts";
 import type {
   BuildingLocationImportReport,
@@ -360,9 +361,18 @@ async function buildInformePayload(): Promise<InformePayload> {
     readStoredResolutionHistory(),
   ]);
 
+  const weeklyPayload = withHistory(
+    weekly ?? emptyWeeklyDataset(),
+    history,
+    resolutions
+  );
+
   return {
-    deck: deck ?? createDefaultDeck(),
-    weekly: withHistory(weekly ?? emptyWeeklyDataset(), history, resolutions),
+    deck: migrateAvDeckWeekSelections(
+      deck ?? createDefaultDeck(),
+      weeklyPayload.maxWeek
+    ),
+    weekly: weeklyPayload,
     monthly: monthly ?? emptyMonthlyDataset(),
   };
 }

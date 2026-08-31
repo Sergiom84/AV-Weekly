@@ -23,8 +23,11 @@ export type {
 } from "./deck/core.ts";
 
 export {
+  ALL_REPORTED_WEEKS_WINDOW,
   MONTH_LABELS,
+  TRAILING_WEEK_WINDOW,
   defaultWeekSelection,
+  followLatestWeekSelection,
   formatChartMetric,
   isPageVisible,
   metricAxisWidth,
@@ -63,6 +66,8 @@ export {
   emptyMonthlyDataset,
   emptyWeeklyDataset,
 } from "./modules/av/types.ts";
+
+export { migrateAvDeckWeekSelections } from "./modules/av/weekSelection.ts";
 
 export type {
   ResolutionTableRow,
