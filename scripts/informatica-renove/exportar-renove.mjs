@@ -2,11 +2,11 @@
 /**
  * Produces the `[RENOVE]` block of the Informatica plain text.
  *
- * Renove is the one section the Drive automation cannot generate: its source is
- * `Dashboards Renoves SSCC.xlsx`, a workbook the IT team publishes from Google
- * Sheets into the Renove dashboard, and it never reaches the `Bruto` folder
- * that `Codigo.gs` reads. So it is produced here and pasted after the sections
- * of the PLANO.
+ * Fallback path, no longer the usual one. Since `Dashboards Renoves SSCC.xlsx`
+ * is published into the same Drive folder the automation reads, `Codigo.gs`
+ * emits `[RENOVE]` inside the weekly PLANO and nothing has to be pasted after
+ * it. This script stays for the week the workbook does not reach the folder, or
+ * to rebuild the section on its own from a copy of the file.
  *
  * Two inputs, one output:
  *
@@ -149,7 +149,10 @@ function readSheet(workbook, name) {
 
 /** `{ ambito, estado, day }` per unit, read from the consolidated workbook. */
 function readWorkbook(path) {
-  const workbook = XLSX.readFile(path, { cellDates: true });
+  // XLSX.readFile is absent from the ESM build of the library, which never
+  // binds node:fs. Reading the bytes here is what the rest of the repository
+  // already does, in server/ and in the Drive verifier.
+  const workbook = XLSX.read(readFileSync(path), { type: "buffer", cellDates: true });
   const units = [];
   const missing = [];
 

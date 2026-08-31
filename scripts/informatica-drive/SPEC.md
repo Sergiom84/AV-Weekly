@@ -95,6 +95,12 @@ orders se llama `Peticiones ON SITE SSCC`, es decir, el nombre miente.
 | Peticiones (backlog / gestionadas / liberadas) | `Denominación Producto` + `Estatus de la Posición` |
 | Templates | las trece pestañas `N-N - ...` |
 | IMAC | `Fecha limite` + `nº trabajos` |
+| Renove | `Ubicación` + `Estado` en una pestaña llamada `Holding - …` o `España - …` |
+
+Renove es la excepción a la regla de la cabecera: sus ocho pestañas comparten columnas y
+el ámbito solo está en el nombre, así que el nombre de la pestaña identifica y las
+columnas confirman. Una copia de trabajo como `Copia de Renove semanal` queda fuera, que
+es lo que impide contar dos veces las mismas máquinas.
 
 Los tres ficheros de peticiones comparten la misma cabecera de 19 columnas, así que entre
 ellos se distinguen por nombre de fichero (`Backlog`, `Gestionadas`, `Liberadas`, sin
@@ -342,10 +348,17 @@ concepto:
 | `PETICIONESPRODUCTO` | semana, producto, estado | total |
 | `CITAS` | semana, edificio, tipo | citas |
 | `IMACS` | mes, ciudad, métrica | total |
+| `RENOVE` | día, mes, semana, ámbito, estado | equipos |
 
-No se emiten `WASP`, `RENOVE`, `PeticionesAnual` ni `CitasAnual`: ninguno de los cinco
-ficheros de la carpeta contiene esos datos. Las páginas del deck que dependen de ellos
-siguen en "Próximamente", que es preferible a inventar la cifra.
+`RENOVE` sale de `Dashboards Renoves SSCC`, que el equipo publica desde su hoja de Google
+en la misma carpeta de Drive. Es el único origen opcional: si el libro no está esa semana,
+la sección no se emite y `Comprobación` lo dice con el nombre `Dashboards Renoves SSCC
+(ausente)`. Como el PLANO se importa con `alcance completo`, una semana sin el libro deja
+las dos páginas de Renove vacías; por eso su ausencia se nombra en vez de callarse.
+
+No se emiten `WASP`, `PeticionesAnual` ni `CitasAnual` desde los ficheros semanales:
+ninguno de ellos contiene esos datos. Las páginas del deck que dependen de ellos siguen en
+"Próximamente", que es preferible a inventar la cifra.
 
 Las secciones y sus dimensiones son las mismas que ya declara
 `Documentación/Informática/_esquema-excel-plano.md` y que `server/parseInformaticaPlano.ts`
@@ -468,5 +481,6 @@ Criterio de aceptación: ejecutar el script sobre una copia del libro con los fi
 | `Hoja 19` referencia una pestaña `'2025'` que no existe en la copia limpia. El `IFERROR` lo tapa devolviendo `"0"`, así que diciembre 2025 y enero 2026 de esa tabla salen a cero sin avisar | pendiente de mirar en el libro bueno |
 | Qué hacer si el fichero IMAC trae una pestaña de año que el libro no tiene | pendiente |
 | Quién mantiene los maestros `X:Z`, `Y:Z` y `AB`, y cada cuánto | pendiente, riesgo bajo: el script no los escribe, solo avisa de los valores que no encuentra |
-| Origen de los datos de WASP, RENOVE y las series anuales de peticiones y citas | sin origen conocido, se sigue pidiendo |
+| Origen de los datos de WASP y de las series anuales de peticiones y citas | sin origen conocido, se sigue pidiendo |
+| Renove ya tiene origen: `Dashboards Renoves SSCC` en la carpeta de Drive, generado desde la hoja `1dpjt6zqPHNbNvLzUWwvIv0sDZNaljXxh9IUx_WiI7Y8` | resuelto, lo emite `Procesar semana` |
 | Bloque `2.1.6 (Informe)` filas 45-49 (Teclado / Ratón / Desinstalar SW): a qué página del informe sale | pendiente, no bloquea |

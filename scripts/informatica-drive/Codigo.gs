@@ -475,8 +475,54 @@ var REQUIRED = {
   imac: ['Fecha limite', 'nº trabajos'],
   encuestas: ['Incident Number', 'Fecha'],
   workOrders: ['DWP_SRID', 'Ubicacion_asociada'],
-  citas: ['Incidencia', 'Cita_Previa', 'Smart_Tech']
+  citas: ['Incidencia', 'Cita_Previa', 'Smart_Tech'],
+  renove: ['Ubicación', 'Estado']
 };
+
+/**
+ * Tabs of `Dashboards Renoves SSCC`, four per scope.
+ *
+ * The scope is only in the tab name, so the name is what identifies the sheet
+ * and the two columns above only confirm it. A workbook exported without
+ * accents writes "Espana", and the file carries working copies such as
+ * "Copia de Renove semanal": anything that is not one of these eight names is
+ * left out, because a copy would count its rows twice.
+ */
+var RENOVE_TABS = {
+  'ONBOARDING SEMANAL': true,
+  'RENOVADOS ONBOARDING': true,
+  'RENOVE SEMANAL': true,
+  'RENOVADOS RENOVE': true
+};
+
+/** Date column of a Renove tab, in order of preference. */
+var RENOVE_DATE_HEADERS = ['Fecha Renovado', 'Fecha de Estado', 'Fecha'];
+
+/** Scope a Renove tab reports, or an empty string when the tab is not one. */
+function renoveAmbito(sheetName) {
+  var match = /^(HOLDING|ESPANA) - (.+)$/.exec(normalize(sheetName));
+
+  if (!match || !RENOVE_TABS[match[2]]) return '';
+
+  return match[1] === 'HOLDING' ? 'Holding' : 'España';
+}
+
+/** The eight Renove tabs of a workbook, each with its scope resolved. */
+function renoveSheets(grids) {
+  var candidates = findDataSheets(grids, REQUIRED.renove);
+  var sheets = [];
+
+  for (var index = 0; index < candidates.length; index += 1) {
+    var ambito = renoveAmbito(candidates[index].name);
+
+    if (ambito === '') continue;
+
+    candidates[index].ambito = ambito;
+    sheets.push(candidates[index]);
+  }
+
+  return sheets;
+}
 
 /** Fragment of the satisfaction question. Mirrors the server-side converter. */
 var ENCUESTAS_SCORE_HINT = 'Nivel de satis';
@@ -563,7 +609,8 @@ function classifyFolder(folderId) {
     encuestas: null,
     workOrders: null,
     citas: null,
-    imac: null
+    imac: null,
+    renove: null
   };
   var handles = [];
   var skipped = [];
@@ -639,6 +686,13 @@ function classifyFolder(folderId) {
 
       if (imacs.length > 0) {
         keepNewest(found, duplicated, 'imac', file, imacs, grids);
+        matched = true;
+      }
+
+      var renove = renoveSheets(grids);
+
+      if (renove.length > 0) {
+        keepNewest(found, duplicated, 'renove', file, renove, grids);
         matched = true;
       }
 
@@ -2302,6 +2356,7 @@ var SECTION = {
   citas: 'CITAS',
   citasAnual: 'CITASANUAL',
   imacs: 'IMACS'
+  ,renove: 'RENOVE'
   ,hic: 'HIC'
   ,comparativas: 'COMPARATIVAS'
   ,slas: 'SLAS'
@@ -2317,6 +2372,7 @@ var SECTION_ORDER = [
   'peticionesAnual',
   'citas',
   'citasAnual',
+  'renove',
   'hic',
   'comparativas',
   'slas',
@@ -2797,6 +2853,69 @@ function agregarImacs(found, imacs) {
 }
 
 /**
+ * First non-empty cell among the candidate date headers of a Renove row.
+ *
+ * Non-empty, not merely present: the weekly tabs date a row by the day its
+ * status changed and the renewal tabs by the day the machine was swapped, so a
+ * tab carries one column filled and may carry the other one blank.
+ */
+function renoveFecha(row, columns) {
+  for (var index = 0; index < RENOVE_DATE_HEADERS.length; index += 1) {
+    var at = columns[normalize(RENOVE_DATE_HEADERS[index])];
+
+    if (at === undefined) continue;
+
+    var value = row[at];
+
+    if (value === null || value === undefined || text(value) === '') continue;
+
+    return toDate(value);
+  }
+
+  return null;
+}
+
+/**
+ * One row per unit of equipment, folded into counts by day, scope and status.
+ *
+ * Undated rows are kept with an empty day: they are equipment whose state is
+ * decided but not yet dated at source, and dropping them would silently shrink
+ * the totals of `2.7.1`. Serials, locations and petition numbers are read to
+ * group the rows and never written out, the rule the whole PLANO follows.
+ */
+function agregarRenove(found, renove) {
+  if (!found.renove || !found.renove.sheets) return;
+
+  var sheets = found.renove.sheets;
+
+  for (var sheetIndex = 0; sheetIndex < sheets.length; sheetIndex += 1) {
+    var source = sheets[sheetIndex];
+    var data = sourceRows(source);
+
+    for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+      var row = data[rowIndex] || [];
+      var estado = text(valueAt(row, source.columns, 'Estado'));
+
+      if (estado === '') continue;
+
+      var date = renoveFecha(row, source.columns);
+
+      bump(
+        renove,
+        [
+          date ? isoDate(date) : '',
+          date ? monthLabel(date) : '',
+          date ? String(isoWeekNumber(date)) : '0',
+          source.ambito,
+          estado
+        ],
+        1
+      );
+    }
+  }
+}
+
+/**
  * Pivot leftovers that are not sites. Drive materialises "Grand Total" as a
  * building because the IMAC workbook carries a pivot tab with that label.
  */
@@ -2897,6 +3016,7 @@ function agregar(clasificacion, extraction) {
     peticionesAnual: {},
     citas: {},
     citasAnual: {},
+    renove: {},
     hic: {},
     comparativas: {},
     slas: {},
@@ -2909,6 +3029,7 @@ function agregar(clasificacion, extraction) {
   agregarPeticiones(found, date, buckets.peticiones, buckets.peticionesProducto);
   agregarPeticionesAnual(buckets.peticionesAnual);
   agregarCitas(found, date, buckets.citas, buckets.citasAnual);
+  agregarRenove(found, buckets.renove);
   agregarHic(found, buckets.hic);
   agregarComparativas(found, buckets.comparativas);
   agregarSlas(found, buckets.slas);
@@ -2924,6 +3045,7 @@ function agregar(clasificacion, extraction) {
     peticionesAnual: rows(buckets.peticionesAnual),
     citas: rows(buckets.citas),
     citasAnual: rows(buckets.citasAnual),
+    renove: rows(buckets.renove),
     hic: rows(buckets.hic),
     comparativas: rows(buckets.comparativas),
     slas: rows(buckets.slas),
@@ -3020,7 +3142,18 @@ function sourceRecord(entry, rowsRead) {
   };
 }
 
-/** The five physical inputs, without any cell contents from their raw rows. */
+/** Data rows of the Renove workbook, over its eight tabs. */
+function filasRenove(entry) {
+  var total = 0;
+
+  for (var index = 0; index < entry.sheets.length; index += 1) {
+    total += sourceRows(entry.sheets[index]).length;
+  }
+
+  return total;
+}
+
+/** The physical inputs, without any cell contents from their raw rows. */
 function registrarArchivosLeidos(clasificacion, informe) {
   var found = clasificacion.found;
   var read = informe.leidas;
@@ -3038,6 +3171,21 @@ function registrarArchivosLeidos(clasificacion, informe) {
     sourceRecord(found.encuestas, templateRows),
     sourceRecord(found.imac, read[TAB.imacsDatos])
   ];
+
+  // Renove is optional and writes no tab of the book: it only feeds the RENOVE
+  // section of PLANO. Its absence is stated instead of left blank, because a
+  // week without the workbook publishes the two Renove pages empty and that is
+  // indistinguishable from a week with nothing to renew.
+  if (found.renove) {
+    informe.archivos.push(sourceRecord(found.renove, filasRenove(found.renove)));
+  } else {
+    informe.archivos.push({
+      name: 'Dashboards Renoves SSCC (ausente)',
+      modified: null,
+      rows: 0
+    });
+  }
+
   informe.duplicados = clasificacion.duplicated || [];
   informe.ignorados = clasificacion.skipped || [];
   informe.huerfanos = clasificacion.orphans || [];

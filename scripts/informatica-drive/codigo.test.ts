@@ -39,6 +39,13 @@ function loadCodigo() {
     toDate: (value: unknown) => Date | null;
     yearFromCell: (value: unknown) => number;
     fechaOperativa: (date: Date | null) => boolean;
+    renoveAmbito: (sheetName: string) => string;
+    renoveSheets: (grids: { name: string; grid: unknown[][] }[]) => { name: string }[];
+    agregarRenove: (
+      found: Record<string, unknown>,
+      buckets: Record<string, number>
+    ) => void;
+    rows: (buckets: Record<string, number>) => unknown[][];
   };
 }
 
@@ -92,6 +99,56 @@ describe("Codigo.gs weekly safeguards", () => {
     expect(gs.yearFromCell(2026)).toBe(2026);
     expect(gs.yearFromCell("2026")).toBe(2026);
     expect(gs.yearFromCell(new Date(2026, 0, 1))).toBe(2026);
+  });
+
+  it("reconoce las ocho pestañas de Renove y descarta las copias", () => {
+    expect(gs.renoveAmbito("Holding - Onboarding semanal")).toBe("Holding");
+    expect(gs.renoveAmbito("España - Renovados renove")).toBe("España");
+    expect(gs.renoveAmbito("Espana - Renove semanal")).toBe("España");
+    expect(gs.renoveAmbito("Copia de Renove semanal")).toBe("");
+    expect(gs.renoveAmbito("Holding - Renove semanal (2)")).toBe("");
+  });
+
+  it("agrupa Renove por día, ámbito y estado sin leer serial ni ubicación", () => {
+    const grids = [
+      {
+        name: "Holding - Renove semanal",
+        grid: [
+          ["Ubicación", "Estado", "Fecha de Estado", "Serial", "Nº Petición"],
+          ["SEDE Principal", "PENDIENTE USUARIO", null, "PF5WQS8W", "G500744"],
+          ["SEDE Principal", "PENDIENTE USUARIO", null, "PF63YRLT", "G500741"],
+          ["SEDE Principal", "", null, "PF63XDTH", "G500737"],
+        ],
+      },
+      {
+        name: "España - Renovados renove",
+        grid: [
+          ["Ubicación", "Estado", "Fecha", "Nº Petición"],
+          ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), "G500287"],
+          ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), "G500292"],
+          ["Antoni Maura", "RECHAZADO", new Date(2026, 3, 20), "G500283"],
+        ],
+      },
+      {
+        name: "Copia de Renove semanal",
+        grid: [
+          ["Ubicación", "Estado", "Fecha de Estado", "Serial", "Nº Petición"],
+          ["SEDE Principal", "RENOVADO", new Date(2026, 3, 22), "PF5WQS8W", "G500744"],
+        ],
+      },
+    ];
+    const buckets: Record<string, number> = {};
+
+    gs.agregarRenove(
+      { renove: { sheets: gs.renoveSheets(grids) } },
+      buckets
+    );
+
+    expect(gs.rows(buckets)).toEqual([
+      ["", "", "0", "Holding", "PENDIENTE USUARIO", 2],
+      ["2026-04-20", "2026/04", "17", "España", "RECHAZADO", 1],
+      ["2026-04-22", "2026/04", "17", "España", "RENOVADO", 2],
+    ]);
   });
 
   it("el cierre automático apunta al mes de extracción, no al siguiente", () => {

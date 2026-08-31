@@ -215,8 +215,13 @@ function entry(file, grids, sheets) {
   };
 }
 
+/** Read when present, never required: the Renove workbook only feeds PLANO. */
+const OPTIONAL_KINDS = ["renove"];
+
 function classify(script, folder, cleanPath) {
-  const found = Object.fromEntries(REQUIRED_KINDS.map((kind) => [kind, null]));
+  const found = Object.fromEntries(
+    [...REQUIRED_KINDS, ...OPTIONAL_KINDS].map((kind) => [kind, null])
+  );
   const skipped = [];
   const sources = [];
 
@@ -243,6 +248,7 @@ function classify(script, folder, cleanPath) {
 
     const candidates = [
       ["encuestas", script.encuestasSheets(grids)],
+      ["renove", script.renoveSheets(grids)],
       ["workOrders", script.findDataSheets(grids, script.REQUIRED.workOrders)],
       ["citas", script.findDataSheets(grids, script.REQUIRED.citas)],
       ["imac", script.findDataSheets(grids, script.REQUIRED.imac)],

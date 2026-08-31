@@ -34,7 +34,9 @@ por el equipo.
 
 1. Dejar en la carpeta un solo fichero de cada tipo: backlog, liberadas,
    gestionadas, peticiones IMAC y el template semanal. El template contiene
-   encuestas, work orders y citas.
+   encuestas, work orders y citas. Añadir también `Dashboards Renoves SSCC`,
+   que el equipo publica desde su hoja de Google y alimenta las dos páginas de
+   Renove.
 2. Escribir en `Configuración` la fecha de extracción de la semana.
 3. Ejecutar `⭐ Informática Weekly > Procesar semana` **una sola vez**.
 4. Revisar las siete líneas de `Comprobación`: archivo leído, fecha de
@@ -55,6 +57,12 @@ los meses que ya quedaron atrás (agosto se congela al informar septiembre).
 Los ficheros se reconocen por cabeceras. Solo backlog, liberadas y gestionadas
 se distinguen por nombre porque comparten exactamente el mismo formato. Si
 falta un origen obligatorio, el proceso se detiene antes de escribir datos.
+
+`Dashboards Renoves SSCC` es el único origen opcional: el proceso no se detiene
+sin él, pero `Comprobación` escribe `Dashboards Renoves SSCC (ausente)` y el
+TXT sale sin sección `RENOVE`, es decir, con las dos páginas de Renove vacías.
+De ese libro se leen sus ocho pestañas `Holding - …` y `España - …`; cualquier
+copia de trabajo con otro nombre se ignora para no contar equipos dos veces.
 
 ## Cierre de mes
 
