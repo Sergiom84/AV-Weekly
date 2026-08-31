@@ -67,7 +67,11 @@ export default function SeriesLineChart({
           ResponsiveContainer to zero. */}
       <div className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 12, right: 0, bottom: 0, left: 0 }}>
+          {/* The right margin is the width of the last dot plus its label: with
+              none, the newest month is drawn half outside the plot and its tick
+              collides with the previous one. It is the month being reported, so
+              it is the one that must not be cut. */}
+          <LineChart data={data} margin={{ top: 12, right: 18, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--border)" />
             <XAxis
               dataKey={categoryKey}
