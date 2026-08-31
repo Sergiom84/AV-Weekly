@@ -27,7 +27,7 @@ export function resolveOficinasYears(
     year,
   ];
 
-  if (!stored) {
+  if (!stored || stored.length === 0) {
     return { available, selected: defaultSelected };
   }
 

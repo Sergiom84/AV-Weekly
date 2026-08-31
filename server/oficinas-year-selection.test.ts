@@ -24,6 +24,14 @@ describe("Oficinas year chips", () => {
     expect(available).toEqual([2023, 2024, 2025, 2026]);
   });
 
+  it("treats an empty stored list as the default, not as every chip off", () => {
+    expect(resolveOficinasYears(series, 2026, []).selected).toEqual([
+      2024,
+      2025,
+      2026,
+    ]);
+  });
+
   it("keeps the current year on for a stored extras-only selection", () => {
     expect(resolveOficinasYears(series, 2026, [2023, 2024, 2025]).selected).toEqual(
       [2023, 2024, 2025, 2026]
