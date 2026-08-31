@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DECK_MODULES } from "../shared/deck/registry.ts";
+import { DECK_MODULES, getDeckModule } from "../shared/deck/registry.ts";
 
 describe("deck artwork", () => {
   it("gives each module its own cover", () => {
@@ -12,5 +12,14 @@ describe("deck artwork", () => {
       "/informe/portada.png",
     ]);
     expect(new Set(covers).size).toBe(covers.length);
+  });
+});
+
+describe("informatica sources", () => {
+  it("only offers the Drive text upload in the sidebar", () => {
+    const uploads = getDeckModule("informatica").deck?.uploads ?? [];
+
+    expect(uploads.map(slot => slot.id)).toEqual(["texto"]);
+    expect(uploads.some(slot => slot.id === "plano")).toBe(false);
   });
 });

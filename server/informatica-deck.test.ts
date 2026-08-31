@@ -109,4 +109,27 @@ describe("mergeInformaticaDeckTemplate", () => {
         .title
     ).toBe("Volumetría personalizada");
   });
+
+  it("drops the WASP slide from a stored deck and the default template", () => {
+    const stored = createDefaultInformaticaDeck();
+    stored.pages.push({
+      id: "wasp",
+      kind: "itWasp",
+      supportType: null,
+      text: { title: "2.6 WASP", subtitle: "INFORMÁTICA" },
+      visible: true,
+      weekSelection: null,
+      years: null,
+      overrides: {},
+    });
+    stored.pages.find(page => page.id === "index")!.text.item5 = "2.6 WASP";
+
+    const merged = mergeInformaticaDeckTemplate(stored);
+
+    expect(merged.pages.some(page => page.id === "wasp")).toBe(false);
+    expect(createDefaultInformaticaDeck().pages.some(page => page.id === "wasp")).toBe(
+      false
+    );
+    expect(merged.pages.find(page => page.id === "index")?.text.item5).toBeUndefined();
+  });
 });

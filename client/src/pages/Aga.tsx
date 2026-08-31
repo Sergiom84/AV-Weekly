@@ -21,6 +21,7 @@ import ClosingPage from "@/components/deck/ClosingPage";
 import ComingSoonPage from "@/components/deck/ComingSoonPage";
 import CoverPage from "@/components/deck/CoverPage";
 import DeckSidebar, { type SidebarUpload } from "@/components/deck/DeckSidebar";
+import ResizableSidebar from "@/components/deck/ResizableSidebar";
 import IndexPage from "@/components/deck/IndexPage";
 import NotesPage from "@/components/deck/NotesPage";
 import PageOrderControls from "@/components/deck/PageOrderControls";
@@ -313,27 +314,24 @@ export default function Aga() {
 
       <main className="container py-8" data-deck-root>
         <div className="flex flex-col gap-8 lg:flex-row">
-          <div className="w-full flex-shrink-0 lg:w-80 print:hidden">
-            {/* Own scroll track: the sidebar reaches its last page without moving the deck. */}
-            <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2 print:max-h-none print:overflow-visible">
-              <DeckSidebar
-                deck={deck}
-                uploads={uploads}
-                kindLabels={MODULE.deck?.kindLabels ?? {}}
-                storagePrefix={MODULE.deck?.storagePrefix ?? ""}
-                editing={editing}
-                onEditingChange={setEditing}
-                loading={loading}
-                saving={saving}
-                error={error}
-                onUpdatePage={updatePage}
-                onResetDeck={resetDeck}
-                onSelectPage={scrollToPage}
-                pdfHref="/api/aga/pdf"
-                onPresent={() => setPresenting(true)}
-              />
-            </div>
-          </div>
+          <ResizableSidebar storagePrefix={MODULE.deck?.storagePrefix ?? ""}>
+            <DeckSidebar
+              deck={deck}
+              uploads={uploads}
+              kindLabels={MODULE.deck?.kindLabels ?? {}}
+              storagePrefix={MODULE.deck?.storagePrefix ?? ""}
+              editing={editing}
+              onEditingChange={setEditing}
+              loading={loading}
+              saving={saving}
+              error={error}
+              onUpdatePage={updatePage}
+              onResetDeck={resetDeck}
+              onSelectPage={scrollToPage}
+              pdfHref="/api/aga/pdf"
+              onPresent={() => setPresenting(true)}
+            />
+          </ResizableSidebar>
 
           <div className="min-w-0 flex-1 space-y-12" data-deck-list>
             {error && (

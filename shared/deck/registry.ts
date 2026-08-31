@@ -120,16 +120,15 @@ export const DECK_MODULES: DeckModule[] = [
     name: "Informática",
     meta: "Módulo 02",
     description:
-      "Incidencias, work orders, citas SmartTech, peticiones, IMACS, WASP y Renove.",
+      "Incidencias, work orders, citas SmartTech, peticiones, IMACS y Renove.",
     route: "/informatica",
     layers: 2,
     deck: {
       apiBase: "/api/informatica",
-      // The Informatica Drive spreadsheet (see scripts/informatica-drive/) reads
-      // the five raw exports and writes this text, so it goes first. Unlike AGA,
-      // the raw workbooks keep their own slot: the Drive flow is not yet part of
-      // the weekly routine, and removing the direct upload would leave the week
-      // depending on a script nobody has run in anger.
+      // The Informatica Drive spreadsheet (see scripts/informatica-drive/)
+      // reads the raw exports and writes this text. The sidebar only offers
+      // that one input; the workbook route still exists server-side for
+      // direct use, like AGA's raw uploads.
       uploads: [
         {
           id: "texto",
@@ -138,14 +137,6 @@ export const DECK_MODULES: DeckModule[] = [
           error: "No se pudo cargar el texto plano de Informática",
           multiple: false,
           accept: ".txt,.tsv,.csv",
-        },
-        {
-          id: "plano",
-          label: "Libro plano",
-          path: "/api/informatica/upload/plano",
-          error: "No se pudo cargar el libro plano",
-          multiple: true,
-          accept: ".xlsx,.xls,.csv",
         },
       ],
       artwork: {
@@ -163,7 +154,6 @@ export const DECK_MODULES: DeckModule[] = [
         itCitas: "Citas SmartTech",
         itCitasAnual: "Citas anual",
         itImacs: "IMACS",
-        itWasp: "WASP",
         itRenove: "Renove",
       },
       storagePrefix: "av-weekly:informatica-sidebar-collapsed:",

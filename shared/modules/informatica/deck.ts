@@ -139,7 +139,6 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
     title: "2.4.2 Volumetría de IMACS resueltos OnSite",
     sections: ["imacs"],
   },
-  { id: "wasp", kind: "itWasp", title: "2.6 WASP", sections: ["wasp"] },
   { id: "renove", kind: "itRenove", title: "2.7 Renove", sections: ["renove"] },
   {
     id: "renove-acumulado",
@@ -200,7 +199,6 @@ export function createDefaultInformaticaDeck(): InformaticaDeckState {
         item2: "2.2 Peticiones",
         item3: "2.3 Citas SmartTech",
         item4: "2.4 IMACS OnSite",
-        item5: "2.6 WASP",
       },
       visible: true,
       weekSelection: null,
@@ -254,6 +252,12 @@ function migrateInformaticaPage(page: InformaticaDeckPage): InformaticaDeckPage 
     return { ...page, text: { ...page.text, title: NEW_WO_TITLE } };
   }
 
+  if (page.id === "index" && page.text.item5 === "2.6 WASP") {
+    const text = { ...page.text };
+    delete text.item5;
+    return { ...page, text };
+  }
+
   return page;
 }
 
@@ -268,9 +272,14 @@ function migrateInformaticaPage(page: InformaticaDeckPage): InformaticaDeckPage 
 export function mergeInformaticaDeckTemplate(
   deck: InformaticaDeckState
 ): InformaticaDeckState {
-  return mergeDeckTemplate(
+  const merged = mergeDeckTemplate(
     deck,
     createDefaultInformaticaDeck().pages,
     migrateInformaticaPage
   );
+
+  return {
+    ...merged,
+    pages: merged.pages.filter(page => page.id !== "wasp"),
+  };
 }
