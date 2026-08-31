@@ -11,6 +11,7 @@ export interface InformaticaPageProps {
 
 interface PageShellProps extends InformaticaPageProps {
   children: ReactNode;
+  hideFootnote?: boolean;
 }
 
 /** Heading, body and footnote every Informatica data page shares. */
@@ -19,6 +20,7 @@ export default function PageShell({
   editing,
   onChange,
   children,
+  hideFootnote = false,
 }: PageShellProps) {
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
@@ -37,7 +39,7 @@ export default function PageShell({
         {children}
       </div>
 
-      {(editing || page.text.footnote) && (
+      {!hideFootnote && (editing || page.text.footnote) && (
         <p className="mt-[1cqi] shrink-0 font-mono text-[1.15cqi] leading-snug text-muted-foreground">
           <EditableText
             value={page.text.footnote ?? ""}

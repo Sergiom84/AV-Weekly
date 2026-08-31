@@ -7,7 +7,7 @@ import {
   isPageVisible,
 } from "@shared/informe";
 import type { DeckPage } from "@shared/informe";
-import { createNotesPage, createSectionPage } from "@shared/deck/core";
+import { createNotesPage, createSectionPage, weekCoverLabel } from "@shared/deck/core";
 import { getDeckModule } from "@shared/deck/registry";
 import { useAvDeck } from "@/modules/av/useAvDeck";
 import MainNav from "@/components/MainNav";
@@ -186,16 +186,30 @@ export default function Informe() {
     const onChange = handlePageChange(page.id);
 
     switch (page.kind) {
-      case "cover":
+      case "cover": {
+        const week = weekly.maxWeek;
+        const year =
+          monthly.years.length > 0
+            ? monthly.years[monthly.years.length - 1]
+            : weekly.uploadedAt
+              ? Number(weekly.uploadedAt.slice(0, 4))
+              : new Date().getUTCFullYear();
+        const derivedPeriod =
+          week > 0 && Number.isFinite(year) ? weekCoverLabel(week, year) : "";
+        const coverPage = derivedPeriod
+          ? { ...page, text: { ...page.text, period: derivedPeriod } }
+          : page;
         return (
           <CoverPage
-            page={page}
+            page={coverPage}
             editing={isEditing}
             onChange={onChange}
             number={number}
             muted={muted}
+            background={MODULE.deck?.artwork?.cover}
           />
         );
+      }
       case "index":
         return (
           <IndexPage

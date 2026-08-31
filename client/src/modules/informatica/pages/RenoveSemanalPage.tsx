@@ -2,7 +2,13 @@ import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
+import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
+import {
+  defaultWeekSelection,
+  resolveWeekSelection,
+} from "@shared/deck/core";
 import { coverageEnd, monthLabel, seriesColor } from "../aggregate";
 import {
   RENOVE_AMBITOS,
@@ -48,10 +54,34 @@ export default function RenoveSemanalPage({
 
   const weekTotals = renoveTotals(renoveInWeek(rows, window));
   const monthTotals = renoveTotals(renoveInMonth(rows, month));
-  const data = renoveWeekSeries(rows, window);
+  const allData = renoveWeekSeries(rows, window);
+  const weekSlots = allData.map((_, index) => index + 1);
+  const weekSelection =
+    page.weekSelection ?? defaultWeekSelection(weekSlots.at(-1) ?? 1);
+  const visibleSlots = new Set(resolveWeekSelection(weekSelection, weekSlots));
+  const data = allData.filter((_, index) => visibleSlots.has(index + 1));
+  const hiddenRows = page.hiddenRows ?? [];
+  const series = SERIES.filter(entry => !hiddenRows.includes(entry.label));
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
+      {editing && weekSlots.length > 0 && (
+        <WeekRangeSelector
+          selection={weekSelection}
+          available={weekSlots}
+          format={week => String(allData[week - 1]?.semana ?? `S${week}`)}
+          onChange={weekSelection => onChange({ weekSelection })}
+        />
+      )}
+      {editing && (
+        <RowFilterPanel
+          labels={[...RENOVE_AMBITOS]}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
       <KpiRow
         items={[
           {
@@ -77,13 +107,15 @@ export default function RenoveSemanalPage({
         {/* Every week is drawn, tilted. Left to itself the axis drops the ticks
             that overlap and prints one week in two, so half the columns lose
             the only thing that identifies them. */}
-        <CategoryBarChart
-          categoryKey="semana"
-          series={SERIES}
-          data={data}
-          stacked
-          angledCategories
-        />
+        {series.length > 0 && (
+          <CategoryBarChart
+            categoryKey="semana"
+            series={series}
+            data={data}
+            stacked
+            angledCategories
+          />
+        )}
       </div>
     </PageShell>
   );

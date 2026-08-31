@@ -51,7 +51,7 @@ export default function ImacsTablePage({
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <MatrixTable
           rowHeader="Edificio"
           columns={columns.map(column => {
@@ -60,6 +60,7 @@ export default function ImacsTablePage({
           })}
           rows={matrix.rows}
           rowTotals={false}
+          groupEvery={2}
           variant="report"
         />
       </div>

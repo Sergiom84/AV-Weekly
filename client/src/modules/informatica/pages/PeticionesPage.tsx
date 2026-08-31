@@ -109,14 +109,15 @@ export default function PeticionesPage({
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
-      <div className="grid min-h-0 flex-1 grid-cols-[57%_1fr] gap-[1.8cqi]">
-        <div className="grid min-h-0 grid-rows-2 gap-[1cqi]">
+      <div className="grid min-h-0 flex-1 grid-cols-[57%_1fr] items-start gap-[1.8cqi]">
+        <div className="flex min-h-0 flex-col gap-[1.2cqi]">
           {entities.map(entity => (
-            <div key={entity} className="min-h-0 overflow-auto">
+            <div key={entity} className="min-h-0">
               <p className="mb-[0.5cqi] font-mono text-[1.2cqi] uppercase tracking-wide text-muted-foreground">
                 {entity}
               </p>
               <MatrixTable
+                fill={false}
                 rowHeader="Estado"
                 columns={columns}
                 rows={matrixFor(entity).rows}
@@ -136,11 +137,12 @@ export default function PeticionesPage({
         </div>
 
         {topProducts.length > 0 && (
-          <div className="min-h-0 overflow-auto">
+          <div className="min-h-0">
             <p className="mb-[0.5cqi] font-mono text-[1.2cqi] uppercase tracking-wide text-muted-foreground">
               Top {TOP_PRODUCTS} productos
             </p>
             <MatrixTable
+              fill={false}
               rowHeader="Producto"
               columns={["Total"]}
               rows={topProducts}

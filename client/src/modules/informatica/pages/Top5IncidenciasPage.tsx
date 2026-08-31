@@ -111,6 +111,7 @@ export default function Top5IncidenciasPage({
           data={data}
           fitGroupedValueLabels
           centerGroupedValueLabels
+          allCategories
         />
       </section>
     </PageShell>

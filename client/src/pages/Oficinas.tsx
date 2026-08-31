@@ -179,17 +179,18 @@ export default function Oficinas() {
     const onChange = handlePageChange(page.id);
 
     switch (page.kind) {
-      case "cover":
-        const coverPage =
-          page.text.period?.trim() || closedWeek === null
-            ? page
-            : {
-                ...page,
-                text: {
-                  ...page.text,
-                  period: reportPeriod(reportYear, closedWeek),
-                },
-              };
+      case "cover": {
+        const derivedPeriod =
+          closedWeek === null ? "" : reportPeriod(reportYear, closedWeek);
+        const coverPage = derivedPeriod
+          ? {
+              ...page,
+              text: {
+                ...page.text,
+                period: derivedPeriod,
+              },
+            }
+          : page;
 
         return (
           <CoverPage
@@ -201,6 +202,7 @@ export default function Oficinas() {
             background={artwork?.cover}
           />
         );
+      }
       case "index":
         return (
           <IndexPage

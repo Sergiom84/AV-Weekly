@@ -2,6 +2,7 @@ import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { seriesColor } from "../aggregate";
 import { RENOVE_AMBITOS, renoveMonthSeries, renoveTotals } from "../renove";
@@ -35,6 +36,8 @@ export default function RenoveAcumuladoPage({
   const rows = dataset.renove ?? [];
   const totals = renoveTotals(rows);
   const data = renoveMonthSeries(rows);
+  const hiddenRows = page.hiddenRows ?? [];
+  const series = SERIES.filter(entry => !hiddenRows.includes(entry.label));
   const charted = data.reduce(
     (sum, point) => sum + point.Holding + point["España"],
     0
@@ -42,6 +45,15 @@ export default function RenoveAcumuladoPage({
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
+      {editing && (
+        <RowFilterPanel
+          labels={[...RENOVE_AMBITOS]}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
       <KpiRow
         items={[
           { label: "Renovado Acumulado", value: String(totals.total) },
@@ -55,12 +67,14 @@ export default function RenoveAcumuladoPage({
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <CategoryBarChart
-          categoryKey="mes"
-          series={SERIES}
-          data={data}
-          stacked
-        />
+        {series.length > 0 && (
+          <CategoryBarChart
+            categoryKey="mes"
+            series={series}
+            data={data}
+            stacked
+          />
+        )}
       </div>
     </PageShell>
   );

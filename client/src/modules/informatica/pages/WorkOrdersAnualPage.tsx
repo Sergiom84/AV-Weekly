@@ -64,7 +64,12 @@ export default function WorkOrdersAnualPage({
       />
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <CategoryBarChart categoryKey="mes" series={series} data={data} />
+        <CategoryBarChart
+          categoryKey="mes"
+          series={series}
+          data={data}
+          allCategories
+        />
       </div>
     </PageShell>
   );

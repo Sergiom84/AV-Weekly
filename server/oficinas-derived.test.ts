@@ -54,7 +54,7 @@ describe("Oficinas report period", () => {
   });
 
   it("writes the closed ISO week on the cover", () => {
-    expect(reportPeriod(2026, 33)).toBe("Agosto 2026 - Semana 33");
+    expect(reportPeriod(2026, 33)).toBe("Semana 33 de 2026 · 10-16 agosto");
   });
 });
 

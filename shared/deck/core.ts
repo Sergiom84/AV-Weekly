@@ -38,6 +38,62 @@ export const MONTH_LABELS = [
   "Dic",
 ];
 
+/** Full Spanish month names used on cover period lines. */
+export const MONTH_NAMES_ES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+] as const;
+
+function isoDayUtc(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Monday and Sunday of an ISO week, as `YYYY-MM-DD`. */
+export function isoWeekBounds(
+  year: number,
+  week: number
+): { start: string; end: string } {
+  const januaryFourth = new Date(Date.UTC(year, 0, 4));
+  const weekday = (januaryFourth.getUTCDay() + 6) % 7;
+  const monday = new Date(Date.UTC(year, 0, 4 - weekday + (week - 1) * 7));
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+
+  return { start: isoDayUtc(monday), end: isoDayUtc(sunday) };
+}
+
+/**
+ * Cover period shared by every module: `Semana 33 de 2026 · 10-16 agosto`.
+ * Pass explicit bounds when the module's week is not a plain ISO week.
+ */
+export function weekCoverLabel(
+  week: number,
+  year: number,
+  bounds?: { start: string; end: string }
+): string {
+  const range = bounds ?? isoWeekBounds(year, week);
+  const startMonth = Number(range.start.slice(5, 7)) - 1;
+  const endMonth = Number(range.end.slice(5, 7)) - 1;
+  const startDay = Number(range.start.slice(8, 10));
+  const endDay = Number(range.end.slice(8, 10));
+  const span =
+    startMonth === endMonth
+      ? `${startDay}-${endDay} ${MONTH_NAMES_ES[endMonth]}`
+      : `${startDay} ${MONTH_NAMES_ES[startMonth]}-${endDay} ${MONTH_NAMES_ES[endMonth]}`;
+
+  return `Semana ${week} de ${year} · ${span}`;
+}
+
 /** Formats quantitative chart ticks without abbreviating thousands. */
 export function formatChartMetric(value: number): string {
   const sign = value < 0 ? "-" : "";

@@ -1,7 +1,13 @@
 import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
+import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
+import {
+  defaultMonthWindow,
+  resolveMonthSelection,
+} from "@shared/deck/core";
 import {
   Cell,
   Label,
@@ -13,9 +19,9 @@ import {
   historicoByMonth,
   latestOf,
   monthLabel,
-  monthsEndingAt,
   publishedTotal,
   seriesColor,
+  uniqueSorted,
 } from "../aggregate";
 import { HIC_RESOLVED, isReportedWorkOrder } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
@@ -56,17 +62,22 @@ export default function HicWorkOrdersPage({
     row => row.categoria === "" && row.metrica === HIC_RESOLVED
   );
   const workOrders = (dataset.workOrders ?? []).filter(isReportedWorkOrder);
+  const availableMonths = uniqueSorted([
+    ...incidentRows.map(row => row.mes),
+    ...workOrders.map(row => row.mes),
+  ]);
+  const monthSelection = page.monthSelection ?? defaultMonthWindow(WINDOW_MONTHS);
+  const months = resolveMonthSelection(monthSelection, availableMonths);
   const currentMonth =
+    months[months.length - 1] ??
     [
       latestOf(incidentRows, row => row.mes),
       latestOf(workOrders, row => row.mes),
     ]
       .filter((month): month is string => month !== null && month !== "")
       .sort()
-      .at(-1) ?? null;
-  const months = currentMonth === null
-    ? []
-    : monthsEndingAt(currentMonth, WINDOW_MONTHS);
+      .at(-1) ??
+    null;
   const value = <T,>(rows: T[], month: string, monthOf: (row: T) => string, totalOf: (row: T) => number) =>
     rows.filter(row => monthOf(row) === month).reduce((sum, row) => sum + totalOf(row), 0);
   const frozenIncidencias = historicoByMonth(dataset, "incidencias");
@@ -90,49 +101,75 @@ export default function HicWorkOrdersPage({
     incidencias: incidenciasOf(month),
     workOrders: workOrdersOf(month),
   }));
-  const series: CategorySeries[] = [
+  const allSeries: CategorySeries[] = [
     { key: "workOrders", label: "Work Orders", color: seriesColor(0) },
     { key: "incidencias", label: "Incidencias", color: seriesColor(1) },
   ];
-  // The donut reads the same resolved figures as the bars, so the headline and
-  // the axis can never report different numbers for the same month.
+  const hiddenRows = page.hiddenRows ?? [];
+  const series = allSeries.filter(entry => !hiddenRows.includes(entry.label));
   const currentIncidencias = currentMonth ? incidenciasOf(currentMonth) : 0;
   const currentWorkOrders = currentMonth ? workOrdersOf(currentMonth) : 0;
-  const currentTotal = currentIncidencias + currentWorkOrders;
-  const distribution = [
-    { name: "Work Orders", value: currentWorkOrders, color: seriesColor(0) },
-    { name: "Incidencias", value: currentIncidencias, color: seriesColor(1) },
-  ];
+  const distribution = allSeries
+    .map(entry => ({
+      name: entry.label,
+      value: entry.key === "workOrders" ? currentWorkOrders : currentIncidencias,
+      color: entry.color,
+    }))
+    .filter(entry => !hiddenRows.includes(entry.name));
+  const donutTotal = distribution.reduce((sum, entry) => sum + entry.value, 0);
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
-      <div className="grid min-h-0 flex-1 grid-cols-[1.1fr_.9fr] gap-[2.3cqi]">
+      {editing && (
+        <MonthRangeSelector
+          selection={monthSelection}
+          available={availableMonths}
+          format={monthLabel}
+          onChange={monthSelection => onChange({ monthSelection })}
+        />
+      )}
+      {editing && (
+        <RowFilterPanel
+          labels={allSeries.map(entry => entry.label)}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.55fr)_minmax(0,0.45fr)] gap-[1.2cqi]">
         <section className="flex min-h-0 flex-col" aria-label="Work Orders e incidencias por mes">
           <h3 className="shrink-0 pb-[0.4cqi] font-mono text-[1.3cqi] font-medium text-muted-foreground">
             Work Orders e Incidencias
           </h3>
-          <CategoryBarChart
-            categoryKey="mes"
-            series={series}
-            data={data}
-            fitGroupedValueLabels
-            centerGroupedValueLabels
-          />
+          {series.length > 0 && (
+            <CategoryBarChart
+              categoryKey="mes"
+              series={series}
+              data={data}
+              fitGroupedValueLabels
+              centerGroupedValueLabels
+              allCategories
+            />
+          )}
         </section>
 
         <section className="flex min-h-0 flex-col" aria-label="Distribución del mes actual">
-          <h3 className="shrink-0 pb-[0.4cqi] font-mono text-[1.3cqi] font-medium text-muted-foreground">
-            Distribución del mes actual{currentMonth ? ` · ${monthLabel(currentMonth)}` : ""}
+          <h3 className="shrink-0 pb-[0.3cqi] text-center font-mono text-[1.1cqi] font-medium leading-snug text-muted-foreground">
+            Distribución del mes actual
+            {currentMonth ? (
+              <span className="mt-[0.15cqi] block">{monthLabel(currentMonth)}</span>
+            ) : null}
           </h3>
-          <div className="min-h-0 flex-1">
+          <div className="mx-auto min-h-0 w-[72%] flex-1">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={distribution}
                   dataKey="value"
                   nameKey="name"
-                  innerRadius="54%"
-                  outerRadius="78%"
+                  innerRadius="48%"
+                  outerRadius="68%"
                   paddingAngle={0}
                   stroke="var(--background)"
                   strokeWidth={2}
@@ -142,21 +179,24 @@ export default function HicWorkOrdersPage({
                   ))}
                   <Label
                     position="center"
-                    value={currentTotal.toLocaleString("es-ES")}
-                    className="fill-foreground font-mono text-[2.1cqi] font-semibold"
+                    value={donutTotal.toLocaleString("es-ES")}
+                    className="fill-foreground font-mono text-[1.7cqi] font-semibold"
                   />
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <ul className="grid shrink-0 grid-cols-2 gap-[0.7cqi] font-mono text-[1.05cqi] text-muted-foreground">
+          <ul className="mx-auto flex w-[18cqi] shrink-0 flex-col gap-[0.12cqi] font-mono text-[1cqi] text-muted-foreground">
             {distribution.map(entry => (
-              <li key={entry.name} className="border-t border-border pt-[0.45cqi]">
-                <span className="block truncate">{entry.name}</span>
-                <span className="tabular-nums text-foreground">
+              <li
+                key={entry.name}
+                className="flex items-baseline justify-between gap-[0.7cqi] border-t border-border pt-[0.22cqi]"
+              >
+                <span>{entry.name}</span>
+                <span className="whitespace-nowrap tabular-nums text-foreground">
                   {entry.value.toLocaleString("es-ES")}
-                  {currentTotal > 0
-                    ? ` · ${((entry.value / currentTotal) * 100).toLocaleString("es-ES", { maximumFractionDigits: 1 })} %`
+                  {donutTotal > 0
+                    ? ` · ${((entry.value / donutTotal) * 100).toLocaleString("es-ES", { maximumFractionDigits: 1 })} %`
                     : ""}
                 </span>
               </li>

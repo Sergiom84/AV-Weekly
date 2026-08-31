@@ -13,6 +13,7 @@ interface WeekRangeSelectorProps {
   available: number[];
   onChange: (selection: WeekSelection) => void;
   disabled?: boolean;
+  format?: (week: number) => string;
 }
 
 export default function WeekRangeSelector({
@@ -20,6 +21,7 @@ export default function WeekRangeSelector({
   available,
   onChange,
   disabled,
+  format = week => `S${week}`,
 }: WeekRangeSelectorProps) {
   if (available.length === 0) {
     return null;
@@ -63,7 +65,7 @@ export default function WeekRangeSelector({
                 value={String(week)}
                 className="font-mono text-xs"
               >
-                {`S${week}`}
+                {format(week)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -90,7 +92,7 @@ export default function WeekRangeSelector({
                 value={String(week)}
                 className="font-mono text-xs"
               >
-                {`S${week}`}
+                {format(week)}
               </SelectItem>
             ))}
           </SelectContent>

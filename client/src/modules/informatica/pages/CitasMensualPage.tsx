@@ -41,7 +41,7 @@ export default function CitasMensualPage({
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <MatrixTable
           rowHeader="SmartTech"
           columns={months.map(monthLabel)}

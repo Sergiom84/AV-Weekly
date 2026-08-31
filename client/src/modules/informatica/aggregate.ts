@@ -1,4 +1,4 @@
-import { MONTH_LABELS } from "@shared/deck/core";
+import { MONTH_LABELS, weekCoverLabel } from "@shared/deck/core";
 import type { MatrixRow } from "@/components/deck/MatrixTable";
 import { INFORMATICA_HISTORICO_UNTIL } from "@shared/modules/informatica/types";
 import type {
@@ -197,6 +197,31 @@ export function lastClosedWeek<T>(
   const start = last >= addDays(monday, 4) ? monday : addDays(monday, -7);
 
   return { start, end: addDays(start, 6) };
+}
+
+function isoWeekOf(day: string): { week: number; year: number } {
+  const date = new Date(`${day}T00:00:00Z`);
+  const thursday = new Date(date);
+  thursday.setUTCDate(thursday.getUTCDate() + 4 - (thursday.getUTCDay() || 7));
+  const year = thursday.getUTCFullYear();
+  const firstDay = Date.UTC(year, 0, 1);
+  const week = Math.ceil(((thursday.getTime() - firstDay) / 86_400_000 + 1) / 7);
+  return { week, year };
+}
+
+/**
+ * Cover-page period, recomputed from the last closed week in the workbook.
+ */
+export function coverPeriodLabel(dataset: InformaticaDataset): string {
+  const rows: { fecha: InformaticaDateCell }[] = [
+    ...(dataset.incidencias ?? []),
+    ...(dataset.workOrders ?? []),
+    ...(dataset.peticiones ?? []),
+  ];
+  const window = lastClosedWeek(rows, row => row.fecha, null);
+  if (window === null) return "";
+  const { week, year } = isoWeekOf(window.start);
+  return weekCoverLabel(week, year, { start: window.start, end: window.end });
 }
 
 /**

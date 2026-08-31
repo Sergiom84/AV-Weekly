@@ -47,11 +47,21 @@ export function useFitTableScale<
       }
 
       // Small safety margin so rounding never leaves a 1px overflow.
-      const next = Math.max(
+      let next = Math.max(
         minScale,
         Math.min(maxScale, (available / natural) * 0.98)
       );
       table.style.setProperty("--fit-scale", String(next));
+
+      const after = table.scrollHeight;
+      if (after > available) {
+        next = Math.max(
+          minScale,
+          Math.min(maxScale, next * (available / after) * 0.98)
+        );
+        table.style.setProperty("--fit-scale", String(next));
+      }
+
       setScale(next);
     };
 

@@ -40,6 +40,11 @@ interface CategoryBarChartProps {
    * identity. Month and year axes read better with the default.
    */
   angledCategories?: boolean;
+  /**
+   * Draws every category tick, kept horizontal. Month labels split onto two
+   * lines (`Ago` / `26`) so a trailing window stays readable.
+   */
+  allCategories?: boolean;
   /** Brings the Y-axis labels flush with the slide content above the chart. */
   alignYAxisStart?: boolean;
 }
@@ -84,6 +89,36 @@ interface AngledTickProps {
  * which leaves the tick box and the text free to disagree and spill out of the
  * slide.
  */
+function CompactMonthTick({
+  x,
+  y,
+  payload,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string | number };
+}) {
+  const raw = String(payload?.value ?? "");
+  const parts = raw.match(/^(\S+)\s+(\d{2})$/);
+  const lines = parts ? [parts[1], parts[2]] : [raw];
+
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="middle"
+      fill="var(--muted-foreground)"
+      className="font-mono text-[0.7cqi]"
+    >
+      {lines.map((line, index) => (
+        <tspan key={`${line}-${index}`} x={x} dy={index === 0 ? "0.85em" : "1.05em"}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  );
+}
+
 function AngledTick({ x, y, fontSize, payload }: AngledTickProps) {
   return (
     <g transform={`translate(${Number(x)}, ${Number(y)})`}>
@@ -315,6 +350,7 @@ export default function CategoryBarChart({
   fitGroupedValueLabels = false,
   centerGroupedValueLabels = false,
   angledCategories = false,
+  allCategories = false,
   alignYAxisStart = false,
 }: CategoryBarChartProps) {
   const animate = usePresentationAnimation();
@@ -376,7 +412,7 @@ export default function CategoryBarChart({
             margin={{
               top: 16,
               right: 0,
-              bottom: angledCategories ? 8 : 0,
+              bottom: angledCategories ? 8 : allCategories ? 4 : 0,
               left: (angledAxis?.marginLeft ?? 0) - yAxisAlignmentOffset,
             }}
             {...(fitGroupedValueLabels && !stacked
@@ -401,7 +437,13 @@ export default function CategoryBarChart({
                     tick: <AngledTick fontSize={angledAxis.fontSize} />,
                     height: angledAxis.tickHeight,
                   }
-                : { tick: AXIS_TICK })}
+                : allCategories
+                  ? {
+                      interval: 0 as const,
+                      tick: <CompactMonthTick />,
+                      height: 28,
+                    }
+                  : { tick: AXIS_TICK })}
             />
             <YAxis
               stroke="var(--border)"

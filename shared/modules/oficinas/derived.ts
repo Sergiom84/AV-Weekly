@@ -1,3 +1,4 @@
+import { weekCoverLabel } from "../../deck/core.ts";
 import type {
   OficinasDataset,
   OficinasElementRow,
@@ -231,17 +232,9 @@ export function reportWeek(
   return weeks[weeks.length - 1] ?? null;
 }
 
-/** Cover label for an ISO report week, e.g. `Agosto 2026 - Semana 33`. */
+/** Cover label for an ISO report week, matching AGA. */
 export function reportPeriod(year: number, week: number): string {
-  const januaryFourth = new Date(Date.UTC(year, 0, 4));
-  const weekday = (januaryFourth.getUTCDay() + 6) % 7;
-  const monday = new Date(Date.UTC(year, 0, 4 - weekday + (week - 1) * 7));
-  const month = new Intl.DateTimeFormat("es-ES", {
-    month: "long",
-    timeZone: "UTC",
-  }).format(monday);
-
-  return `${month.charAt(0).toUpperCase()}${month.slice(1)} ${year} - Semana ${week}`;
+  return weekCoverLabel(week, year);
 }
 
 /* -------------------------------------------------------------------------- */

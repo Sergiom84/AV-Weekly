@@ -100,7 +100,11 @@ export default function MonthRangeSelector({
         <Button
           type="button"
           size="sm"
-          variant={selection.mode === "window" ? "default" : "outline"}
+          variant={
+            selection.mode === "window" && (selection.size ?? 12) === 12
+              ? "default"
+              : "outline"
+          }
           className="h-7 px-2 font-mono text-xs"
           onClick={() =>
             onChange({
@@ -113,6 +117,27 @@ export default function MonthRangeSelector({
           }
         >
           Últimos 12 meses
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={
+            selection.mode === "window" && selection.size === 18
+              ? "default"
+              : "outline"
+          }
+          className="h-7 px-2 font-mono text-xs"
+          onClick={() =>
+            onChange({
+              mode: "window",
+              from: first,
+              to: last,
+              months: [],
+              size: 18,
+            })
+          }
+        >
+          Últimos 18 meses
         </Button>
       </div>
     </div>

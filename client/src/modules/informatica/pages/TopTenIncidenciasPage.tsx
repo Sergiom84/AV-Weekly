@@ -1,4 +1,6 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import type { MatrixRow } from "@/components/deck/MatrixTable";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
@@ -31,31 +33,27 @@ function DetailTable({
   const totals = columns.map((_, index) =>
     rows.reduce((sum, row) => sum + (row.values[index] ?? 0), 0)
   );
-  const gridTemplateColumns = `minmax(0, 1.6fr) repeat(${columns.length}, minmax(0, 1fr))`;
+  const gridTemplateColumns = `minmax(0, 2.4fr) repeat(${columns.length}, minmax(0, 0.85fr))`;
 
   return (
-    <section className="flex min-h-0 flex-col" aria-label={label}>
-      <h3 className="h-[1.45cqi] shrink-0 font-mono text-[1.05cqi] uppercase leading-none tracking-wide text-muted-foreground">
+    <section className="flex min-h-0 flex-col" aria-label={label} lang="es">
+      <h3 className="mb-[0.12cqi] shrink-0 font-mono text-[1.05cqi] uppercase leading-none tracking-wide text-muted-foreground">
         {label}
       </h3>
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden font-mono text-[0.85cqi] leading-none tabular-nums"
+        className="flex min-h-0 flex-col overflow-hidden font-mono text-[0.78cqi] leading-snug tabular-nums"
         role="table"
       >
         <div
-          className="grid shrink-0 border-b border-border py-[0.28cqi] text-muted-foreground"
+          className="grid shrink-0 border-b border-border py-[0.12cqi] text-muted-foreground"
           style={{ gridTemplateColumns }}
           role="row"
         >
-          <span className="truncate text-left" role="columnheader">
+          <span className="pr-[0.4cqi] text-left" role="columnheader">
             Componente
           </span>
           {columns.map(column => (
-            <span
-              key={column}
-              className="truncate text-center"
-              role="columnheader"
-            >
+            <span key={column} className="text-center" role="columnheader">
               {column}
             </span>
           ))}
@@ -65,19 +63,19 @@ function DetailTable({
           {rows.map(row => (
             <div
               key={row.label}
-              className="grid h-[1.05cqi] items-center border-b border-border/60"
+              className="grid min-h-[1.15cqi] items-center border-b border-border/60 py-[0.12cqi]"
               style={{ gridTemplateColumns }}
               role="row"
             >
               <span
-                className="truncate text-left"
+                className="hyphens-auto pr-[0.4cqi] text-left break-words [overflow-wrap:break-word]"
                 role="rowheader"
                 title={row.label}
               >
                 {row.label}
               </span>
               {columns.map((column, index) => (
-                <span key={column} className="truncate text-center" role="cell">
+                <span key={column} className="whitespace-nowrap text-center" role="cell">
                   {row.values[index] || ""}
                 </span>
               ))}
@@ -86,17 +84,17 @@ function DetailTable({
         </div>
 
         <div
-          className="grid shrink-0 border-t border-border py-[0.3cqi] font-semibold"
+          className="grid shrink-0 bg-[var(--informe-serie-4)] py-[0.28cqi] font-medium text-white underline decoration-white/80 underline-offset-[0.18cqi]"
           style={{ gridTemplateColumns }}
           role="row"
         >
-          <span className="truncate text-left" role="rowheader">
+          <span className="pr-[0.4cqi] text-left" role="rowheader">
             Total
           </span>
           {totals.map((total, index) => (
             <span
               key={columns[index]}
-              className="truncate text-center"
+              className="whitespace-nowrap text-center"
               role="cell"
             >
               {total || ""}
@@ -110,8 +108,39 @@ function DetailTable({
 
 const AXIS_TICK = {
   fill: "var(--muted-foreground)",
-  className: "text-[1cqi] font-mono",
+  className: "text-[0.85cqi] font-mono",
 };
+
+function CategoryTick({
+  x,
+  y,
+  payload,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string | number };
+}) {
+  return (
+    <text
+      x={x}
+      y={y}
+      dy="0.32em"
+      textAnchor="end"
+      fill="var(--muted-foreground)"
+      className="font-mono text-[0.82cqi]"
+    >
+      {payload?.value}
+    </text>
+  );
+}
+
+function yAxisWidthFor(labels: string[], chartWidth: number): number {
+  const longest = labels.reduce((max, label) => Math.max(max, label.length), 0);
+  const char = Math.max(5.4, chartWidth * 0.0085 * 0.62);
+  const wanted = Math.ceil(longest * char + 12);
+  const cap = Math.round(chartWidth * 0.4);
+  return Math.min(Math.max(wanted, 108), Math.max(108, cap));
+}
 
 /** Components comparison as horizontal bars, with one series per month. */
 function ComponentsChart({
@@ -122,15 +151,38 @@ function ComponentsChart({
   columns: string[];
 }) {
   const animate = usePresentationAnimation();
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(0);
   const data = rows.map(row => ({
     componente: row.label,
     ...Object.fromEntries(
       columns.map((column, index) => [column, row.values[index] ?? 0])
     ),
   }));
+  const yAxisWidth =
+    chartWidth > 0
+      ? yAxisWidthFor(
+          rows.map(row => row.label),
+          chartWidth
+        )
+      : 168;
+
+  useLayoutEffect(() => {
+    const node = boxRef.current;
+    if (!node) return;
+    const measure = () => {
+      const width = node.getBoundingClientRect().width;
+      setChartWidth(current => (current === width ? current : width));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div
+      ref={boxRef}
       className="min-h-0 flex-1"
       role="img"
       aria-label="Comparativa mensual de componentes"
@@ -139,7 +191,7 @@ function ComponentsChart({
         <BarChart
           data={data}
           layout="vertical"
-          margin={{ top: 4, right: 36, bottom: 4, left: 8 }}
+          margin={{ top: 4, right: 36, bottom: 4, left: 4 }}
           barGap={1}
         >
           <CartesianGrid
@@ -157,9 +209,10 @@ function ComponentsChart({
             type="category"
             dataKey="componente"
             stroke="var(--border)"
-            tick={AXIS_TICK}
+            tick={<CategoryTick />}
             tickLine={false}
-            width={138}
+            interval={0}
+            width={yAxisWidth}
           />
           <Tooltip
             cursor={{ fill: "var(--muted)", fillOpacity: 0.4 }}
@@ -212,17 +265,31 @@ export default function TopTenIncidenciasPage({
   dataset,
 }: TopTenIncidenciasPageProps) {
   const { columns, components, details } = topTenComparison(dataset);
+  const componentLabels = components?.rows.map(row => row.label) ?? [];
+  const hiddenRows = page.hiddenRows ?? [];
+  const visibleRows = components
+    ? components.rows.filter(row => !hiddenRows.includes(row.label))
+    : [];
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-[1.7cqi]">
+      {editing && (
+        <RowFilterPanel
+          labels={componentLabels}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.22fr)_minmax(0,0.78fr)] gap-[1.4cqi]">
         <div className="flex min-h-0 flex-col">
-          {components && (
-            <ComponentsChart rows={components.rows} columns={columns} />
+          {visibleRows.length > 0 && (
+            <ComponentsChart rows={visibleRows} columns={columns} />
           )}
         </div>
 
-        <div className="grid min-h-0 content-start gap-[0.7cqi]">
+        <div className="flex min-h-0 flex-col justify-start gap-[1.7cqi]">
           {details.map(table => (
             <DetailTable
               key={table.view}

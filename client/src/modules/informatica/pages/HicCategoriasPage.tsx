@@ -1,7 +1,9 @@
 import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
+import EditableText from "@/components/deck/EditableText";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
+import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
   defaultMonthWindow,
@@ -26,6 +28,9 @@ interface HicCategoriasPageProps extends InformaticaPageProps {
 const WINDOW = 14;
 
 const HIC_ASSIGNMENTS = "Asignaciones";
+const HIC_METRICS = [HIC_ASSIGNED, HIC_ASSIGNMENTS, HIC_RESOLVED];
+const MIGRATION_NOTE =
+  "En los meses de septiembre a noviembre de 2025 se aprecia un volumen elevado de incidencias asociado a la migración a W11.";
 
 /**
  * `2.1.1 Volumetría de Incidencias`: the same `Hic` sheet as the previous page,
@@ -57,27 +62,20 @@ export default function HicCategoriasPage({
   // which on a monthly series collapses the chart to one column. The default
   // here is the window the slide is about; an editor's saved range still wins.
   const monthSelection = page.monthSelection ?? defaultMonthWindow(WINDOW);
-  const months = resolveMonthSelection(monthSelection, availableMonths).slice(
-    -WINDOW
-  );
+  const months = resolveMonthSelection(monthSelection, availableMonths);
   const month = months[months.length - 1] ?? null;
+  const hiddenRows = page.hiddenRows ?? [];
 
-  const monthlySeries: CategorySeries[] = [
-    HIC_ASSIGNED,
-    HIC_ASSIGNMENTS,
-    HIC_RESOLVED,
-  ].map(
-    (metric, index) => ({
-      key: metric,
-      label: metric,
-      color: seriesColor(index),
-    })
-  );
+  const monthlySeries: CategorySeries[] = HIC_METRICS.map((metric, index) => ({
+    key: metric,
+    label: metric,
+    color: seriesColor(index),
+  })).filter(entry => !hiddenRows.includes(entry.label));
 
   const monthlyData = months.map(target => {
     const entry: Record<string, number | string> = { mes: monthLabel(target) };
 
-    for (const metric of [HIC_ASSIGNED, HIC_ASSIGNMENTS, HIC_RESOLVED]) {
+    for (const metric of HIC_METRICS) {
       entry[metric] = totals
         .filter(row => row.mes === target && row.metrica === metric)
         .reduce((sum, row) => sum + row.total, 0);
@@ -85,11 +83,12 @@ export default function HicCategoriasPage({
 
     return entry;
   });
+  const note = page.text.footnote || MIGRATION_NOTE;
 
   const suffix = month ? ` ${monthLabel(month)}` : "";
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell page={page} editing={editing} onChange={onChange} hideFootnote>
       {editing && (
         <MonthRangeSelector
           selection={monthSelection}
@@ -98,20 +97,41 @@ export default function HicCategoriasPage({
           onChange={monthSelection => onChange({ monthSelection })}
         />
       )}
+      {editing && (
+        <RowFilterPanel
+          labels={[...HIC_METRICS]}
+          hiddenRows={hiddenRows}
+          scope={page.id}
+          defaultHidden={[]}
+          onChange={hiddenRows => onChange({ hiddenRows })}
+        />
+      )}
       <section className="flex min-h-0 flex-1 flex-col" aria-label="Volumen operativo mensual">
         <h3 className="shrink-0 pb-[0.7cqi] font-mono text-[1.35cqi] font-medium text-muted-foreground">
           Volumen Operativo Mensual: Abiertas, Reasignaciones y Resueltas{suffix ? ` · hasta${suffix}` : ""}
         </h3>
-        <CategoryBarChart
-          categoryKey="mes"
-          series={monthlySeries}
-          data={monthlyData}
-          fitGroupedValueLabels
-          centerGroupedValueLabels
-        />
+        {monthlySeries.length > 0 && (
+          <CategoryBarChart
+            categoryKey="mes"
+            series={monthlySeries}
+            data={monthlyData}
+            fitGroupedValueLabels
+            centerGroupedValueLabels
+            allCategories
+          />
+        )}
       </section>
       <p className="shrink-0 border border-border bg-muted/30 px-[1.2cqi] py-[0.75cqi] text-center font-mono text-[1.2cqi] leading-snug text-muted-foreground">
-        En los meses de septiembre a noviembre de 2025 se aprecia un volumen elevado de incidencias asociado a la migración a W11.
+        <EditableText
+          value={note}
+          onChange={value =>
+            onChange({ text: { ...page.text, footnote: value } })
+          }
+          editing={editing}
+          multiline
+          ariaLabel="Nota del volumen operativo"
+          className="block w-full text-center"
+        />
       </p>
     </PageShell>
   );

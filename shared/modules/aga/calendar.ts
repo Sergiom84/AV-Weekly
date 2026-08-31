@@ -1,3 +1,5 @@
+import { weekCoverLabel } from "../../deck/core.ts";
+
 /**
  * Calendar conventions of the AGA report.
  *
@@ -16,20 +18,6 @@ export interface AgaReportingPeriod {
 }
 
 const DAY_MS = 86_400_000;
-const MONTHS = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-] as const;
 
 function dateOnly(value: string): Date | null {
   const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -90,10 +78,6 @@ export function agaWeekLabel(extractionDate: string, explicitWeek?: number | nul
   return period ? `S${period.week}` : extractionDate;
 }
 
-function day(value: string): number {
-  return Number(value.slice(8, 10));
-}
-
 /** Human-readable period for the cover, derived from the latest dataset week. */
 export function agaPeriodLabel(
   extractionDate: string,
@@ -103,12 +87,8 @@ export function agaPeriodLabel(
 
   if (!period) return "";
 
-  const startMonth = Number(period.start.slice(5, 7)) - 1;
-  const endMonth = Number(period.end.slice(5, 7)) - 1;
-  const range =
-    startMonth === endMonth
-      ? `${day(period.start)}-${day(period.end)} ${MONTHS[endMonth]}`
-      : `${day(period.start)} ${MONTHS[startMonth]}-${day(period.end)} ${MONTHS[endMonth]}`;
-
-  return `Semana ${period.week} de ${period.year} · ${range}`;
+  return weekCoverLabel(period.week, period.year, {
+    start: period.start,
+    end: period.end,
+  });
 }

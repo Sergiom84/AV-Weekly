@@ -20,19 +20,41 @@ interface MatrixTableProps {
   formatValue?: (value: number) => string;
   /** AV-style framed table with primary header/footer and grouped first column. */
   variant?: "plain" | "report";
+  /**
+   * Stretch the framed box to the parent. Off when the table should hug its
+   * rows instead of leaving an empty card below the last one.
+   */
+  fill?: boolean;
+  /** Draws a stronger vertical rule after every N value columns. */
+  groupEvery?: number;
 }
 
 const defaultFormat = (value: number) => (value === 0 ? "" : String(value));
 
 /**
+ * Width of the label column. Narrow tables (products, SmartTech) need most of
+ * the row for the name; dense matrices keep a smaller share so the figures
+ * stay readable. Truncation is not used — the name wraps at word boundaries.
+ */
+function rowHeaderShare(numericColumns: number): string {
+  if (numericColumns <= 1) return "72%";
+  if (numericColumns <= 2) return "52%";
+  if (numericColumns <= 3) return "56%";
+  if (numericColumns <= 5) return "26%";
+  if (numericColumns <= 8) return "20%";
+  return "16%";
+}
+
+/** Label cells wrap at words and hyphenate long Spanish compounds. */
+const LABEL_WRAP =
+  "hyphens-auto whitespace-normal break-words [overflow-wrap:break-word]";
+
+/**
  * Read-only pivot of a long dataset: one row per dimension value, one column
  * per period or category, with optional totals on both axes.
  *
- * Every module feeds this from its own upload (buildings, products, SmartTech
- * points, ...), so the row count is whatever that month's workbook brings —
- * never fixed. Font and row padding shrink to fit the space this table is
- * given, and every cell truncates instead of spilling past its column, so a
- * denser upload never breaks the slide layout.
+ * Font and row padding shrink to fit the given space. Labels wrap at words
+ * instead of truncating or breaking mid-glyph.
  */
 export default function MatrixTable({
   rowHeader,
@@ -43,29 +65,63 @@ export default function MatrixTable({
   totalsLabel = "Total",
   formatValue = defaultFormat,
   variant = "plain",
+  fill = true,
+  groupEvery,
 }: MatrixTableProps) {
   const totalOfRow = (row: MatrixRow) =>
     row.values.reduce((sum, value) => sum + value, 0);
   const totalOfColumn = (index: number) =>
     rows.reduce((sum, row) => sum + (row.values[index] ?? 0), 0);
   const grandTotal = rows.reduce((sum, row) => sum + totalOfRow(row), 0);
+  const numericColumns = columns.length + (rowTotals ? 1 : 0);
+  const dense = numericColumns >= 8;
+  const headerWidth = rowHeaderShare(numericColumns);
 
   const { containerRef, tableRef } = useFitTableScale<
     HTMLDivElement,
     HTMLTableElement
   >({
-    deps: [rows.length, columns.length],
+    deps: [rows.length, columns.length, numericColumns],
+    minScale: dense ? 0.42 : 0.5,
   });
+
+  const groupRule = (index: number) =>
+    groupEvery != null &&
+    (index + 1) % groupEvery === 0 &&
+    index < columns.length - 1
+      ? "border-r-2 border-black"
+      : variant === "report"
+        ? "border-r border-border/30"
+        : "";
+
+  const headerPad = dense
+    ? "px-[0.08cqi] py-[calc(var(--fit-scale,1)*0.2cqi)]"
+    : "px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.28cqi)]";
+  const cellPad = dense
+    ? "px-[0.06cqi] py-[calc(var(--fit-scale,1)*0.18cqi)]"
+    : "px-[0.12cqi] py-[calc(var(--fit-scale,1)*0.22cqi)]";
 
   return (
     <div
       ref={containerRef}
-      className={`h-full max-h-full w-full overflow-auto ${variant === "report" ? "rounded-[0.4cqi] border border-border shadow-sm" : ""}`}
+      className={`${fill ? "h-full max-h-full" : "h-auto"} w-full overflow-hidden ${variant === "report" ? "rounded-[0.4cqi] border border-border shadow-sm" : ""}`}
     >
       <table
         ref={tableRef}
-        className="w-full min-w-full table-fixed border-collapse font-mono text-[length:calc(var(--fit-scale,1)*1.15cqi)] leading-none tabular-nums"
+        lang="es"
+        className={`w-full min-w-full table-fixed border-collapse font-mono leading-snug tabular-nums ${
+          dense
+            ? "text-[length:calc(var(--fit-scale,1)*0.95cqi)]"
+            : "text-[length:calc(var(--fit-scale,1)*1.15cqi)]"
+        }`}
       >
+        <colgroup>
+          <col style={{ width: headerWidth }} />
+          {columns.map(column => (
+            <col key={column} />
+          ))}
+          {rowTotals && <col />}
+        </colgroup>
         <thead>
           <tr
             className={
@@ -76,16 +132,20 @@ export default function MatrixTable({
           >
             <th
               scope="col"
-              className={`truncate px-[0.25cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-left ${variant === "report" ? "w-[13%] font-semibold tracking-wide" : "w-[18%] font-normal"}`}
+              className={`${headerPad} ${LABEL_WRAP} text-left align-middle ${variant === "report" ? "font-semibold tracking-wide" : "font-normal"}`}
             >
               {rowHeader}
             </th>
-            {columns.map(column => (
+            {columns.map((column, index) => (
               <th
                 key={column}
                 scope="col"
                 title={column}
-                className={`text-center ${variant === "report" ? "break-words px-[0.06cqi] py-[calc(var(--fit-scale,1)*0.22cqi)] text-[length:calc(var(--fit-scale,1)*0.92cqi)] font-semibold leading-tight [overflow-wrap:anywhere]" : "truncate px-[0.08cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] font-normal"}`}
+                className={`${headerPad} ${LABEL_WRAP} text-center align-middle ${groupRule(index)} ${
+                  variant === "report"
+                    ? `font-semibold ${dense ? "text-[length:calc(var(--fit-scale,1)*0.78cqi)]" : ""}`
+                    : "font-normal"
+                }`}
               >
                 {column}
               </th>
@@ -93,7 +153,7 @@ export default function MatrixTable({
             {rowTotals && (
               <th
                 scope="col"
-                className={`truncate px-[0.08cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center ${variant === "report" ? "font-semibold tracking-wide" : "font-normal"}`}
+                className={`${headerPad} text-center align-middle ${variant === "report" ? "font-semibold tracking-wide" : "font-normal"}`}
               >
                 {totalsLabel}
               </th>
@@ -105,7 +165,7 @@ export default function MatrixTable({
             <tr key={row.label} className="border-b border-border/60">
               <th
                 scope="row"
-                className={`truncate px-[0.25cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-left ${variant === "report" ? "border-r border-border bg-muted/30 font-semibold text-muted-foreground" : "font-normal"}`}
+                className={`${cellPad} ${LABEL_WRAP} text-left align-middle ${variant === "report" ? "border-r border-border bg-muted/30 font-semibold text-muted-foreground" : "font-normal"}`}
                 title={row.label}
               >
                 {row.label}
@@ -113,14 +173,14 @@ export default function MatrixTable({
               {columns.map((column, index) => (
                 <td
                   key={column}
-                  className={`truncate px-[0.08cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center ${variant === "report" ? "border-r border-border/30" : ""}`}
+                  className={`${cellPad} whitespace-nowrap text-center align-middle ${groupRule(index)}`}
                 >
                   {formatValue(row.values[index] ?? 0)}
                 </td>
               ))}
               {rowTotals && (
                 <td
-                  className={`truncate px-[0.08cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center font-medium ${variant === "report" ? "bg-muted/40" : ""}`}
+                  className={`${cellPad} whitespace-nowrap text-center align-middle font-medium ${variant === "report" ? "bg-muted/40" : ""}`}
                 >
                   {totalOfRow(row)}
                 </td>
@@ -136,22 +196,21 @@ export default function MatrixTable({
                   : "border-t border-border font-medium"
               }
             >
-              <th
-                scope="row"
-                className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left"
-              >
+              <th scope="row" className={`${cellPad} text-left align-middle`}>
                 {totalsLabel}
               </th>
               {columns.map((column, index) => (
                 <td
                   key={column}
-                  className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center"
+                  className={`${cellPad} whitespace-nowrap text-center align-middle ${groupRule(index)}`}
                 >
                   {totalOfColumn(index)}
                 </td>
               ))}
               {rowTotals && (
-                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+                <td
+                  className={`${cellPad} whitespace-nowrap text-center align-middle`}
+                >
                   {grandTotal}
                 </td>
               )}

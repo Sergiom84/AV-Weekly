@@ -3,6 +3,10 @@ export interface KpiItem {
   value: string;
 }
 
+/** Lift used by Oficinas KPI cards and reused on Informática summaries. */
+export const KPI_CARD_HOVER =
+  "transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-[0.1cqi] hover:scale-[1.015] hover:border-primary/30 hover:bg-primary/[0.03] hover:shadow-md motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100";
+
 interface KpiRowProps {
   items: KpiItem[];
   compact?: boolean;
@@ -19,10 +23,10 @@ export default function KpiRow({ items, compact = false }: KpiRowProps) {
       {items.map((item) => (
         <li
           key={item.label}
-          className={`flex flex-1 flex-col justify-center rounded-md border border-border ${
+          className={`flex flex-1 flex-col justify-center rounded-md border border-border ${KPI_CARD_HOVER} ${
             compact
-              ? "px-[0.9cqi] py-[0.55cqi] text-center transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-[0.1cqi] hover:scale-[1.015] hover:border-primary/30 hover:bg-primary/[0.03] hover:shadow-md motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
-              : "px-[1.4cqi] py-[1cqi]"
+              ? "px-[0.9cqi] py-[0.55cqi] text-center"
+              : "px-[1.4cqi] py-[1cqi] text-center"
           }`}
         >
           <p className={`font-mono uppercase tracking-wide text-muted-foreground ${compact ? "text-[0.95cqi]" : "text-[1.1cqi]"}`}>

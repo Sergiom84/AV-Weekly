@@ -120,8 +120,8 @@ export default function CitasSemanalPage({
         ]}
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-[38%_1fr] gap-[1.8cqi]">
-        <div className="min-h-0 overflow-auto">
+      <div className="grid min-h-0 flex-1 grid-cols-[34%_1fr] gap-[1.4cqi]">
+        <div className="min-h-0 overflow-hidden">
           <MatrixTable
             rowHeader="SmartTech"
             columns={columns}
@@ -140,6 +140,7 @@ export default function CitasSemanalPage({
             data={trend}
             fitGroupedValueLabels
             centerGroupedValueLabels
+            allCategories
           />
         </div>
       </div>

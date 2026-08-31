@@ -28,6 +28,7 @@ import SectionPage from "@/components/deck/SectionPage";
 import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInformaticaDeck } from "@/modules/informatica/useInformaticaDeck";
+import { coverPeriodLabel } from "@/modules/informatica/aggregate";
 import CitasAnualPage from "@/modules/informatica/pages/CitasAnualPage";
 import CitasMensualPage from "@/modules/informatica/pages/CitasMensualPage";
 import CitasSemanalPage from "@/modules/informatica/pages/CitasSemanalPage";
@@ -144,6 +145,7 @@ export default function Informatica() {
   const artwork = MODULE.deck?.artwork;
   const pages = deck?.pages ?? [];
   const hasSource = Boolean(dataset.source?.sourceFile);
+  const derivedPeriod = coverPeriodLabel(dataset);
 
   let visibleNumber = 0;
   const rendered = pages
@@ -180,10 +182,13 @@ export default function Informatica() {
     const onChange = handlePageChange(page.id);
 
     switch (page.kind) {
-      case "cover":
+      case "cover": {
+        const coverPage = derivedPeriod
+          ? { ...page, text: { ...page.text, period: derivedPeriod } }
+          : page;
         return (
           <CoverPage
-            page={page}
+            page={coverPage}
             editing={isEditing}
             onChange={onChange}
             number={number}
@@ -191,6 +196,7 @@ export default function Informatica() {
             background={artwork?.cover}
           />
         );
+      }
       case "index":
         return (
           <IndexPage
