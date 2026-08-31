@@ -165,6 +165,33 @@ export interface RenoveSeriesPoint extends Record<string, string | number> {
   España: number;
 }
 
+/**
+ * First day the campaign can have produced anything.
+ *
+ * The workbook writes an empty renewal date as serial 0 on part of its rows,
+ * which reads back as 1899-12-30 and opens the weekly chart with a column of
+ * its own, three units tall, thirteen decades before the first real one. The
+ * row is kept without its date rather than dropped: it is equipment in a
+ * decided state, and `2.7.1` counts it.
+ */
+const RENOVE_FIRST_DAY = "2020-01-01";
+
+/** Rows with an impossible date stripped of it, keeping the unit in the totals. */
+export function renoveReportedRows(
+  rows: InformaticaRenoveRow[]
+): InformaticaRenoveRow[] {
+  return rows.map(row => {
+    const day = isoDay(row.fecha);
+
+    // The month goes with the date: left as 1899/12 it would open the monthly
+    // chart of 2.7.1 with a column of its own instead of adding to the undated
+    // units the page already accounts for.
+    return day !== null && day < RENOVE_FIRST_DAY
+      ? { ...row, fecha: null, mes: "", semana: 0 }
+      : row;
+  });
+}
+
 function emptyPoint<K extends string>(
   categoryKey: K,
   category: string

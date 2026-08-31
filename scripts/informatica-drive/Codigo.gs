@@ -2898,7 +2898,12 @@ function agregarRenove(found, renove) {
 
       if (estado === '') continue;
 
+      // An empty renewal date arrives as serial 0 on part of the rows, which
+      // resolves to 1899-12-30. The unit is still counted, without a date, the
+      // same as the rows that come with the cell blank.
       var date = renoveFecha(row, source.columns);
+
+      if (!fechaOperativa(date)) date = null;
 
       bump(
         renove,

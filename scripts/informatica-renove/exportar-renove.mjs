@@ -97,7 +97,22 @@ function cell(row, candidates) {
 
 const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30);
 
+/**
+ * First day the campaign can have produced anything.
+ *
+ * An empty renewal date arrives as serial 0 on part of the rows, which resolves
+ * to 1899-12-30. The unit is still counted, without a date, like the rows whose
+ * cell comes blank.
+ */
+const FIRST_DAY = "2020-01-01";
+
 function toDay(value) {
+  const day = readDay(value);
+
+  return day !== null && day >= FIRST_DAY ? day : null;
+}
+
+function readDay(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return new Date(EXCEL_EPOCH_UTC + Math.trunc(value) * 86400000)
       .toISOString()

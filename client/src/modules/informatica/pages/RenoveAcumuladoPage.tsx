@@ -5,7 +5,12 @@ import KpiRow from "@/components/deck/KpiRow";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { seriesColor } from "../aggregate";
-import { RENOVE_AMBITOS, renoveMonthSeries, renoveTotals } from "../renove";
+import {
+  RENOVE_AMBITOS,
+  renoveMonthSeries,
+  renoveReportedRows,
+  renoveTotals,
+} from "../renove";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface RenoveAcumuladoPageProps extends InformaticaPageProps {
@@ -33,7 +38,7 @@ export default function RenoveAcumuladoPage({
   onChange,
   dataset,
 }: RenoveAcumuladoPageProps) {
-  const rows = dataset.renove ?? [];
+  const rows = renoveReportedRows(dataset.renove ?? []);
   const totals = renoveTotals(rows);
   const data = renoveMonthSeries(rows);
   const hiddenRows = page.hiddenRows ?? [];

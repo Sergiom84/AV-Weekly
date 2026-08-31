@@ -6,6 +6,7 @@ import {
   renoveInWeek,
   renoveMonthSeries,
   renovePendientesUsuario,
+  renoveReportedRows,
   renoveTotals,
   renoveWeekLabel,
   renoveWeekSeries,
@@ -125,6 +126,23 @@ describe("Renove weekly series", () => {
     expect(charted).toHaveLength(1);
     expect(charted[0].Holding).toBe(0);
     expect(renoveTotals(rows).total).toBe(51);
+  });
+
+  it("strips the 1899 date of a row and keeps the unit counted", () => {
+    const rows = renoveReportedRows([
+      row("1899-12-30", "Holding", "RENOVADO", 3),
+      row("2026-08-19", "España", "RENOVADO", 17),
+    ]);
+    const window = renoveWindow(rows, "2026-08-22");
+    const charted = renoveWeekSeries(rows, window);
+
+    // Serial 0 of the workbook: it is an empty renewal date, not a week.
+    expect(rows[0].fecha).toBeNull();
+    expect(rows[0].mes).toBe("");
+    expect(charted).toHaveLength(1);
+    expect(charted[0].semana).toBe("S34");
+    expect(renoveMonthSeries(rows)).toHaveLength(1);
+    expect(renoveTotals(rows).total).toBe(20);
   });
 
   it("reads the reported week and its month from the same rows", () => {

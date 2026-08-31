@@ -15,6 +15,7 @@ import {
   renoveInMonth,
   renoveInWeek,
   renovePendientesUsuario,
+  renoveReportedRows,
   renoveTotals,
   renoveWeekLabel,
   renoveWeekSeries,
@@ -47,7 +48,7 @@ export default function RenoveSemanalPage({
   onChange,
   dataset,
 }: RenoveSemanalPageProps) {
-  const rows = dataset.renove ?? [];
+  const rows = renoveReportedRows(dataset.renove ?? []);
   const window = renoveWindow(rows, coverageEnd(dataset));
   const week = window === null ? null : renoveWeekLabel(window.start);
   const month = window === null ? null : window.start.slice(0, 7).replace("-", "/");
@@ -95,6 +96,10 @@ export default function RenoveSemanalPage({
           {
             label: `Renovados ${month === null ? "" : monthLabel(month)}`.trim(),
             value: String(monthTotals.total),
+          },
+          {
+            label: `España / Holding ${month === null ? "" : monthLabel(month)}`.trim(),
+            value: `${monthTotals.porAmbito["España"]} / ${monthTotals.porAmbito.Holding}`,
           },
           {
             label: "Pdte Usuario",
