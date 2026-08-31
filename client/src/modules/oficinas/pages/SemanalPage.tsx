@@ -117,8 +117,9 @@ export default function SemanalPage({
 }: SemanalPageProps) {
   const rules = semanalLayoutRules(layout);
   const extraYears = yearSelector
-    ? [...yearSelector.selected].sort((a, b) => a - b)
+    ? yearSelector.selected.filter(value => value !== year).sort((a, b) => a - b)
     : [];
+  const includeCurrent = !yearSelector || yearSelector.selected.includes(year);
   const currentReported = new Set(
     totals
       ? seriesWeeks(totals, year)
@@ -149,6 +150,7 @@ export default function SemanalPage({
     throughWeek,
     currentReported,
     currentAt,
+    includeCurrent,
   });
   const series: WeeklySeries[] = seriesRows.map(entry => ({
     key: entry.key,

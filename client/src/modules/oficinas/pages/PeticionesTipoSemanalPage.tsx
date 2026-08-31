@@ -3,6 +3,7 @@ import {
   reportWeek,
   seriesYears,
 } from "@shared/modules/oficinas/derived";
+import { oficinasYearSelector } from "../yearSelection";
 import type { OficinasDataPageProps } from "./PageShell";
 import SemanalPage from "./SemanalPage";
 
@@ -13,9 +14,6 @@ import SemanalPage from "./SemanalPage";
  * the other pivot of it. The two slides are printed back to back for exactly
  * that reason: the bars are the same, the breakdown underneath is not.
  */
-
-/** Past years drawn next to the current one before the user picks otherwise. */
-const DEFAULT_EXTRA_YEARS = 2;
 
 export default function PeticionesTipoSemanalPage({
   page,
@@ -31,13 +29,7 @@ export default function PeticionesTipoSemanalPage({
     latestYear(totals) ??
     new Date().getFullYear();
 
-  const availableYears = seriesYears(totals).filter(y => y !== year);
-  const defaultYears = availableYears
-    .filter(y => y >= year - DEFAULT_EXTRA_YEARS && y < year)
-    .sort((a, b) => a - b);
-  const selectedYears = page.years
-    ? page.years.filter(y => availableYears.includes(y))
-    : defaultYears;
+
 
   return (
     <SemanalPage
@@ -53,15 +45,12 @@ export default function PeticionesTipoSemanalPage({
       rankByAverage
       layout="volumetrias-semanales"
       headlineLabel="Peticiones"
-      yearSelector={
-        availableYears.length > 0
-          ? {
-              available: availableYears,
-              selected: selectedYears,
-              onChange: years => onChange({ years }),
-            }
-          : undefined
-      }
+      yearSelector={oficinasYearSelector({
+        seriesYears: seriesYears(totals),
+        year,
+        stored: page.years,
+        onChange: years => onChange({ years }),
+      })}
     />
   );
 }

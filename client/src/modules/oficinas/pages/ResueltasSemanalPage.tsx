@@ -8,6 +8,7 @@ import {
   weeklyTotals,
 } from "@shared/modules/oficinas/derived";
 import { disambiguate } from "../aggregate";
+import { oficinasYearSelector } from "../yearSelection";
 import type { OficinasDataPageProps } from "./PageShell";
 import SemanalPage from "./SemanalPage";
 
@@ -21,9 +22,6 @@ import SemanalPage from "./SemanalPage";
 
 /** Elements the printed slide samples, ranked by their year total. */
 const SAMPLE_ROWS = 8;
-
-/** Past years drawn next to the current one before the user picks otherwise. */
-const DEFAULT_EXTRA_YEARS = 2;
 
 export default function ResueltasSemanalPage({
   page,
@@ -51,13 +49,6 @@ export default function ResueltasSemanalPage({
   }));
 
   const comparison = comparisonSeries(section, "sin");
-  const availableYears = seriesYears(comparison).filter(y => y !== year);
-  const defaultYears = availableYears
-    .filter(y => y >= year - DEFAULT_EXTRA_YEARS && y < year)
-    .sort((a, b) => a - b);
-  const selectedYears = page.years
-    ? page.years.filter(y => availableYears.includes(y))
-    : defaultYears;
 
   return (
     <SemanalPage
@@ -74,15 +65,12 @@ export default function ResueltasSemanalPage({
       totalRow={false}
       rankByAverage
       layout="comparativas-semanales"
-      yearSelector={
-        availableYears.length > 0
-          ? {
-              available: availableYears,
-              selected: selectedYears,
-              onChange: years => onChange({ years }),
-            }
-          : undefined
-      }
+      yearSelector={oficinasYearSelector({
+        seriesYears: seriesYears(comparison),
+        year,
+        stored: page.years,
+        onChange: years => onChange({ years }),
+      })}
     />
   );
 }

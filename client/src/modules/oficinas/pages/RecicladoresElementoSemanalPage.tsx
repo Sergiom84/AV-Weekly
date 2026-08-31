@@ -4,6 +4,7 @@ import {
   reportWeek,
   seriesYears,
 } from "@shared/modules/oficinas/derived";
+import { oficinasYearSelector } from "../yearSelection";
 import type { OficinasDataPageProps } from "./PageShell";
 import SemanalPage from "./SemanalPage";
 
@@ -14,9 +15,6 @@ import SemanalPage from "./SemanalPage";
  * section, printed right after it. `byElemento` is the whole matrix, not a
  * sample, so the table closes with its total.
  */
-
-/** Past years drawn next to the current one before the user picks otherwise. */
-const DEFAULT_EXTRA_YEARS = 2;
 
 export default function RecicladoresElementoSemanalPage({
   page,
@@ -32,13 +30,7 @@ export default function RecicladoresElementoSemanalPage({
     latestYear(series) ??
     new Date().getFullYear();
 
-  const availableYears = seriesYears(series).filter(y => y !== year);
-  const defaultYears = availableYears
-    .filter(y => y >= year - DEFAULT_EXTRA_YEARS && y < year)
-    .sort((a, b) => a - b);
-  const selectedYears = page.years
-    ? page.years.filter(y => availableYears.includes(y))
-    : defaultYears;
+
 
   return (
     <SemanalPage
@@ -54,15 +46,12 @@ export default function RecicladoresElementoSemanalPage({
       rankByAverage
       layout="volumetrias-semanales"
       headlineLabel="Recicladores"
-      yearSelector={
-        availableYears.length > 0
-          ? {
-              available: availableYears,
-              selected: selectedYears,
-              onChange: years => onChange({ years }),
-            }
-          : undefined
-      }
+      yearSelector={oficinasYearSelector({
+        seriesYears: seriesYears(series),
+        year,
+        stored: page.years,
+        onChange: years => onChange({ years }),
+      })}
     />
   );
 }

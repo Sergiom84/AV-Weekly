@@ -11,10 +11,10 @@ interface YearSelectorProps {
 }
 
 /**
- * Editor-only control for the annual series displayed in a chart.
+ * Editor-only chips for the annual series displayed in a chart.
  *
- * The reader identifies each year from the chart legend; this control merely
- * decides which imported years the editor wants to compare.
+ * The reader identifies each year from the chart legend; these buttons decide
+ * which years, including the report year, the editor wants on the axis.
  */
 export default function YearSelector({ selection }: YearSelectorProps) {
   const { available, selected, onChange } = selection;

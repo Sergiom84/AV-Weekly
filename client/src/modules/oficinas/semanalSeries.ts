@@ -40,6 +40,8 @@ export function semanalSeriesRows(input: {
   throughWeek: number | null | undefined;
   currentReported: Set<number>;
   currentAt: (week: number) => number;
+  /** When false the current-year line is omitted, same as an unpressed year chip. */
+  includeCurrent?: boolean;
 }): SemanalSeriesRow[] {
   const {
     page,
@@ -49,10 +51,12 @@ export function semanalSeriesRows(input: {
     throughWeek,
     currentReported,
     currentAt,
+    includeCurrent = true,
   } = input;
+  const pastYears = extraYears.filter(comparisonYear => comparisonYear !== year);
 
   return [
-    ...extraYears.map(comparisonYear => {
+    ...pastYears.map(comparisonYear => {
       const reported = new Set(
         comparison ? seriesWeeks(comparison, comparisonYear) : []
       );
@@ -77,25 +81,29 @@ export function semanalSeriesRows(input: {
         }),
       };
     }),
-    {
-      key: "actual",
-      label: String(year),
-      color: yearColor(year, year),
-      cells: ALL_ISO_WEEKS.map(week => {
-        const key = cellKey(TOTAL_ROW, weekColumn(week));
-        const closed =
-          throughWeek === null || throughWeek === undefined
-            ? true
-            : week <= throughWeek;
-        const imported =
-          currentReported.has(week) && closed ? currentAt(week) : null;
+    ...(includeCurrent
+      ? [
+          {
+            key: "actual",
+            label: String(year),
+            color: yearColor(year, year),
+            cells: ALL_ISO_WEEKS.map(week => {
+              const key = cellKey(TOTAL_ROW, weekColumn(week));
+              const closed =
+                throughWeek === null || throughWeek === undefined
+                  ? true
+                  : week <= throughWeek;
+              const imported =
+                currentReported.has(week) && closed ? currentAt(week) : null;
 
-        return {
-          key,
-          value: overriddenValue(page, key, imported),
-          overridden: isOverridden(page, key),
-        };
-      }),
-    },
+              return {
+                key,
+                value: overriddenValue(page, key, imported),
+                overridden: isOverridden(page, key),
+              };
+            }),
+          },
+        ]
+      : []),
   ];
 }

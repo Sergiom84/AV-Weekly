@@ -7,6 +7,7 @@ import {
 } from "@shared/modules/oficinas/derived";
 import type { OficinasIncidencias } from "@shared/modules/oficinas/types";
 import { readVariant, variantLabel } from "../aggregate";
+import { oficinasYearSelector } from "../yearSelection";
 import DTPage from "./DTPage";
 import { type OficinasDataPageProps } from "./PageShell";
 import VariantSelector from "./VariantSelector";
@@ -14,9 +15,6 @@ import VariantSelector from "./VariantSelector";
 interface IncidenciasDTPageProps extends OficinasDataPageProps {
   section: OficinasIncidencias | undefined;
 }
-
-/** Past years drawn next to the current one before the user picks otherwise. */
-const DEFAULT_EXTRA_YEARS = 2;
 
 /**
  * `1.1` and `1.2` by directorate: the same slide over the assigned and the
@@ -35,7 +33,7 @@ const DEFAULT_EXTRA_YEARS = 2;
  *
  * The two selectors compose, and the second is bounded by the first.
  * `comparisonSeries` answers which years exist at the scope the page is charting,
- * so switching to "solo validadoras" leaves the year buttons out rather than
+ * so switching to "solo validadoras" drops the past-year chips rather than
  * charting a "sin validadoras" past year against a "solo" present one. Today
  * the historico is a "sin validadoras" series, which is the variant the client
  * deck publishes; the "con" bars keep the template's own total sheet, which is
@@ -61,15 +59,6 @@ export default function IncidenciasDTPage({
     new Date().getFullYear();
 
   const comparison = comparisonSeries(section, variant);
-  const availableYears = seriesYears(comparison).filter(y => y !== year);
-  const defaultYears = availableYears
-    .filter(y => y >= year - DEFAULT_EXTRA_YEARS && y < year)
-    .sort((a, b) => a - b);
-  // A year stored for another variant is dropped rather than carried over: the
-  // selection is per page and the variants do not share the same set of years.
-  const selectedYears = page.years
-    ? page.years.filter(y => availableYears.includes(y))
-    : defaultYears;
   return (
     <DTPage
       page={page}
@@ -101,15 +90,12 @@ export default function IncidenciasDTPage({
         />
       }
       comparison={comparison}
-      yearSelector={
-        availableYears.length > 0
-          ? {
-              available: availableYears,
-              selected: selectedYears,
-              onChange: years => onChange({ years }),
-            }
-          : undefined
-      }
+      yearSelector={oficinasYearSelector({
+        seriesYears: seriesYears(comparison),
+        year,
+        stored: page.years,
+        onChange: years => onChange({ years }),
+      })}
     />
   );
 }

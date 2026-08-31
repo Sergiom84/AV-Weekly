@@ -4,6 +4,7 @@ import {
   reportWeek,
   seriesYears,
 } from "@shared/modules/oficinas/derived";
+import { oficinasYearSelector } from "../yearSelection";
 import type { OficinasDataPageProps } from "./PageShell";
 import SemanalPage from "./SemanalPage";
 
@@ -19,9 +20,6 @@ import SemanalPage from "./SemanalPage";
  * printed pivot lists.
  */
 
-/** Past years drawn next to the current one before the user picks otherwise. */
-const DEFAULT_EXTRA_YEARS = 2;
-
 export default function RecicladoresDTSemanalPage({
   page,
   editing,
@@ -36,13 +34,7 @@ export default function RecicladoresDTSemanalPage({
     latestYear(series) ??
     new Date().getFullYear();
 
-  const availableYears = seriesYears(series).filter(y => y !== year);
-  const defaultYears = availableYears
-    .filter(y => y >= year - DEFAULT_EXTRA_YEARS && y < year)
-    .sort((a, b) => a - b);
-  const selectedYears = page.years
-    ? page.years.filter(y => availableYears.includes(y))
-    : defaultYears;
+
 
   return (
     <SemanalPage
@@ -58,15 +50,12 @@ export default function RecicladoresDTSemanalPage({
       rankByAverage
       layout="volumetrias-semanales"
       headlineLabel="Recicladores"
-      yearSelector={
-        availableYears.length > 0
-          ? {
-              available: availableYears,
-              selected: selectedYears,
-              onChange: years => onChange({ years }),
-            }
-          : undefined
-      }
+      yearSelector={oficinasYearSelector({
+        seriesYears: seriesYears(series),
+        year,
+        stored: page.years,
+        onChange: years => onChange({ years }),
+      })}
     />
   );
 }

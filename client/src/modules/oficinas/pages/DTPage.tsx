@@ -203,8 +203,9 @@ export default function DTPage({
   // series measured at the scope of the line on screen. `previousRows` keeps
   // driving the chart for a section that has no such flat series.
   const extraYears = yearSelector
-    ? [...yearSelector.selected].sort((a, b) => a - b)
+    ? yearSelector.selected.filter(value => value !== year).sort((a, b) => a - b)
     : [];
+  const includeCurrent = !yearSelector || yearSelector.selected.includes(year);
 
   const currentWeeks = totals
     ? seriesWeeks(totals, year)
@@ -214,7 +215,9 @@ export default function DTPage({
   const otherYearsWeeks = yearSelector
     ? extraYears.flatMap(y => (comparison ? seriesWeeks(comparison, y) : []))
     : previousRows.flatMap(row => seriesWeeks(row.values, previousYear));
-  const chartWeeks = Array.from(new Set([...currentWeeks, ...otherYearsWeeks]))
+  const chartWeeks = Array.from(
+    new Set([...(includeCurrent ? currentWeeks : []), ...otherYearsWeeks])
+  )
     .filter(week => weekLimit === null || week <= weekLimit)
     .sort((a, b) => a - b);
   const weekSelection: WeekSelection =
@@ -234,20 +237,24 @@ export default function DTPage({
   const seriesRows = (
     yearSelector
       ? [
-          {
-            label: String(year),
-            key: "actual",
-            color: CURRENT_YEAR_COLOR,
-            cells: chartWeeks.map(week => {
-              const key = cellKey(TOTAL_ROW, weekColumn(week));
+          ...(includeCurrent
+            ? [
+                {
+                  label: String(year),
+                  key: "actual",
+                  color: CURRENT_YEAR_COLOR,
+                  cells: chartWeeks.map(week => {
+                    const key = cellKey(TOTAL_ROW, weekColumn(week));
 
-              return {
-                key,
-                value: overriddenValue(page, key, currentAt(week)),
-                overridden: isOverridden(page, key),
-              };
-            }),
-          },
+                    return {
+                      key,
+                      value: overriddenValue(page, key, currentAt(week)),
+                      overridden: isOverridden(page, key),
+                    };
+                  }),
+                },
+              ]
+            : []),
           ...extraYears.map(y => {
             const reportedWeeks = new Set(
               comparison ? seriesWeeks(comparison, y) : []
