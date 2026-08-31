@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Play } from "lucide-react";
 import { isPageVisible } from "@shared/deck/core";
 import type { DeckPage } from "@shared/deck/core";
+import { filenameFromDisposition } from "@shared/deck/pdf-download";
 import type { DeckActionResult, DeckStateOf } from "@/hooks/useDeckData";
 import {
   AlertDialog,
@@ -290,6 +291,63 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   exportActions = [],
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const pdfLock = useRef(false);
+
+  const downloadPdf = useCallback(async () => {
+    if (pdfLock.current) {
+      return;
+    }
+
+    pdfLock.current = true;
+    setPdfBusy(true);
+    setPdfError(null);
+
+    try {
+      const response = await fetch(pdfHref);
+      if (response.status === 429) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setPdfError(body?.error ?? "Ya se está generando un PDF");
+        return;
+      }
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setPdfError(body?.error ?? "No se pudo generar el PDF");
+        return;
+      }
+
+      const type = response.headers.get("content-type") ?? "";
+      if (!type.includes("pdf")) {
+        setPdfError("No se pudo generar el PDF");
+        return;
+      }
+
+      const blob = await response.blob();
+      const filename = filenameFromDisposition(
+        response.headers.get("content-disposition"),
+        "informe.pdf"
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setPdfError("No se pudo generar el PDF");
+    } finally {
+      pdfLock.current = false;
+      setPdfBusy(false);
+    }
+  }, [pdfHref]);
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -422,13 +480,18 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
             variant="outline"
             size="sm"
             className="w-full justify-start gap-2"
-            asChild
+            disabled={pdfBusy}
+            aria-busy={pdfBusy}
+            onClick={() => void downloadPdf()}
           >
-            <a href={pdfHref} download>
-              <Download className="h-4 w-4" />
-              Descargar PDF
-            </a>
+            <Download className="h-4 w-4" />
+            {pdfBusy ? "Generando" : "Descargar PDF"}
           </Button>
+          {pdfError && (
+            <p className="font-mono text-xs text-destructive" role="alert">
+              {pdfError}
+            </p>
+          )}
         </CardContent>
       </SidebarSection>
 

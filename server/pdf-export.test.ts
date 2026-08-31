@@ -1,6 +1,7 @@
 import type { Server } from "node:http";
 import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
+import { filenameFromDisposition } from "../shared/deck/pdf-download.ts";
 import {
   createDeckPdfSender,
   reportPdfFilename,
@@ -123,5 +124,15 @@ describe("PDF download filename", () => {
     expect(reportPdfFilename("AGA", new Date("2026-08-21T22:30:00Z"))).toBe(
       "Informe_AGA_22_08_26.pdf"
     );
+  });
+
+  it("reads the attachment name from Content-Disposition", () => {
+    expect(
+      filenameFromDisposition(
+        'attachment; filename="Informe_Oficinas_21_08_26.pdf"',
+        "informe.pdf"
+      )
+    ).toBe("Informe_Oficinas_21_08_26.pdf");
+    expect(filenameFromDisposition(null, "informe.pdf")).toBe("informe.pdf");
   });
 });
