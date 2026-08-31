@@ -90,10 +90,8 @@ export const DECK_MODULES: DeckModule[] = [
           accept: ".xlsx,.xls",
         },
       ],
-      // No Oficinas artwork has been produced yet, so it reuses the corporate
-      // covers the other decks already ship.
       artwork: {
-        cover: "/informe/portada.png",
+        cover: "/informe/oficinas.png",
         divider: "/informe/contraportada.png",
       },
       kindLabels: {
@@ -151,7 +149,7 @@ export const DECK_MODULES: DeckModule[] = [
         },
       ],
       artwork: {
-        cover: "/informe/portada.png",
+        cover: "/informe/sscc.png",
         divider: "/informe/contraportada.png",
       },
       kindLabels: {
@@ -197,10 +195,8 @@ export const DECK_MODULES: DeckModule[] = [
           accept: ".txt,.tsv,.csv",
         },
       ],
-      // No AGA artwork has been produced yet, so it reuses the corporate
-      // covers the other decks already ship.
       artwork: {
-        cover: "/informe/portada.png",
+        cover: "/informe/aga.png",
         divider: "/informe/contraportada.png",
       },
       kindLabels: {
