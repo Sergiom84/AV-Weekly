@@ -1,7 +1,7 @@
 import MatrixTable from "@/components/deck/MatrixTable";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { monthLabel, pivot, reportMonth } from "../aggregate";
-import { siteLabels } from "../sources";
+import { siteLabels, workOrdersWithFallbackSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface WorkOrdersPageProps extends InformaticaPageProps {
@@ -23,13 +23,13 @@ export default function WorkOrdersPage({
   onChange,
   dataset,
 }: WorkOrdersPageProps) {
-  const rows = dataset.workOrders ?? [];
+  const rows = workOrdersWithFallbackSite(dataset.workOrders ?? []);
   const month = reportMonth(dataset, rows, row => row.mes);
   const current = rows.filter(row => row.mes === month);
 
   // Buildings named through the master's work-order alias. Whatever it does not
-  // map keeps its raw value and goes last, including the "#N/A" the lookup
-  // leaves on rows whose address matched nothing.
+  // map keeps its raw value and goes last; the rows the lookup left as "#N/A"
+  // are already under Sede by then.
   const { labelOf, order: rowOrder } = siteLabels(
     dataset.edificios ?? [],
     row => row.aliasWorkOrder,

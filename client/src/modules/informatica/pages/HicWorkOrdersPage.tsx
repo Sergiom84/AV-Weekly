@@ -23,7 +23,11 @@ import {
   seriesColor,
   uniqueSorted,
 } from "../aggregate";
-import { HIC_RESOLVED, isReportedWorkOrder } from "../sources";
+import {
+  HIC_RESOLVED,
+  isReportedWorkOrder,
+  workOrdersWithFallbackSite,
+} from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 /**
@@ -61,7 +65,9 @@ export default function HicWorkOrdersPage({
   const incidentRows = hic.filter(
     row => row.categoria === "" && row.metrica === HIC_RESOLVED
   );
-  const workOrders = (dataset.workOrders ?? []).filter(isReportedWorkOrder);
+  const workOrders = workOrdersWithFallbackSite(
+    dataset.workOrders ?? []
+  ).filter(isReportedWorkOrder);
   const availableMonths = uniqueSorted([
     ...incidentRows.map(row => row.mes),
     ...workOrders.map(row => row.mes),

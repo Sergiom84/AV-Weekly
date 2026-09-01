@@ -381,6 +381,28 @@ const WORK_ORDER_CATEGORIES = new Set([
  */
 export const UNMAPPED_BUILDING = "#N/A";
 
+/**
+ * Building the report gives to a work order whose address matched nothing.
+ *
+ * Decided by the service owner: every `#N/A` of the lookup is Sede. The rows
+ * are real orders — this month they are all of the Dispositivos, Equipo and
+ * Software ones — so dropping them would take volume out of the report, and
+ * leaving them under `#N/A` publishes the defect of a formula as if it were a
+ * site.
+ */
+export const WORK_ORDER_FALLBACK_SITE = "Sede";
+
+/** Work orders with the unmapped ones assigned to the site that owns them. */
+export function workOrdersWithFallbackSite<T extends { edificio: string }>(
+  rows: T[]
+): T[] {
+  return rows.map(row =>
+    row.edificio === UNMAPPED_BUILDING
+      ? { ...row, edificio: WORK_ORDER_FALLBACK_SITE }
+      : row
+  );
+}
+
 /** True when a work order belongs to the volume the report publishes. */
 export function isReportedWorkOrder(row: {
   edificio: string;

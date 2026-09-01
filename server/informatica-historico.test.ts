@@ -5,7 +5,10 @@ import {
   publishedMonthlyTotals,
   publishedTotal,
 } from "../client/src/modules/informatica/aggregate.ts";
-import { isReportedWorkOrder } from "../client/src/modules/informatica/sources.ts";
+import {
+  isReportedWorkOrder,
+  workOrdersWithFallbackSite,
+} from "../client/src/modules/informatica/sources.ts";
 import type { InformaticaDataset } from "../shared/modules/informatica/types.ts";
 import { INFORMATICA_HISTORICO_UNTIL } from "../shared/modules/informatica/types.ts";
 
@@ -148,5 +151,18 @@ describe("alcance publicado de los Work Orders", () => {
     // Fila cuya dirección no resolvió contra el maestro de edificios.
     expect(isReportedWorkOrder({ edificio: "#N/A", tipo: "TRASLADO" })).toBe(false);
     expect(isReportedWorkOrder({ edificio: "", tipo: "TRASLADO" })).toBe(false);
+  });
+
+  it("asigna a Sede las órdenes cuya dirección no resolvió", () => {
+    const rows = workOrdersWithFallbackSite([
+      { edificio: "#N/A", tipo: "DISPOSITIVOS", ordenes: 9 },
+      { edificio: "Tablas I", tipo: "TRASLADO", ordenes: 3 },
+    ]);
+
+    expect(rows.map(row => row.edificio)).toEqual(["Sede", "Tablas I"]);
+    // El edificio deja de excluirlas; la categoría sigue decidiendo si la 2.1.1
+    // las publica.
+    expect(isReportedWorkOrder(rows[0])).toBe(false);
+    expect(isReportedWorkOrder({ ...rows[0], tipo: "TRASLADO" })).toBe(true);
   });
 });

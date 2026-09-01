@@ -6,6 +6,7 @@ import YearSelector from "@/components/deck/YearSelector";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { monthIndexOf, reportMonth, yearlyComparison } from "../aggregate";
 import { yearSeriesColor } from "@/lib/yearSeries";
+import { workOrdersWithFallbackSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface WorkOrdersAnualPageProps extends InformaticaPageProps {
@@ -22,7 +23,7 @@ export default function WorkOrdersAnualPage({
   onChange,
   dataset,
 }: WorkOrdersAnualPageProps) {
-  const rows = dataset.workOrders ?? [];
+  const rows = workOrdersWithFallbackSite(dataset.workOrders ?? []);
   const closed = reportMonth(dataset, rows, row => row.mes);
   const completeRows = closed === null ? [] : rows;
   const { years, data, totals } = yearlyComparison(
