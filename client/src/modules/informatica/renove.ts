@@ -1,5 +1,11 @@
 import type { InformaticaRenoveRow } from "@shared/modules/informatica/types";
-import { isoDay, lastClosedWeek, monthLabel, type WeekWindow } from "./aggregate";
+import {
+  isoDay,
+  lastClosedWeek,
+  monthLabel,
+  reportedWeek,
+  type WeekWindow,
+} from "./aggregate";
 
 /**
  * Aggregations behind the two Renove pages, `2.7` and `2.7.1`.
@@ -258,11 +264,12 @@ export function renoveMonthSeries(
 /**
  * Week the Renove pages report on.
  *
- * Taken from the extraction cut, not from the last renewal. Renewals are
- * sparse — plenty of weeks close on a Wednesday — and the "data through
- * Friday" rule the busier sections use would then step back a week and drop
- * the units of the week being reported. The cut is a property of the extract,
- * so it says which week is closed regardless of how quiet Renove was.
+ * The week that closed before the cut, like every other section: the team
+ * uploads on Monday and reports the week behind it. Reading it from the cut and
+ * not from the last renewal matters here more than anywhere else, because
+ * renewals are sparse and plenty of weeks close on a Wednesday — a rule that
+ * waited for data through Friday would step back and drop the units of the week
+ * being reported.
  *
  * Falls back to the rows when Renove is the only section imported and there is
  * no extraction cut to read.
@@ -273,7 +280,7 @@ export function renoveWindow(
 ): WeekWindow | null {
   return cutoff === null
     ? lastClosedWeek(rows, row => row.fecha, null)
-    : lastClosedWeek([cutoff], day => day, cutoff);
+    : reportedWeek(cutoff);
 }
 
 /** Rows dated inside a Monday-to-Sunday window. */

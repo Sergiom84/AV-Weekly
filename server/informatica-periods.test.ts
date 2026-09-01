@@ -3,6 +3,8 @@ import type { InformaticaDataset } from "../shared/modules/informatica/types.ts"
 import {
   lastClosedMonth,
   reportMonths,
+  reportedWeek,
+  snapshotRows,
   yearlyComparison,
 } from "../client/src/modules/informatica/aggregate.ts";
 
@@ -88,5 +90,49 @@ describe("Informatica complete-month reporting", () => {
         [2026, 7],
       ])
     );
+  });
+});
+
+/**
+ * The team uploads on Monday and reports the week that closed before it, the
+ * same convention AGA writes down. Reading the week from the cut and not from
+ * the last row is what keeps every page of the deck on one week.
+ */
+describe("semana del informe", () => {
+  it("es la semana cerrada anterior al corte, suba el día que suba", () => {
+    // Lunes: la rutina normal.
+    expect(reportedWeek("2026-08-31")).toEqual({
+      start: "2026-08-24",
+      end: "2026-08-30",
+    });
+    // Viernes: sin esta regla, la semana en curso se publicaría a medias.
+    expect(reportedWeek("2026-09-04")).toEqual({
+      start: "2026-08-24",
+      end: "2026-08-30",
+    });
+    // Domingo, último día de su propia semana ISO.
+    expect(reportedWeek("2026-09-06")).toEqual({
+      start: "2026-08-24",
+      end: "2026-08-30",
+    });
+    expect(reportedWeek(null)).toBeNull();
+  });
+
+  it("cuenta el backlog de la foto más reciente, no de la ventana", () => {
+    const rows = [
+      { fecha: "2026-08-24", total: 733 },
+      { fecha: "2026-08-31", total: 948 },
+      { fecha: "2026-08-31", total: 589 },
+      // Posterior al corte: pertenece a la subida siguiente.
+      { fecha: "2026-09-07", total: 1000 },
+    ];
+
+    expect(
+      snapshotRows(rows, row => row.fecha, "2026-08-31").map(row => row.total)
+    ).toEqual([948, 589]);
+    expect(snapshotRows(rows, row => row.fecha, null).map(row => row.total)).toEqual([
+      1000,
+    ]);
+    expect(snapshotRows([], row => (row as { fecha: string }).fecha, "2026-08-31")).toEqual([]);
   });
 });

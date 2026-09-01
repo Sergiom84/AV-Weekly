@@ -3,8 +3,7 @@ import KpiRow from "@/components/deck/KpiRow";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
   coverageEnd,
-  inWeek,
-  snapshotWeek,
+  snapshotRows,
   orderColumns,
   pivot,
   uniqueSorted,
@@ -47,8 +46,10 @@ export default function PeticionesPage({
 }: PeticionesPageProps) {
   const rows = dataset.peticiones ?? [];
   const cutoff = coverageEnd(dataset);
-  const window = snapshotWeek(rows, row => row.fecha, cutoff);
-  const current = rows.filter(row => inWeek(row.fecha, window));
+  // The backlog is one photograph taken on the upload day, and it reports on
+  // the week that closed before it. Counting the snapshot and naming the week
+  // are two different questions, so they are answered apart.
+  const current = snapshotRows(rows, row => row.fecha, cutoff);
 
   // The reference reads status down the side and origin across the top. Keeping
   // that orientation matters beyond taste: the row that is read out loud is the
@@ -78,10 +79,8 @@ export default function PeticionesPage({
   ]);
 
   const productRows = dataset.peticionesProducto ?? [];
-  const productWindow = snapshotWeek(productRows, row => row.fecha, cutoff);
   const topProducts: MatrixRow[] = Array.from(
-    productRows
-      .filter(row => inWeek(row.fecha, productWindow))
+    snapshotRows(productRows, row => row.fecha, cutoff)
       .reduce((totals, row) => {
         totals.set(row.producto, (totals.get(row.producto) ?? 0) + row.total);
         return totals;

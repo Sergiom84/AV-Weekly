@@ -106,8 +106,9 @@ describe("Renove weekly series", () => {
       // The extract carries the start of the week after the reported one.
       row("2026-08-25", "España", "RENOVADO", 2),
     ];
-    const window = renoveWindow(rows, "2026-08-22");
+    const window = renoveWindow(rows, "2026-08-24");
 
+    // Subida del lunes 24: se informa la semana cerrada que va detrás.
     expect(window).toEqual({ start: "2026-08-17", end: "2026-08-23" });
     expect(renoveWeekSeries(rows, window)).toEqual([
       { semana: "S49", Holding: 1, España: 0 },
@@ -120,7 +121,7 @@ describe("Renove weekly series", () => {
       row("2026-08-19", "España", "RENOVADO", 17),
       row(null, "Holding", "RECHAZADO", 34),
     ];
-    const window = renoveWindow(rows, "2026-08-22");
+    const window = renoveWindow(rows, "2026-08-24");
     const charted = renoveWeekSeries(rows, window);
 
     expect(charted).toHaveLength(1);
@@ -133,7 +134,7 @@ describe("Renove weekly series", () => {
       row("1899-12-30", "Holding", "RENOVADO", 3),
       row("2026-08-19", "España", "RENOVADO", 17),
     ]);
-    const window = renoveWindow(rows, "2026-08-22");
+    const window = renoveWindow(rows, "2026-08-24");
     const charted = renoveWeekSeries(rows, window);
 
     // Serial 0 of the workbook: it is an empty renewal date, not a week.
@@ -151,7 +152,7 @@ describe("Renove weekly series", () => {
       row("2026-08-19", "España", "RENOVADO", 17),
       row("2026-08-19", "Holding", "RENOVADO", 2),
     ];
-    const window = renoveWindow(rows, "2026-08-22");
+    const window = renoveWindow(rows, "2026-08-24");
 
     expect(renoveTotals(renoveInWeek(rows, window)).total).toBe(19);
     expect(renoveTotals(renoveInMonth(rows, "2026/08")).total).toBe(29);
@@ -171,5 +172,34 @@ describe("Renove monthly series", () => {
       { mes: "Dic 25", Holding: 5, España: 0 },
       { mes: "Ene 26", Holding: 56, España: 25 },
     ]);
+  });
+});
+
+describe("Renove reporting window", () => {
+  const rows = [
+    row("2026-08-19", "España", "RENOVADO", 17),
+    row("2026-08-26", "España", "RENOVADO", 2),
+  ];
+
+  it("no publica la semana en curso aunque el corte caiga dentro de ella", () => {
+    // Corte en sábado: su propia semana aún no ha cerrado.
+    expect(renoveWindow(rows, "2026-08-22")).toEqual({
+      start: "2026-08-10",
+      end: "2026-08-16",
+    });
+    // Corte en lunes, la rutina normal.
+    expect(renoveWindow(rows, "2026-08-24")).toEqual({
+      start: "2026-08-17",
+      end: "2026-08-23",
+    });
+  });
+
+  it("cae a las filas cuando Renove se importa sin fecha de corte", () => {
+    // Sin corte manda la regla del viernes sobre la última renovación: el 26 es
+    // miércoles, así que su semana todavía no cuenta como cerrada.
+    expect(renoveWindow(rows, null)).toEqual({
+      start: "2026-08-17",
+      end: "2026-08-23",
+    });
   });
 });

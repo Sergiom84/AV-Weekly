@@ -13,6 +13,7 @@ import {
   monthsEndingAt,
   orderColumns,
   pivot,
+  reportedWeek,
   seriesColor,
   uniqueSorted,
 } from "../aggregate";
@@ -46,7 +47,9 @@ export default function CitasSemanalPage({
   dataset,
 }: CitasSemanalPageProps) {
   const rows = reportedSmartTechRows(dataset.citas ?? []);
-  const window = lastClosedWeek(rows, row => row.fecha, coverageEnd(dataset));
+  const cutoff = coverageEnd(dataset);
+  const window =
+    reportedWeek(cutoff) ?? lastClosedWeek(rows, row => row.fecha, cutoff);
   const current = rows.filter(row => inWeek(row.fecha, window));
   const week = current[0]?.semana ?? null;
 

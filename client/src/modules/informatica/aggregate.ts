@@ -225,6 +225,56 @@ export function coverPeriodLabel(dataset: InformaticaDataset): string {
 }
 
 /**
+ * Week the report covers, given the day the sources were cut.
+ *
+ * The team uploads on Monday and reports the week that has just closed, the
+ * same convention AGA already writes down: an extract cut on 2026-08-31 is the
+ * report of 24 to 30 August. Deriving it from the cut and not from the last row
+ * keeps every page of the deck on one week — a section that had a quiet Friday
+ * does not step back on its own — and keeps a Wednesday upload from publishing
+ * a week that is still running.
+ */
+export function reportedWeek(cutoff: string | null): WeekWindow | null {
+  if (cutoff === null) {
+    return null;
+  }
+
+  const start = addDays(mondayOf(cutoff), -7);
+
+  return { start, end: addDays(start, 6) };
+}
+
+/**
+ * Rows of the most recent snapshot at or before the cutoff.
+ *
+ * A backlog is counted in one go and dated with the day the extract was taken,
+ * so its rows are not spread over the week: they are one photograph, and the
+ * week it reports on is `reportedWeek`, not the week that contains the date it
+ * carries.
+ */
+export function snapshotRows<T>(
+  rows: T[],
+  dateOf: (row: T) => InformaticaDateCell,
+  cutoff: string | null
+): T[] {
+  let last: string | null = null;
+
+  for (const row of rows) {
+    const day = isoDay(dateOf(row));
+
+    if (day === null || (cutoff !== null && day > cutoff)) {
+      continue;
+    }
+
+    if (last === null || day > last) {
+      last = day;
+    }
+  }
+
+  return last === null ? [] : rows.filter(row => isoDay(dateOf(row)) === last);
+}
+
+/**
  * Week a snapshot belongs to: the one containing its most recent row.
  *
  * `lastClosedWeek` only accepts a week once it reaches Friday, which is right
