@@ -31,6 +31,19 @@ interface PageSpec {
   sections?: OficinasSectionKey[];
 }
 
+/** Printed comparison pages replaced by the new total-only weekly readings. */
+const HIDDEN_WEEKLY_ELEMENT_PAGE_IDS = new Set([
+  "oficinas-asignadas-semanal",
+  "oficinas-resueltas-semanal",
+]);
+
+/** One stale manual correction published a 7 over the imported S35 value 99. */
+const STALE_RESUELTAS_S35_OVERRIDE = {
+  pageId: "oficinas-resueltas-dt",
+  key: "total:S35",
+  value: 7,
+} as const;
+
 /**
  * Every page between the section divider "1." and the closing slide, in the
  * order of the published PDF ("Informe semanal | Oficinas").
@@ -81,6 +94,12 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     sections: ["asignadas"],
   },
   {
+    id: "oficinas-asignadas-total-semanal",
+    kind: "ofiAsignadasTotalSemanal",
+    title: "1.1 Total semanal de incidencias asignadas",
+    sections: ["asignadas"],
+  },
+  {
     id: "oficinas-asignadas-elemento",
     kind: "ofiAsignadasElemento",
     title: "1.1 Incidencias asignadas por elemento",
@@ -90,6 +109,12 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     id: "oficinas-resueltas-semanal",
     kind: "ofiResueltasSemanal",
     title: "1.2 Comparativa de incidencias resueltas sin validadoras",
+    sections: ["resueltas"],
+  },
+  {
+    id: "oficinas-resueltas-total-semanal",
+    kind: "ofiResueltasTotalSemanal",
+    title: "1.2 Total semanal de incidencias resueltas",
     sections: ["resueltas"],
   },
   {
@@ -227,7 +252,7 @@ function createPage(spec: PageSpec): OficinasDeckPage {
     id: spec.id,
     kind: spec.kind,
     supportType: null,
-    visible: true,
+    visible: !HIDDEN_WEEKLY_ELEMENT_PAGE_IDS.has(spec.id),
     weekSelection: null,
     years: null,
     overrides: {},
@@ -323,5 +348,27 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
  * enough. The insert and kind-realignment rules live in `mergeDeckTemplate`.
  */
 export function mergeOficinasDeckTemplate(deck: OficinasDeckState): OficinasDeckState {
-  return mergeDeckTemplate(deck, createDefaultOficinasDeck().pages);
+  return mergeDeckTemplate(
+    deck,
+    createDefaultOficinasDeck().pages,
+    (page) => {
+      let migrated = page;
+
+      if (HIDDEN_WEEKLY_ELEMENT_PAGE_IDS.has(page.id) && page.visible !== false) {
+        migrated = { ...migrated, visible: false };
+      }
+
+      if (
+        page.id === STALE_RESUELTAS_S35_OVERRIDE.pageId &&
+        page.overrides?.[STALE_RESUELTAS_S35_OVERRIDE.key] ===
+          STALE_RESUELTAS_S35_OVERRIDE.value
+      ) {
+        const overrides = { ...page.overrides };
+        delete overrides[STALE_RESUELTAS_S35_OVERRIDE.key];
+        migrated = { ...migrated, overrides };
+      }
+
+      return migrated;
+    }
+  );
 }

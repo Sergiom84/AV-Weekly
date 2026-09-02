@@ -17,11 +17,14 @@ export function oficinasYearSelector(input: {
   year: number;
   stored: number[] | null;
   onChange: (years: number[]) => void;
+  /** Past years selected before the user customises the comparison. */
+  defaultExtraYears?: number;
 }): YearSelection {
   const { available, selected } = resolveOficinasYears(
     input.seriesYears,
     input.year,
-    input.stored
+    input.stored,
+    input.defaultExtraYears
   );
 
   return {

@@ -77,6 +77,8 @@ interface SemanalPageProps extends OficinasPageProps {
   comparison?: OficinasWeekValue[];
   /** Last closed week; later columns of the source are still in progress. */
   throughWeek?: number | null;
+  /** New comparison pages can start at the current reporting horizon. */
+  defaultToReportedWeek?: boolean;
   yearSelector?: YearSelection;
   /**
    * Qualifier of the figures below, printed above the table. It is data, not
@@ -108,6 +110,7 @@ export default function SemanalPage({
   totals,
   comparison,
   throughWeek,
+  defaultToReportedWeek = false,
   yearSelector,
   caption,
   totalRow = true,
@@ -129,7 +132,11 @@ export default function SemanalPage({
     semanalCurrentAt(rows, year, week, totals);
   const weekSelection: WeekSelection =
     page.weekSelection ??
-    defaultWeekSelection(ALL_ISO_WEEKS[ALL_ISO_WEEKS.length - 1]);
+    defaultWeekSelection(
+      defaultToReportedWeek && throughWeek
+        ? throughWeek
+        : ALL_ISO_WEEKS[ALL_ISO_WEEKS.length - 1]
+    );
   const currentReportWeeks = semanalReportWeeks(
     rows,
     year,

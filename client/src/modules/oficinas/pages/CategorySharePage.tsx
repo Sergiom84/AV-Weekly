@@ -20,6 +20,13 @@ interface CategorySharePageProps extends OficinasPageProps {
   column: string;
   /** Legend and table header of the single series. */
   seriesLabel: string;
+  /** Table's category heading when the chart legend is a year label. */
+  categoryHeader?: string;
+  /** Optional second imported series. Enabled only by comparison pages. */
+  comparison?: {
+    label: string;
+    entries: ShareEntry[];
+  };
   kpis?: KpiItem[];
   /** Rows the bar chart draws. The rest still reach the share table. */
   topN?: number;
@@ -51,6 +58,8 @@ export default function CategorySharePage({
   entries,
   column,
   seriesLabel,
+  categoryHeader,
+  comparison,
   kpis = [],
   topN,
   total: totalOverride,
@@ -71,15 +80,36 @@ export default function CategorySharePage({
   const total = totalOverride ?? shown;
   const ranked = [...cells].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
   const charted = topN === undefined ? ranked : ranked.slice(0, topN);
+  const comparisonByLabel = new Map(
+    (comparison?.entries ?? []).map(entry => [entry.label, entry.imported])
+  );
+  const comparisonTotal = Array.from(comparisonByLabel.values()).reduce<number>(
+    (sum, value) => sum + (value ?? 0),
+    0
+  );
 
   const series: CategorySeries[] = [
     { key: "valor", label: seriesLabel, color: oficinasColor(0) },
+    ...(comparison
+      ? [{ key: "comparacion", label: comparison.label, color: oficinasColor(2) }]
+      : []),
   ];
 
-  const data = charted.map(cell => ({
-    categoria: cell.label,
-    valor: cell.value ?? 0,
-  }));
+  const data = charted.map(cell => {
+    const row: Record<string, number | string> = {
+      categoria: cell.label,
+      valor: cell.value ?? 0,
+    };
+    const previous = comparisonByLabel.get(cell.label);
+
+    // Missing historical categories stay absent. Recharts then draws no bar;
+    // writing zero here would falsely claim that the old source measured them.
+    if (previous !== null && previous !== undefined) {
+      row.comparacion = previous;
+    }
+
+    return row;
+  });
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
@@ -104,10 +134,14 @@ export default function CategorySharePage({
           rows={ranked.map(cell => ({
             label: cell.label,
             value: cell.value ?? 0,
+            comparison: comparisonByLabel.get(cell.label) ?? null,
             share: total === 0 ? 0 : (cell.value ?? 0) / total,
           }))}
           total={total}
-          header={seriesLabel}
+          header={categoryHeader ?? seriesLabel}
+          comparisonHeader={comparison?.label}
+          comparisonTotal={comparison ? comparisonTotal : undefined}
+          valueHeader={comparison ? seriesLabel : undefined}
           compact={compactPresentation}
         />
       </div>
@@ -129,14 +163,25 @@ export default function CategorySharePage({
 }
 
 interface ShareTableProps {
-  rows: { label: string; value: number; share: number }[];
+  rows: { label: string; value: number; comparison: number | null; share: number }[];
   total: number;
   header: string;
+  comparisonHeader?: string;
+  comparisonTotal?: number;
+  valueHeader?: string;
   compact?: boolean;
 }
 
 /** Two-column breakdown printed under the bars: the count and its share. */
-function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
+function ShareTable({
+  rows,
+  total,
+  header,
+  comparisonHeader,
+  comparisonTotal,
+  valueHeader,
+  compact = false,
+}: ShareTableProps) {
   const { containerRef, tableRef } = useFitTableScale<
     HTMLDivElement,
     HTMLTableElement
@@ -147,8 +192,20 @@ function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
     // pivot merely because it has fewer lines to fit.
     maxScale: compact ? 0.615 : 1,
   });
-  const labelWidth = compact ? "w-1/3" : "w-[60%]";
-  const numericWidth = compact ? "w-1/3" : "";
+  const labelWidth = comparisonHeader
+    ? compact
+      ? "w-[34%]"
+      : "w-[52%]"
+    : compact
+      ? "w-1/3"
+      : "w-[60%]";
+  const numericWidth = comparisonHeader
+    ? compact
+      ? "w-[22%]"
+      : "w-[16%]"
+    : compact
+      ? "w-1/3"
+      : "";
 
   return (
     <div ref={containerRef} className="h-full max-h-full w-full overflow-auto">
@@ -176,8 +233,16 @@ function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
               scope="col"
               className={`${numericWidth} truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal`}
             >
-              Nº
+              {valueHeader ?? "Nº"}
             </th>
+            {comparisonHeader && (
+              <th
+                scope="col"
+                className={`${numericWidth} truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal`}
+              >
+                {comparisonHeader}
+              </th>
+            )}
             <th
               scope="col"
               className={`${numericWidth} truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal`}
@@ -201,6 +266,11 @@ function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
               <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
                 {row.value}
               </td>
+              {comparisonHeader && (
+                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                  {row.comparison ?? "—"}
+                </td>
+              )}
               <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
                 {percent(row.share)}
               </td>
@@ -225,6 +295,11 @@ function ShareTable({ rows, total, header, compact = false }: ShareTableProps) {
             <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
               {total}
             </td>
+            {comparisonHeader && (
+              <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+                {comparisonTotal ?? "—"}
+              </td>
+            )}
             <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
               {total === 0 ? "" : "100%"}
             </td>

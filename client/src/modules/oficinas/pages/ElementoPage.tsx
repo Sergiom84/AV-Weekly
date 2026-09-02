@@ -3,9 +3,11 @@ import {
   rankedRows,
   reportWeek,
   rowTotal,
+  seriesWeeks,
 } from "@shared/modules/oficinas/derived";
 import type { OficinasIncidencias } from "@shared/modules/oficinas/types";
-import { disambiguate } from "../aggregate";
+import { decimal, disambiguate } from "../aggregate";
+import { elementHeadlineStats } from "../elementHeadline";
 import CategorySharePage from "./CategorySharePage";
 import type { OficinasDataPageProps } from "./PageShell";
 
@@ -65,6 +67,11 @@ export default function ElementoPage({
     (sum, row) => sum + rowTotal(row, year, throughWeek),
     0
   );
+  const reportedWeeks = seriesWeeks(
+    rows.flatMap(row => row.values),
+    year
+  ).filter(week => throughWeek === undefined || week <= throughWeek).length;
+  const stats = elementHeadlineStats(total, dataset.masters, reportedWeeks);
 
   return (
     <CategorySharePage
@@ -79,12 +86,14 @@ export default function ElementoPage({
       compactPresentation={compactPresentation}
       kpis={[
         { label: `Total ${year}`, value: total.toLocaleString("es-ES") },
-        { label: "Elementos", value: String(ranked.length) },
+        { label: "Total oficinas", value: stats.offices.toLocaleString("es-ES") },
         {
-          label: `Primeros ${CHART_ROWS}`,
-          value: entries
-            .reduce((sum, entry) => sum + (entry.imported ?? 0), 0)
-            .toLocaleString("es-ES"),
+          label: "Ratio por oficina",
+          value: decimal(stats.ratio, 2),
+        },
+        {
+          label: "Media semanal",
+          value: decimal(stats.average, 2),
         },
       ]}
     />

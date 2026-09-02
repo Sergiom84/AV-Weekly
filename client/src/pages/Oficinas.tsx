@@ -45,6 +45,10 @@ import RecicladoresElementoSemanalPage from "@/modules/oficinas/pages/Reciclador
 import ResueltasDTPage from "@/modules/oficinas/pages/ResueltasDTPage";
 import ResueltasElementoPage from "@/modules/oficinas/pages/ResueltasElementoPage";
 import ResueltasSemanalPage from "@/modules/oficinas/pages/ResueltasSemanalPage";
+import {
+  AsignadasTotalSemanalPage,
+  ResueltasTotalSemanalPage,
+} from "@/modules/oficinas/pages/IncidenciasTotalSemanalPage";
 import type { OficinasDataPageProps } from "@/modules/oficinas/pages/PageShell";
 
 /** Index entries the printed report lists, one more than the slide draws by default. */
@@ -64,9 +68,11 @@ const DATA_PAGES: Record<
   "oficinas-asignadas-dt": AsignadasDTPage,
   "oficinas-asignadas-semanal": AsignadasSemanalPage,
   "oficinas-asignadas-elemento": AsignadasElementoPage,
+  "oficinas-asignadas-total-semanal": AsignadasTotalSemanalPage,
   "oficinas-resueltas-dt": ResueltasDTPage,
   "oficinas-resueltas-semanal": ResueltasSemanalPage,
   "oficinas-resueltas-elemento": ResueltasElementoPage,
+  "oficinas-resueltas-total-semanal": ResueltasTotalSemanalPage,
   "oficinas-peticiones-dt-semanal": PeticionesDTSemanalPage,
   "oficinas-peticiones-dt": PeticionesDTPage,
   "oficinas-peticiones-tipo-semanal": PeticionesTipoSemanalPage,

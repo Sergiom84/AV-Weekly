@@ -285,9 +285,11 @@
   }
 
   [data-deck-list] {
+    display: block !important;
     width: 1600px !important;
     margin: 0 !important;
     padding: 0 !important;
+    gap: 0 !important;
   }
 
   [data-deck-slide] {
@@ -295,6 +297,12 @@
     height: 900px !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Tailwind's screen spacing must not become top offset on the next page. */
+  [data-deck-list] > [data-deck-slide] {
+    margin-block: 0 !important;
   }
 
   [data-deck-slide][data-deck-visible="false"] {

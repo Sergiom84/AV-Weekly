@@ -9,6 +9,7 @@
 export type SemanalLayout =
   | "standard-semanal"
   | "comparativas-semanales"
+  | "total-semanal-comparativa"
   | "peticiones-territorial-semanal"
   | "volumetrias-semanales";
 
@@ -39,6 +40,13 @@ export const SEMANAL_LAYOUTS: Record<SemanalLayout, SemanalLayoutRules> = {
     highlightTotal: false,
     centerRowHeader: false,
     wideAverage: false,
+  },
+  "total-semanal-comparativa": {
+    comparisonLabels: true,
+    peticionesTerritorial: false,
+    highlightTotal: false,
+    centerRowHeader: true,
+    wideAverage: true,
   },
   "peticiones-territorial-semanal": {
     comparisonLabels: true,

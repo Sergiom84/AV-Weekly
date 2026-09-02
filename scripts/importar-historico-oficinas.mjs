@@ -36,9 +36,10 @@
  *   decía 2025) no se importa: no declara variante (con/sin/solo
  *   validadoras) y ninguna página del deck necesita el desglose por DT del
  *   año anterior para asignadas o resueltas, solo el total semanal.
- * - El bloque DT y el de tipología de Peticiones IMAC (año 2025) tampoco se
- *   importan: el template ya trae el año anterior completo para peticiones
- *   (hoja 13, 52 semanas), así que no hay hueco que tapar.
+ * - El bloque DT de Peticiones IMAC no se importa: la hoja 13 del template ya
+ *   trae esa comparación completa. El bloque por tipología de 2025 sí se
+ *   conserva, porque es la única fuente de comparación por tipo. Solo contiene
+ *   seis categorías; las dos categorías nuevas de 2026 quedan ausentes, no a 0.
  * - La hoja "Comparativa 2024-2025" es mensual, no semanal; ningún campo del
  *   dataset ni página del deck consume esa granularidad hoy. Se deja fuera.
  *
@@ -46,6 +47,7 @@
  */
 
 import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 
 const require = createRequire(import.meta.url);
 require("dotenv/config");
@@ -122,7 +124,7 @@ function readLeftTotals(rows, yearCols) {
 }
 
 /** Bloque DT de la derecha (Semana | OF/Media | 1..52), agrupado por DT normalizada. */
-function readDTBlock(rows, year, totalRowLabel, labelCol) {
+export function readDTBlock(rows, year, totalRowLabel, labelCol) {
   const totalRow = rows.find(
     (r) => String(r[labelCol] ?? "").toUpperCase() === totalRowLabel
   );
@@ -170,6 +172,31 @@ function readDTBlock(rows, year, totalRowLabel, labelCol) {
   return Array.from(out.entries()).map(([label, values]) => ({ label, values }));
 }
 
+const PETICION_TYPES = new Map([
+  ["AMPLIACION", "AMPLIACIÓN"],
+  ["DESINSTALACION", "DESINSTALACIÓN"],
+  ["SINIESTRO", "SINIESTRO"],
+  ["REUBICACION INTERNA", "REUBICACIÓN INTERNA"],
+  ["REINSTALACION", "REINSTALACIÓN"],
+  ["SUSTITUCION", "SUSTITUCIÓN DE TERMINAL YA GENERADO"],
+]);
+
+function typeKey(raw) {
+  return String(raw ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+}
+
+/** Six categories the 2025 source reports, aligned to current labels. */
+export function readPreviousTypeRows(rows, year = 2025) {
+  return readDTBlock(rows, year, "TOTAL", 6)
+    .map(row => ({ ...row, label: PETICION_TYPES.get(typeKey(row.label)) ?? null }))
+    .filter(row => row.label !== null);
+}
+
 /** Añade solo las celdas `(year, week)` que `existing` no tiene ya. Nunca pisa una existente. */
 function addMissingValues(existing, incoming) {
   const have = new Set((existing ?? []).map((e) => `${e.year}:${e.week}`));
@@ -184,7 +211,7 @@ function addMissingValues(existing, incoming) {
 }
 
 /** Igual que `addMissingValues`, pero por fila de DT, uniendo por `normalizeDT`. */
-function addMissingRows(existingRows, incomingRows) {
+export function addMissingRows(existingRows, incomingRows) {
   const rows = (existingRows ?? []).map((row) => ({ ...row, values: [...row.values] }));
   const byLabel = new Map(rows.map((row) => [normalizeDT(row.label), row]));
   let added = 0;
@@ -219,6 +246,10 @@ async function main() {
   const asignadasTotals = readLeftTotals(grid(workbook, "ASIGNADAS SEMANAL"), yearCols);
   const resueltasTotals = readLeftTotals(grid(workbook, "RESUELTAS SEMANAL"), yearCols);
   const peticionesTotals = readLeftTotals(grid(workbook, "Peticiones IMAC"), yearCols);
+  const peticionesTipo2025 = readPreviousTypeRows(
+    grid(workbook, "Peticiones IMAC"),
+    2025
+  );
 
   const recRows = grid(workbook, "RECICLADORES RESUELTAS");
   const recicladores2025 = readDTBlock(recRows, 2025, "TOTAL GENERAL", 6);
@@ -315,6 +346,23 @@ async function main() {
   seedHistory("resueltas", resueltasTotals);
   seedTotals("peticiones", peticionesTotals);
 
+  const peticiones = existing.peticiones ?? {};
+  const byTipoPrevious = addMissingRows(
+    peticiones.byTipoPrevious,
+    peticionesTipo2025
+  );
+  existing.peticiones = {
+    ...peticiones,
+    byTipoPrevious: byTipoPrevious.rows,
+  };
+  report.push(
+    `peticiones.byTipoPrevious (2025, ${peticionesTipo2025.length} categorías reportadas, S35=${peticionesTipo2025.reduce(
+      (sum, row) =>
+        sum + (row.values.find(cell => cell.year === 2025 && cell.week === 35)?.value ?? 0),
+      0
+    )}): +${byTipoPrevious.added} celdas`
+  );
+
   const recicladores = existing.recicladores ?? {};
   const byDT = addMissingRows(recicladores.byDT, recicladores2024);
   const byDTPrevious = addMissingRows(recicladores.byDTPrevious, recicladores2025);
@@ -345,7 +393,9 @@ async function main() {
   console.log("oficinas_dataset actualizado. source_file y uploaded_at sin tocar.");
 }
 
-main().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}

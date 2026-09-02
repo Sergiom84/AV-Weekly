@@ -43,6 +43,10 @@ import {
 } from "../overrides";
 import PageShell, { type OficinasPageProps } from "./PageShell";
 import YearSelector, { type YearSelection } from "./YearSelector";
+import {
+  dtTableFrameFlex,
+  type DTTerritorialLayout,
+} from "../territorialLayout";
 
 /** One directorate table of the row the incident slides print. */
 export interface DTTableSpec {
@@ -64,10 +68,6 @@ export interface DTTableSpec {
  * inferred from the deck page kind, which could accidentally affect another
  * territorial section.
  */
-export type DTTerritorialLayout =
-  | "standard-territorial"
-  | "incidencias-territoriales";
-
 interface DTPageProps extends OficinasPageProps {
   /**
    * Directorate matrix of the current year: what the chart draws, which weeks
@@ -458,12 +458,15 @@ export default function DTPage({
                       ? "pt-[0.12cqi]"
                       : ""
                   }`}
-                  // The three tables share one box, so each takes the width its
-                  // own column count needs: ten columns cannot live in the
-                  // space seven do.
+                  // The incident layout gives all three cards the same outer
+                  // frame; other territorial families keep column-weighted
+                  // frames. Column widths inside each card remain independent.
                   style={{
-                    flexGrow: tableWeeks.length + (aggregates ? 4 : 1),
-                    flexBasis: 0,
+                    flex: dtTableFrameFlex(
+                      layout,
+                      tableWeeks.length,
+                      aggregates
+                    ),
                   }}
                 >
                   <p className="shrink-0 truncate text-center font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">

@@ -822,6 +822,9 @@ export function mergeOficinasDataset(
             incoming.peticiones.byDTPrevious
           ),
           byTipo: mergeRows(existing?.peticiones?.byTipo, incoming.peticiones.byTipo),
+          // The weekly template has no previous-year type matrix. Keep the
+          // historic seed intact across every upload.
+          byTipoPrevious: existing?.peticiones?.byTipoPrevious,
         }
       : existing?.peticiones,
     recicladores: incoming.recicladores

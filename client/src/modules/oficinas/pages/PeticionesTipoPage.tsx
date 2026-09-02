@@ -5,7 +5,8 @@ import {
 } from "@shared/modules/oficinas/derived";
 import CategorySharePage from "./CategorySharePage";
 import type { OficinasDataPageProps } from "./PageShell";
-import { weekLabel } from "../aggregate";
+import { variationLabel, weekLabel } from "../aggregate";
+import { previousTypeEntries } from "../peticionesTipoComparison";
 
 /**
  * `1.3 Peticiones por tipo`.
@@ -36,6 +37,20 @@ export default function PeticionesTipoPage({
   }));
 
   const total = shares.reduce((sum, entry) => sum + entry.value, 0);
+  const previousYear = year - 1;
+  const previousEntries =
+    week === null
+      ? []
+      : previousTypeEntries(
+          rows,
+          dataset.peticiones?.byTipoPrevious ?? [],
+          previousYear,
+          week
+        );
+  const previousReported = previousEntries.some(entry => entry.imported !== null);
+  const previousTotal = previousReported
+    ? previousEntries.reduce((sum, entry) => sum + (entry.imported ?? 0), 0)
+    : null;
 
   return (
     <CategorySharePage
@@ -44,14 +59,25 @@ export default function PeticionesTipoPage({
       onChange={onChange}
       entries={entries}
       column={week === null ? String(year) : weekLabel(week)}
-      seriesLabel="Tipo de petición"
+      seriesLabel={String(year)}
+      categoryHeader="Tipo de petición"
+      comparison={
+        week === null || !previousReported
+          ? undefined
+          : { label: String(previousYear), entries: previousEntries }
+      }
       compactPresentation
       kpis={
         week === null
           ? []
           : [
-              { label: `Semana ${week}`, value: total.toLocaleString("es-ES") },
-              { label: "Tipos", value: String(entries.length) },
+              { label: `${year} ${weekLabel(week)}`, value: total.toLocaleString("es-ES") },
+              {
+                label: `${previousYear} ${weekLabel(week)}`,
+                value:
+                  previousTotal === null ? "—" : previousTotal.toLocaleString("es-ES"),
+              },
+              { label: "Variación", value: variationLabel(previousTotal, total) },
             ]
       }
     />

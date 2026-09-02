@@ -1,11 +1,13 @@
 import {
   latestYear,
   rankedRows,
+  recicladoresSeries,
   reportWeek,
-  rowTotal,
+  valueAt,
 } from "@shared/modules/oficinas/derived";
 import CategorySharePage from "./CategorySharePage";
 import type { OficinasDataPageProps } from "./PageShell";
+import { variationLabel, weekLabel } from "../aggregate";
 
 /**
  * `1.5 Recicladores por elemento`.
@@ -25,13 +27,27 @@ export default function RecicladoresElementoPage({
     latestYear(rows.flatMap(row => row.values)) ??
     new Date().getFullYear();
 
-  const throughWeek = reportWeek(dataset, year) ?? undefined;
-  const ranked = rankedRows(rows, year, throughWeek);
+  const week = reportWeek(dataset, year);
+  const ranked =
+    week === null
+      ? []
+      : rankedRows(rows, year).filter(row =>
+          row.values.some(entry => entry.year === year && entry.week === week)
+        );
   const entries = ranked.map(row => ({
     label: row.label,
-    imported: rowTotal(row, year, throughWeek),
+    imported: week === null ? null : valueAt(row.values, year, week),
   }));
   const total = entries.reduce((sum, entry) => sum + (entry.imported ?? 0), 0);
+  const previousYear = year - 1;
+  const comparison = recicladoresSeries(dataset.recicladores);
+  const previousReported =
+    week !== null &&
+    comparison.some(entry => entry.year === previousYear && entry.week === week);
+  const previous =
+    week === null || !previousReported
+      ? null
+      : valueAt(comparison, previousYear, week);
 
   return (
     <CategorySharePage
@@ -39,12 +55,19 @@ export default function RecicladoresElementoPage({
       editing={editing}
       onChange={onChange}
       entries={entries}
-      column={String(year)}
+      column={week === null ? String(year) : weekLabel(week)}
       seriesLabel="Elemento"
       compactPresentation
       kpis={[
-        { label: `Total ${year}`, value: total.toLocaleString("es-ES") },
-        { label: "Elementos", value: String(entries.length) },
+        {
+          label: week === null ? String(year) : `${year} ${weekLabel(week)}`,
+          value: total.toLocaleString("es-ES"),
+        },
+        {
+          label: `${previousYear}${week === null ? "" : ` ${weekLabel(week)}`}`,
+          value: previous === null ? "—" : previous.toLocaleString("es-ES"),
+        },
+        { label: "Variación", value: variationLabel(previous, total) },
       ]}
     />
   );

@@ -11,6 +11,7 @@ import {
   surveyAverage,
 } from "@shared/modules/oficinas/derived";
 import { decimal, monthLabel, oficinasColor, percent } from "../aggregate";
+import { surveyYtdSeries } from "../surveyYtd";
 import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
 import PageShell, { type OficinasDataPageProps } from "./PageShell";
 
@@ -64,12 +65,13 @@ export default function EncuestasPage({
   });
 
   const series: LineSeries[] = [
-    { key: "encuestas", label: "Encuestas recibidas", color: oficinasColor(0) },
+    { key: "acumulado", label: "Acumulado mensual", color: oficinasColor(0) },
   ];
 
-  const data = responses.map(entry => ({
+  const ytd = surveyYtdSeries(responses);
+  const data = ytd.latestSeries.map(entry => ({
     mes: monthLabel(entry.month),
-    encuestas: entry.value,
+    acumulado: entry.accumulated,
   }));
 
   const scoreSeries: CategorySeries[] = SCORES.map((score, index) => ({
@@ -104,10 +106,8 @@ export default function EncuestasPage({
     return row;
   });
 
-  const totalResponses = responses.reduce(
-    (sum, entry) => sum + (entry.value ?? 0),
-    0
-  );
+  const latestYear = ytd.latestYear ?? "";
+  const latestYtd = ytd.latestYtd;
   const globalTotal = distributionTotal(distribucion?.global);
   const topShare =
     globalTotal === 0 ? 0 : (distribucion?.global?.[4] ?? 0) / globalTotal;
@@ -117,7 +117,10 @@ export default function EncuestasPage({
       <KpiRow
         compact
         items={[
-          { label: "Encuestas", value: totalResponses.toLocaleString("es-ES") },
+          {
+            label: latestYear === "" ? "Acumulado anual" : `Acumulado ${latestYear}`,
+            value: latestYtd === null ? "—" : latestYtd.toLocaleString("es-ES"),
+          },
           ...SCORES.map(score => ({
             label: score.label,
             value: decimal(surveyAverage(dataset, score.field), 2),
@@ -129,7 +132,7 @@ export default function EncuestasPage({
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-[1.5cqi]">
         <div className="flex min-h-0 flex-col">
           <p className="shrink-0 pb-[0.4cqi] font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
-            Encuestas por mes
+            Acumulado mensual de encuestas
           </p>
           <SeriesLineChart categoryKey="mes" series={series} data={data} />
         </div>

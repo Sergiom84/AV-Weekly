@@ -304,6 +304,13 @@ export interface OficinasPeticiones {
   /** Same matrix for the previous year (sheet 13), stored with `year - 1`. */
   byDTPrevious: OficinasRow[];
   byTipo: OficinasRow[];
+  /**
+   * Previous-year type breakdown seeded from the manual historic workbook.
+   *
+   * It contains only categories that source actually reported. A missing row
+   * means "not reported", never zero.
+   */
+  byTipoPrevious?: OficinasRow[];
 }
 
 /**
@@ -413,9 +420,11 @@ export type OficinasPageKind =
   | "ofiAsignadasDT"
   | "ofiAsignadasElemento"
   | "ofiAsignadasSemanal"
+  | "ofiAsignadasTotalSemanal"
   | "ofiResueltasDT"
   | "ofiResueltasElemento"
   | "ofiResueltasSemanal"
+  | "ofiResueltasTotalSemanal"
   | "ofiPeticionesDT"
   | "ofiPeticionesDTSemanal"
   | "ofiPeticionesTipo"

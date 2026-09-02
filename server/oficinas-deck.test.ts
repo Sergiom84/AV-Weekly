@@ -114,4 +114,111 @@ describe("mergeOficinasDeckTemplate", () => {
     expect(closingIndex).toBe(merged.pages.length - 1);
     expect(merged.pages.some((page) => page.id === "oficinas-kanban")).toBe(true);
   });
+
+  it("hides the two replaced weekly element pages by default", () => {
+    const deck = createDefaultOficinasDeck();
+
+    expect(
+      deck.pages.find((page) => page.id === "oficinas-asignadas-semanal")?.visible
+    ).toBe(false);
+    expect(
+      deck.pages.find((page) => page.id === "oficinas-resueltas-semanal")?.visible
+    ).toBe(false);
+  });
+
+  it("hides both replaced pages while preserving unrelated visibility", () => {
+    const deck = createDefaultOficinasDeck();
+    const assigned = deck.pages.find(
+      (page) => page.id === "oficinas-asignadas-semanal"
+    );
+    const resolved = deck.pages.find(
+      (page) => page.id === "oficinas-resueltas-semanal"
+    );
+    const element = deck.pages.find(
+      (page) => page.id === "oficinas-asignadas-elemento"
+    );
+
+    if (!assigned || !resolved || !element) {
+      throw new Error("Missing seeded Oficinas pages");
+    }
+
+    assigned.visible = true;
+    resolved.visible = true;
+    element.visible = false;
+
+    const merged = mergeOficinasDeckTemplate(deck);
+
+    expect(
+      merged.pages.find((page) => page.id === assigned.id)?.visible
+    ).toBe(false);
+    expect(
+      merged.pages.find((page) => page.id === resolved.id)?.visible
+    ).toBe(false);
+    expect(
+      merged.pages.find((page) => page.id === element.id)?.visible
+    ).toBe(false);
+  });
+
+  it("replaces the hidden weekly slots before their element pages", () => {
+    const deck = createDefaultOficinasDeck();
+    deck.pages = deck.pages.filter(
+      (page) =>
+        page.id !== "oficinas-asignadas-total-semanal" &&
+        page.id !== "oficinas-resueltas-total-semanal"
+    );
+
+    const ids = mergeOficinasDeckTemplate(deck).pages.map((page) => page.id);
+
+    expect(ids.indexOf("oficinas-asignadas-total-semanal")).toBe(
+      ids.indexOf("oficinas-asignadas-elemento") - 1
+    );
+    expect(ids.indexOf("oficinas-resueltas-total-semanal")).toBe(
+      ids.indexOf("oficinas-resueltas-elemento") - 1
+    );
+  });
+
+  it("removes only the obsolete S35 override from resolved territorial data", () => {
+    const deck = createDefaultOficinasDeck();
+    const resolved = deck.pages.find(
+      (page) => page.id === "oficinas-resueltas-dt"
+    );
+    const assigned = deck.pages.find(
+      (page) => page.id === "oficinas-asignadas-dt"
+    );
+
+    if (!resolved || !assigned) {
+      throw new Error("Missing territorial Oficinas pages");
+    }
+
+    resolved.overrides = { "total:S34": 88, "total:S35": 7 };
+    assigned.overrides = { "total:S35": 7 };
+
+    const merged = mergeOficinasDeckTemplate(deck);
+
+    expect(
+      merged.pages.find((page) => page.id === resolved.id)?.overrides
+    ).toEqual({ "total:S34": 88 });
+    expect(
+      merged.pages.find((page) => page.id === assigned.id)?.overrides
+    ).toEqual({ "total:S35": 7 });
+  });
+
+  it("preserves a legitimate replacement value on resolved S35", () => {
+    const deck = createDefaultOficinasDeck();
+    const resolved = deck.pages.find(
+      (page) => page.id === "oficinas-resueltas-dt"
+    );
+
+    if (!resolved) {
+      throw new Error("Missing resolved territorial page");
+    }
+
+    resolved.overrides = { "total:S35": 98 };
+
+    expect(
+      mergeOficinasDeckTemplate(deck).pages.find(
+        (page) => page.id === resolved.id
+      )?.overrides
+    ).toEqual({ "total:S35": 98 });
+  });
 });
