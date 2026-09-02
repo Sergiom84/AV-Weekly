@@ -328,7 +328,6 @@ export default function Aga() {
               onUpdatePage={updatePage}
               onResetDeck={resetDeck}
               onSelectPage={scrollToPage}
-              pdfHref="/api/aga/pdf"
               onPresent={() => setPresenting(true)}
             />
           </ResizableSidebar>
@@ -365,6 +364,7 @@ export default function Aga() {
                 key={page.id}
                 id={`slide-${page.id}`}
                 data-deck-slide
+                data-deck-visible={visible}
                 className="scroll-mt-24"
               >
                 <div className="mb-2 flex items-center justify-between gap-2 print:hidden">

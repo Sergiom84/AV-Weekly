@@ -297,6 +297,10 @@
     padding: 0 !important;
   }
 
+  [data-deck-slide][data-deck-visible="false"] {
+    display: none !important;
+  }
+
   [data-deck-frame] {
     width: 1600px !important;
     height: 900px !important;

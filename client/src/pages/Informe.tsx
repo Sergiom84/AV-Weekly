@@ -345,7 +345,6 @@ export default function Informe() {
               onUpdatePage={updatePage}
               onResetDeck={resetDeck}
               onSelectPage={scrollToPage}
-              pdfHref="/api/informe/pdf"
               onPresent={() => setPresenting(true)}
               exportActions={exportActions}
             />
@@ -383,6 +382,7 @@ export default function Informe() {
                 key={page.id}
                 id={`slide-${page.id}`}
                 data-deck-slide
+                data-deck-visible={visible}
                 className="scroll-mt-24"
               >
                 <div className="mb-2 flex items-center justify-between gap-2 print:hidden">

@@ -321,7 +321,6 @@ export default function Informatica() {
               onUpdatePage={updatePage}
               onResetDeck={resetDeck}
               onSelectPage={scrollToPage}
-              pdfHref="/api/informatica/pdf"
               onPresent={() => setPresenting(true)}
             />
           </ResizableSidebar>
@@ -358,6 +357,7 @@ export default function Informatica() {
                 key={page.id}
                 id={`slide-${page.id}`}
                 data-deck-slide
+                data-deck-visible={visible}
                 className="scroll-mt-24"
               >
                 <div className="mb-2 flex items-center justify-between gap-2 print:hidden">
