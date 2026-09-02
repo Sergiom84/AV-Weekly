@@ -12,6 +12,7 @@ import Informatica from "./pages/Informatica";
 import Informe from "./pages/Informe";
 import ModuloPendiente from "./pages/ModuloPendiente";
 import Oficinas from "./pages/Oficinas";
+import DepartmentAccessGate from "./components/DepartmentAccessGate";
 
 /** Deck screen of each module. A module with no entry is still a placeholder. */
 const MODULE_PAGES: Record<string, () => ReactElement> = {
@@ -26,11 +27,17 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Home} />
 
-      {DECK_MODULES.map((module) => {
+      {DECK_MODULES.map(module => {
         const Page = MODULE_PAGES[module.id];
 
         if (Page) {
-          return <Route key={module.id} path={module.route} component={Page} />;
+          return (
+            <Route key={module.id} path={module.route}>
+              <DepartmentAccessGate department={module.id} name={module.name}>
+                <Page />
+              </DepartmentAccessGate>
+            </Route>
+          );
         }
 
         return (

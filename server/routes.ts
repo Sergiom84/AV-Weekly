@@ -110,6 +110,7 @@ import {
 } from "./parseTendenciaMensual.js";
 import { configuredCredentials } from "./auth.js";
 import { createDeckPdfSender } from "./pdf-export.js";
+import { persistDeckWithHistory } from "./deck-persistence.js";
 import {
   MAX_INFORMATICA_FILE_SIZE_BYTES,
   MAX_WORKBOOK_SIZE_BYTES,
@@ -397,16 +398,12 @@ router.put("/api/informe/deck", async (req, res) => {
       return res.status(400).json({ error: "El deck enviado no es válido: falta la lista de páginas." });
     }
 
-    const updatedAt = new Date().toISOString();
-    const storedDeck: DeckState = { pages: deck.pages, updatedAt };
-
-    await client.execute({
-      sql: `INSERT INTO informe_deck (id, data, updated_at) VALUES (1, ?, datetime('now'))
-            ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-      args: [JSON.stringify(storedDeck)],
+    const saved = await persistDeckWithHistory("av", {
+      pages: deck.pages,
+      updatedAt: deck.updatedAt,
     });
 
-    res.json({ success: true, deck: storedDeck });
+    res.json({ success: true, ...saved });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al guardar el deck del informe";
     res.status(500).json({ error: message });
@@ -825,16 +822,12 @@ router.put("/api/informatica/deck", async (req, res) => {
         .json({ error: "El deck enviado no es válido: falta la lista de páginas." });
     }
 
-    const updatedAt = new Date().toISOString();
-    const storedDeck: InformaticaDeckState = { pages: deck.pages, updatedAt };
-
-    await client.execute({
-      sql: `INSERT INTO informatica_deck (id, data, updated_at) VALUES (1, ?, datetime('now'))
-            ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-      args: [JSON.stringify(storedDeck)],
+    const saved = await persistDeckWithHistory("informatica", {
+      pages: deck.pages,
+      updatedAt: deck.updatedAt,
     });
 
-    res.json({ success: true, deck: storedDeck });
+    res.json({ success: true, ...saved });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Error al guardar el deck de Informática";
@@ -1210,16 +1203,12 @@ router.put("/api/aga/deck", async (req, res) => {
         .json({ error: "El deck enviado no es válido: falta la lista de páginas." });
     }
 
-    const updatedAt = new Date().toISOString();
-    const storedDeck: AgaDeckState = { pages: deck.pages, updatedAt };
-
-    await client.execute({
-      sql: `INSERT INTO aga_deck (id, data, updated_at) VALUES (1, ?, datetime('now'))
-            ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-      args: [JSON.stringify(storedDeck)],
+    const saved = await persistDeckWithHistory("aga", {
+      pages: deck.pages,
+      updatedAt: deck.updatedAt,
     });
 
-    res.json({ success: true, deck: storedDeck });
+    res.json({ success: true, ...saved });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al guardar el deck de AGA";
     res.status(500).json({ error: message });
@@ -1641,16 +1630,12 @@ router.put("/api/oficinas/deck", async (req, res) => {
         .json({ error: "El deck enviado no es válido: falta la lista de páginas." });
     }
 
-    const updatedAt = new Date().toISOString();
-    const storedDeck: OficinasDeckState = { pages: deck.pages, updatedAt };
-
-    await client.execute({
-      sql: `INSERT INTO oficinas_deck (id, data, updated_at) VALUES (1, ?, datetime('now'))
-            ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-      args: [JSON.stringify(storedDeck)],
+    const saved = await persistDeckWithHistory("oficinas", {
+      pages: deck.pages,
+      updatedAt: deck.updatedAt,
     });
 
-    res.json({ success: true, deck: storedDeck });
+    res.json({ success: true, ...saved });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al guardar el deck de Oficinas";
     res.status(500).json({ error: message });

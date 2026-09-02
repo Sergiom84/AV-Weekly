@@ -5,13 +5,17 @@ import { resolveDatabaseUrl } from "./db-config.js";
 
 // Keep all local state next to the application. APP_DATA_DIR is useful when
 // the app is launched from a shortcut or a shared installation folder.
-const localDataDir = path.resolve(process.env.APP_DATA_DIR ?? path.join(process.cwd(), "data"));
+const localDataDir = path.resolve(
+  process.env.APP_DATA_DIR ?? path.join(process.cwd(), "data")
+);
 fs.mkdirSync(localDataDir, { recursive: true });
 
 const url = resolveDatabaseUrl(process.env, localDataDir);
 
 export const client = createClient(
-  url.startsWith("file:") ? { url } : { url, authToken: process.env.TOKEN_TURSO }
+  url.startsWith("file:")
+    ? { url }
+    : { url, authToken: process.env.TOKEN_TURSO }
 );
 
 export async function initDb() {
@@ -146,5 +150,22 @@ export async function initDb() {
       size_bytes INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Immutable audit trail of every persisted manual deck edit.
+    CREATE TABLE IF NOT EXISTS deck_change_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      department TEXT NOT NULL,
+      page_id TEXT NOT NULL,
+      slide_number INTEGER,
+      page_title TEXT NOT NULL,
+      field_key TEXT NOT NULL,
+      field_label TEXT NOT NULL,
+      previous_value TEXT,
+      new_value TEXT,
+      changed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS deck_change_history_department_date
+      ON deck_change_history (department, changed_at DESC);
   `);
 }

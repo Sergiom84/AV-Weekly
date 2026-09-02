@@ -1,9 +1,13 @@
-import 'dotenv/config';
+import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createAccessMiddleware } from "./auth.js";
+import {
+  createDepartmentAccessRouter,
+  createDepartmentApiMiddleware,
+} from "./department-access.js";
 import { initDb } from "./db.js";
 import routes from "./routes.js";
 
@@ -21,6 +25,8 @@ async function startServer() {
   app.get("/healthz", (_req, res) => res.status(200).json({ status: "ok" }));
   app.use(createAccessMiddleware());
   app.use(express.json());
+  app.use(createDepartmentAccessRouter());
+  app.use(createDepartmentApiMiddleware());
 
   // API routes
   app.use(routes);
@@ -35,7 +41,8 @@ async function startServer() {
     });
   }
 
-  const port = process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3501);
+  const port =
+    process.env.PORT || (process.env.NODE_ENV === "production" ? 3000 : 3501);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

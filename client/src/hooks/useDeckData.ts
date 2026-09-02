@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeckPage } from "@shared/deck/core";
 import { insertBeforeClosing } from "@shared/deck/core";
+import { toast } from "sonner";
 
 /**
  * Deck state and persistence for any report module.
@@ -89,7 +90,11 @@ function readDeck<TPage>(payload: unknown): DeckStateOf<TPage> | null {
 
   const deck = (payload as { deck?: unknown }).deck;
 
-  if (deck && typeof deck === "object" && Array.isArray((deck as DeckStateOf<TPage>).pages)) {
+  if (
+    deck &&
+    typeof deck === "object" &&
+    Array.isArray((deck as DeckStateOf<TPage>).pages)
+  ) {
     return deck as DeckStateOf<TPage>;
   }
 
@@ -132,19 +137,27 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
         setDeck(nextDeck);
       }
 
-      setData((current) => readData(payload, current));
+      setData(current => readData(payload, current));
     },
     [readData]
   );
 
   // The initial load must run once per module, not on every render: the caller
   // builds `readData` and `messages` inline, so their identity is not stable.
-  const loadRef = useRef({ applyPayload, fallbackDeck, message: messages.load });
+  const loadRef = useRef({
+    applyPayload,
+    fallbackDeck,
+    message: messages.load,
+  });
   loadRef.current = { applyPayload, fallbackDeck, message: messages.load };
 
   useEffect(() => {
     const load = async () => {
-      const { applyPayload: apply, fallbackDeck: fallback, message } = loadRef.current;
+      const {
+        applyPayload: apply,
+        fallbackDeck: fallback,
+        message,
+      } = loadRef.current;
 
       try {
         const res = await fetch(apiBase);
@@ -198,11 +211,39 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
         if (contentType.includes("application/json")) {
           const body = await res.json();
 
-          if (body && typeof body === "object" && "updatedAt" in body && mountedRef.current) {
-            setDeck((current) =>
-              current
-                ? { ...current, updatedAt: (body as DeckStateOf<TPage>).updatedAt }
-                : current
+          const savedDeck =
+            body && typeof body === "object" && "deck" in body
+              ? (body as { deck?: DeckStateOf<TPage> }).deck
+              : null;
+
+          if (savedDeck && mountedRef.current) {
+            setDeck(current =>
+              current ? { ...current, updatedAt: savedDeck.updatedAt } : current
+            );
+          }
+
+          const changes =
+            body && typeof body === "object" && "changes" in body
+              ? ((
+                  body as {
+                    changes?: Array<{
+                      slideNumber: number | null;
+                      pageId: string;
+                      fieldLabel: string;
+                    }>;
+                  }
+                ).changes ?? [])
+              : [];
+
+          for (const change of changes.slice(0, 4)) {
+            toast.success(
+              `Has realizado un cambio en la Slide ${change.slideNumber ?? change.pageId}, apartado ${change.fieldLabel}.`
+            );
+          }
+
+          if (changes.length > 4) {
+            toast.success(
+              `Se han guardado ${changes.length} cambios en el histórico.`
             );
           }
         }
@@ -268,14 +309,14 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
 
   const updatePage = useCallback(
     (pageId: string, patch: Partial<TPage>) => {
-      setDeck((current) => {
+      setDeck(current => {
         if (!current) {
           return current;
         }
 
         const next: DeckStateOf<TPage> = {
           ...current,
-          pages: current.pages.map((page) =>
+          pages: current.pages.map(page =>
             page.id === pageId ? { ...page, ...patch } : page
           ),
         };
@@ -289,12 +330,12 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
 
   const reorderPages = useCallback(
     (ids: string[]) => {
-      setDeck((current) => {
+      setDeck(current => {
         if (!current) {
           return current;
         }
 
-        const byId = new Map(current.pages.map((page) => [page.id, page]));
+        const byId = new Map(current.pages.map(page => [page.id, page]));
         const ordered: TPage[] = [];
 
         for (const id of ids) {
@@ -323,12 +364,12 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
   /** Swaps a page with its neighbour, so a hand-added slide can be placed anywhere. */
   const movePage = useCallback(
     (pageId: string, delta: -1 | 1) => {
-      setDeck((current) => {
+      setDeck(current => {
         if (!current) {
           return current;
         }
 
-        const index = current.pages.findIndex((page) => page.id === pageId);
+        const index = current.pages.findIndex(page => page.id === pageId);
         const target = index + delta;
 
         if (index < 0 || target < 0 || target >= current.pages.length) {
@@ -348,7 +389,7 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
 
   const addPage = useCallback(
     (page: TPage) => {
-      setDeck((current) => {
+      setDeck(current => {
         if (!current) {
           return current;
         }
@@ -367,14 +408,14 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
 
   const removePage = useCallback(
     (pageId: string) => {
-      setDeck((current) => {
+      setDeck(current => {
         if (!current) {
           return current;
         }
 
         const next: DeckStateOf<TPage> = {
           ...current,
-          pages: current.pages.filter((page) => page.id !== pageId),
+          pages: current.pages.filter(page => page.id !== pageId),
         };
 
         scheduleSave(next);
@@ -422,7 +463,9 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
         const contentType = res.headers.get("Content-Type") ?? "";
 
         if (!contentType.includes("application/json")) {
-          throw new Error("El servidor devolvió una respuesta inesperada (no JSON).");
+          throw new Error(
+            "El servidor devolvió una respuesta inesperada (no JSON)."
+          );
         }
 
         const body = await res.json();

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Printer } from "lucide-react";
+import { Play, Printer, Trash2 } from "lucide-react";
 import { isPageVisible } from "@shared/deck/core";
 import type { DeckPage } from "@shared/deck/core";
 import type { DeckActionResult, DeckStateOf } from "@/hooks/useDeckData";
@@ -291,6 +291,19 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   pdfFilenamePrefix,
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
+  const manualCorrections = pages.flatMap((page, index) => {
+    const pageVisible = isPageVisible(page);
+    const slideNumber = pageVisible
+      ? pages.slice(0, index + 1).filter(other => isPageVisible(other)).length
+      : null;
+
+    return Object.entries(page.overrides ?? {}).map(([key, value]) => ({
+      page,
+      slideNumber,
+      key,
+      value,
+    }));
+  });
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -384,6 +397,56 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        </CardContent>
+      </SidebarSection>
+
+      <SidebarSection
+        id="correcciones"
+        storagePrefix={storagePrefix}
+        title={`Correcciones manuales (${manualCorrections.length})`}
+      >
+        <CardContent className="space-y-2">
+          {manualCorrections.length === 0 && (
+            <p className="font-mono text-xs text-muted-foreground">
+              Sin correcciones
+            </p>
+          )}
+
+          {manualCorrections.map(({ page, slideNumber, key, value }) => (
+            <div
+              key={`${page.id}:${key}`}
+              className="flex items-start gap-2 rounded-md border border-border bg-background p-2"
+            >
+              <button
+                type="button"
+                onClick={() => onSelectPage(page.id)}
+                className="min-w-0 flex-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="block truncate font-mono text-xs text-foreground">
+                  Slide {slideNumber ?? "oculta"} ·{" "}
+                  {key.replaceAll(":", " · ").replaceAll("|", " · ")}
+                </span>
+                <span className="block truncate font-mono text-[0.65rem] text-muted-foreground">
+                  {page.text.title || page.id} · {value ?? "Vacío"}
+                </span>
+              </button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                disabled={!editing}
+                aria-label={`Quitar corrección ${key}`}
+                onClick={() => {
+                  const overrides = { ...page.overrides };
+                  delete overrides[key];
+                  onUpdatePage(page.id, { overrides } as Partial<TPage>);
+                }}
+                className="h-7 w-7 shrink-0"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
         </CardContent>
       </SidebarSection>
 
