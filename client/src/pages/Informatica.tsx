@@ -322,6 +322,7 @@ export default function Informatica() {
               onResetDeck={resetDeck}
               onSelectPage={scrollToPage}
               onPresent={() => setPresenting(true)}
+              pdfFilenamePrefix="Informática"
             />
           </ResizableSidebar>
 

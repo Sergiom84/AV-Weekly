@@ -329,6 +329,7 @@ export default function Aga() {
               onResetDeck={resetDeck}
               onSelectPage={scrollToPage}
               onPresent={() => setPresenting(true)}
+              pdfFilenamePrefix="AGA"
             />
           </ResizableSidebar>
 

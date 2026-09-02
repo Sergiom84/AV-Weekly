@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { printDeckAsPdf } from "@/lib/printDeck";
 
 /** One upload zone: the module resolves which file currently feeds the slot. */
 export interface SidebarUpload {
@@ -59,6 +60,8 @@ interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
   onPresent: () => void;
   /** Module-specific actions rendered inside the shared Exportar section. */
   exportActions?: SidebarExportAction[];
+  /** Module label used to suggest the PDF filename in the print dialog. */
+  pdfFilenamePrefix: string;
 }
 
 function formatUploadedAt(value: string | null): string | null {
@@ -285,6 +288,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   onSelectPage,
   onPresent,
   exportActions = [],
+  pdfFilenamePrefix,
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
 
@@ -419,7 +423,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
             variant="outline"
             size="sm"
             className="w-full justify-start gap-2"
-            onClick={() => window.print()}
+            onClick={() => printDeckAsPdf(pdfFilenamePrefix)}
           >
             <Printer className="h-4 w-4" />
             Guardar PDF
