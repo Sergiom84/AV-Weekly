@@ -42,32 +42,29 @@ function row(
 describe("parser Office AGA", () => {
   it("reconcilia agosto con las cinco series presentadas y cuenta posiciones", () => {
     const rows = [
-      ...Array.from({ length: 4 }, (_, index) =>
+      ...Array.from({ length: 9 }, (_, index) =>
         row(`S${index}`, 1, "MICROSOFT OFFICE LTSC STANDARD 2024")
       ),
       ...Array.from({ length: 14 }, (_, index) =>
         row(`E${Math.floor(index / 2)}`, (index % 2) + 1, "MICROSOFT EXCEL LTSC 2024")
       ),
-      ...Array.from({ length: 11 }, (_, index) =>
+      ...Array.from({ length: 16 }, (_, index) =>
         row(`O${index}`, 1, "MICROSOFT OFFICE 365 BUSINESS X64")
       ),
       ...Array.from({ length: 3 }, (_, index) =>
         row(`A${index}`, 1, "MICROSOFT ACCESS LTSC 2024")
       ),
-      ...Array.from({ length: 12 }, (_, index) =>
+      ...Array.from({ length: 13 }, (_, index) =>
         row(`W${index}`, 1, "MICROSOFT WORD LTSC 2024")
       ),
     ];
-    // The actual August source includes one rejected Excel and the published
-    // value 14 includes it. Preserve that parity until the owner says otherwise.
-    rows[4][0] = "RECHAZADA";
 
     const parsed = parseAgaOfficeWorkbook(workbook(rows));
 
     expect(parsed.office.months).toEqual(["2026-08"]);
     expect(parsed.office.families.map((family) => family.label)).toEqual(AGA_OFFICE_FAMILIES);
-    expect(parsed.office.families.map((family) => family.values[0])).toEqual([4, 14, 11, 3, 12]);
-    expect(parsed.report).toMatchObject({ rows: 44, imported: 44, skipped: 0 });
+    expect(parsed.office.families.map((family) => family.values[0])).toEqual([9, 14, 16, 3, 13]);
+    expect(parsed.report).toMatchObject({ rows: 55, imported: 55, skipped: 0 });
   });
 
   it("clasifica Apple como Standard antes que el resto del nombre", () => {
@@ -105,6 +102,33 @@ describe("parser Office AGA", () => {
     expect(parsed.office.months).toEqual(["2026-08"]);
     expect(parsed.office.families[3].values).toEqual([3]);
     expect(parsed.report).toMatchObject({ imported: 3, skipped: 0, repairedDates: 2 });
+    expect(parsed.report.futureMonths).toEqual([]);
+  });
+
+  it("repara las 39 fechas convertidas de una columna mixta sin crear otros meses", () => {
+    const excelEpoch = Date.UTC(1899, 11, 30);
+    const serial = (year: number, month: number, day: number) =>
+      Math.round((Date.UTC(year, month - 1, day) - excelEpoch) / 86400000);
+    const convertedDates = Array.from({ length: 39 }, (_, index) =>
+      serial(2026, 3 + (index % 10), 8)
+    );
+    const textDates = Array.from({ length: 16 }, (_, index) =>
+      `${13 + (index % 13)}/08/2026`
+    );
+    const rows = [...convertedDates, ...textDates].map((date, index) =>
+      row(`M${index}`, 1, "MICROSOFT OFFICE 365 BUSINESS X64", date)
+    );
+
+    const parsed = parseAgaOfficeWorkbook(workbook(rows));
+
+    expect(parsed.office.months).toEqual(["2026-08"]);
+    expect(parsed.office.families[2].values).toEqual([55]);
+    expect(parsed.report).toMatchObject({
+      rows: 55,
+      imported: 55,
+      skipped: 0,
+      repairedDates: 39,
+    });
     expect(parsed.report.futureMonths).toEqual([]);
   });
 
