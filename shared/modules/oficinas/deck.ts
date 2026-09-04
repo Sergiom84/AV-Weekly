@@ -37,6 +37,58 @@ const HIDDEN_WEEKLY_ELEMENT_PAGE_IDS = new Set([
   "oficinas-resueltas-semanal",
 ]);
 
+/**
+ * Pages the Soporte Oficinas team asked to take out of the report.
+ *
+ * They are dropped from the specs, so a new deck never seeds them, and forced
+ * hidden in a stored one — not deleted. The Kanban slide is a notes page the
+ * team fills by hand, and a migration that removed it would throw away that
+ * text and its images with no way back. Hidden, the page keeps its content, is
+ * out of the printed report and out of the index, and no longer counts as
+ * seeded, so whoever wants it gone for good has the remove control for it.
+ */
+const RETIRED_PAGE_IDS = new Set([
+  "oficinas-asignadas-total-semanal",
+  "oficinas-resueltas-total-semanal",
+  "oficinas-peticiones-dt-semanal",
+  "oficinas-seccion-kanban",
+  "oficinas-kanban",
+]);
+
+/**
+ * Titles the team asked to reword, keyed by the page and by every spelling the
+ * title has had.
+ *
+ * A stored deck keeps the text the user last saved, which is what makes a
+ * manual correction survive an upload — so a retitle has to be migrated or the
+ * published deck would keep the old wording forever. It is keyed on the exact
+ * previous strings, including the " por Territorial" the team typed by hand
+ * into two of them, so a title customised into anything else is still theirs
+ * and is left alone.
+ */
+const RETITLED_PAGES: Record<string, { from: string[]; to: string }> = {
+  "oficinas-asignadas-dt": {
+    from: [
+      "1.1 Volumetría de incidencias asignadas",
+      "1.1 Volumetría de incidencias asignadas por Territorial",
+      "1.1 Incidencias asignadas por DT",
+    ],
+    to: "1.1 Volumetría de incidencias gestionadas sin validadoras",
+  },
+  "oficinas-resueltas-dt": {
+    from: [
+      "1.2 Volumetría de incidencias resueltas",
+      "1.2 Volumetría de incidencias resueltas por Territorial",
+      "1.2 Incidencias resueltas por DT",
+    ],
+    to: "1.2 Volumetría de incidencias resueltas por Territorial sin validadoras",
+  },
+  "oficinas-asignadas-elemento": {
+    from: ["1.1 Incidencias asignadas por elemento"],
+    to: "1.1 Incidencias gestionadas por elemento",
+  },
+};
+
 /** One stale manual correction published a 7 over the imported S35 value 99. */
 const STALE_RESUELTAS_S35_OVERRIDE = {
   pageId: "oficinas-resueltas-dt",
@@ -73,13 +125,13 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
   {
     id: "oficinas-asignadas-dt",
     kind: "ofiAsignadasDT",
-    title: "1.1 Volumetría de incidencias asignadas",
+    title: "1.1 Volumetría de incidencias gestionadas sin validadoras",
     sections: ["asignadas"],
   },
   {
     id: "oficinas-resueltas-dt",
     kind: "ofiResueltasDT",
-    title: "1.2 Volumetría de incidencias resueltas",
+    title: "1.2 Volumetría de incidencias resueltas por Territorial sin validadoras",
     sections: ["resueltas"],
   },
   {
@@ -94,15 +146,9 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     sections: ["asignadas"],
   },
   {
-    id: "oficinas-asignadas-total-semanal",
-    kind: "ofiAsignadasTotalSemanal",
-    title: "1.1 Total semanal de incidencias asignadas",
-    sections: ["asignadas"],
-  },
-  {
     id: "oficinas-asignadas-elemento",
     kind: "ofiAsignadasElemento",
-    title: "1.1 Incidencias asignadas por elemento",
+    title: "1.1 Incidencias gestionadas por elemento",
     sections: ["asignadas"],
   },
   {
@@ -112,24 +158,12 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     sections: ["resueltas"],
   },
   {
-    id: "oficinas-resueltas-total-semanal",
-    kind: "ofiResueltasTotalSemanal",
-    title: "1.2 Total semanal de incidencias resueltas",
-    sections: ["resueltas"],
-  },
-  {
     id: "oficinas-resueltas-elemento",
     kind: "ofiResueltasElemento",
     title: "1.2 Incidencias resueltas por elemento",
     sections: ["resueltas"],
   },
   { id: "oficinas-seccion-peticiones", kind: "section", title: "1.3 Peticiones resueltas" },
-  {
-    id: "oficinas-peticiones-dt-semanal",
-    kind: "ofiPeticionesDTSemanal",
-    title: "1.3 Volumetría de peticiones resueltas por territorial",
-    sections: ["peticiones"],
-  },
   {
     id: "oficinas-peticiones-dt",
     kind: "ofiPeticionesDT",
@@ -184,8 +218,6 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     title: "1.5 Recicladores por elemento",
     sections: ["recicladores"],
   },
-  { id: "oficinas-seccion-kanban", kind: "section", title: "2. Kanban" },
-  { id: "oficinas-kanban", kind: "notes", title: "2. Kanban" },
 ];
 
 /** Sections a page needs, by page id. Empty for the pages with no dataset. */
@@ -293,8 +325,8 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
       id: "index",
       kind: "index",
       supportType: null,
-      // Seven entries, which is one more than the index slide draws by default:
-      // `Oficinas.tsx` widens `itemKeys` to match the printed index.
+      // Six entries, the number the index slide draws by default, since the
+      // seventh ("2. Kanban") went out of the report with its pages.
       text: {
         title: "Contenido",
         item1: "1. Revisión de métricas",
@@ -303,7 +335,6 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
         item4: "1.3 Peticiones",
         item5: "1.4 Volumetría Encuestas Peticiones",
         item6: "1.5 Recicladores",
-        item7: "2. Kanban",
       },
       visible: true,
       weekSelection: null,
@@ -346,6 +377,12 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
  *
  * Generic over `createDefaultOficinasDeck`: adding a page to the specs is
  * enough. The insert and kind-realignment rules live in `mergeDeckTemplate`.
+ *
+ * Taking a page out is not generic and cannot be: `mergeDeckTemplate` only
+ * adds, because a stored deck is the user's copy. So a page the team dropped
+ * has to be named in `RETIRED_PAGE_IDS`, and a title they reworded in
+ * `RETITLED_PAGES`; both are one-way and both leave anything the user typed
+ * themselves untouched.
  */
 export function mergeOficinasDeckTemplate(deck: OficinasDeckState): OficinasDeckState {
   return mergeDeckTemplate(
@@ -356,6 +393,28 @@ export function mergeOficinasDeckTemplate(deck: OficinasDeckState): OficinasDeck
 
       if (HIDDEN_WEEKLY_ELEMENT_PAGE_IDS.has(page.id) && page.visible !== false) {
         migrated = { ...migrated, visible: false };
+      }
+
+      if (RETIRED_PAGE_IDS.has(page.id) && page.visible !== false) {
+        migrated = { ...migrated, visible: false };
+      }
+
+      const retitled = RETITLED_PAGES[page.id];
+
+      if (retitled && retitled.from.includes(page.text.title ?? "")) {
+        migrated = {
+          ...migrated,
+          text: { ...migrated.text, title: retitled.to },
+        };
+      }
+
+      // The index is a page like any other, so its seventh entry survives in a
+      // stored deck after the Kanban pages leave. Cleared only when it still
+      // reads what the deck seeded, never when someone reused the slot.
+      if (page.id === "index" && page.text.item7 === "2. Kanban") {
+        const text = { ...migrated.text };
+        delete text.item7;
+        migrated = { ...migrated, text };
       }
 
       if (

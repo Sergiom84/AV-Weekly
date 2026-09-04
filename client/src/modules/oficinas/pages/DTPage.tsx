@@ -54,8 +54,10 @@ export interface DTTableSpec {
   caption: string;
   rows: OficinasRow[];
   /**
-   * Offices, ratio and weekly average columns. On by default; the
-   * "Validadoras" table of the published slide prints the six weeks alone.
+   * Offices, ratio and weekly average columns. On by default; off prints the
+   * weeks alone, for a matrix whose ratio against the office count would not
+   * mean anything. No page needs it since the "Validadoras" table left the
+   * incident slides, so the contract is kept but currently unexercised.
    */
   aggregates?: boolean;
 }
@@ -124,6 +126,17 @@ interface DTPageProps extends OficinasPageProps {
   yearSelector?: YearSelection;
   /** Name of the current-week metric shown in the first headline card. */
   metricLabel?: string;
+  /**
+   * Names the two compared cards by their week and year ("Semana 35 - 2026")
+   * instead of by the metric and the bare year ("Incidencias S35", "2025").
+   *
+   * Asked for by the Soporte Oficinas team on the territorial slides they
+   * publish: the metric is already in the title above, and a card labelled just
+   * "2025" reads as a year figure rather than as the same week of last year,
+   * which is what it is. Opt-in per page rather than global, so a slide the
+   * request did not name keeps the labels its readers know.
+   */
+  weekYearHeadline?: boolean;
   /** Named visual family that owns the page-specific layout rules. */
   layout?: DTTerritorialLayout;
   /** Prioritises weekly readings over unused aggregate-column space. */
@@ -194,6 +207,7 @@ export default function DTPage({
   comparison,
   yearSelector,
   metricLabel = "Incidencias",
+  weekYearHeadline = false,
   layout = "standard-territorial",
   compactWeekPriority = false,
 }: DTPageProps) {
@@ -384,14 +398,18 @@ export default function DTPage({
       ? []
       : [
           {
-            label: `${metricLabel} S${headline.week}`,
+            label: weekYearHeadline
+              ? `Semana ${headline.week} - ${year}`
+              : `${metricLabel} S${headline.week}`,
             value: headline.current.toLocaleString("es-ES"),
           },
           ...(headline.previous === null || compareYear === null
             ? []
             : [
                 {
-                  label: `${compareYear}`,
+                  label: weekYearHeadline
+                    ? `Semana ${headline.week} - ${compareYear}`
+                    : `${compareYear}`,
                   value: headline.previous.toLocaleString("es-ES"),
                 },
                 {
@@ -522,8 +540,10 @@ interface DTTableProps {
   year: number;
   totals: number[];
   /**
-   * Offices, ratio and weekly average columns. On by default; the
-   * "Validadoras" table of the published slide prints the six weeks alone.
+   * Offices, ratio and weekly average columns. On by default; off prints the
+   * weeks alone, for a matrix whose ratio against the office count would not
+   * mean anything. No page needs it since the "Validadoras" table left the
+   * incident slides, so the contract is kept but currently unexercised.
    */
   aggregates?: boolean;
   /**

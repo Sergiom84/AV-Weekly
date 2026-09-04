@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createSectionPage } from "../shared/deck/core.ts";
+import { createNotesPage, createSectionPage } from "../shared/deck/core.ts";
 import {
+  OFICINAS_SERVICE,
   createDefaultOficinasDeck,
   mergeOficinasDeckTemplate,
 } from "../shared/modules/oficinas/deck.ts";
@@ -33,21 +34,88 @@ describe("mergeOficinasDeckTemplate", () => {
     );
   });
 
-  it("seeds Kanban into a deck that never had it", () => {
-    const deck = createDefaultOficinasDeck();
-    deck.pages = deck.pages.filter(
-      (page) => page.id !== "oficinas-seccion-kanban" && page.id !== "oficinas-kanban"
+  it("never seeds a retired page back into a deck", () => {
+    const ids = mergeOficinasDeckTemplate(createDefaultOficinasDeck()).pages.map(
+      (page) => page.id
     );
 
-    const merged = mergeOficinasDeckTemplate(deck);
-    const ids = merged.pages.map((page) => page.id);
-    const recicladores = ids.indexOf("oficinas-recicladores-elemento");
-    const section = ids.indexOf("oficinas-seccion-kanban");
-    const kanban = ids.indexOf("oficinas-kanban");
+    for (const retired of [
+      "oficinas-asignadas-total-semanal",
+      "oficinas-resueltas-total-semanal",
+      "oficinas-peticiones-dt-semanal",
+      "oficinas-seccion-kanban",
+      "oficinas-kanban",
+    ]) {
+      expect(ids).not.toContain(retired);
+    }
+  });
 
-    expect(section).toBe(recicladores + 1);
-    expect(kanban).toBe(section + 1);
-    expect(merged.pages[kanban]?.kind).toBe("notes");
+  it("hides a retired page already stored instead of throwing its content away", () => {
+    const deck = createDefaultOficinasDeck();
+    const kanban = createNotesPage<"notes", string>(
+      "oficinas-kanban",
+      "notes",
+      OFICINAS_SERVICE
+    ) as OficinasDeckPage;
+    kanban.text = { ...kanban.text, title: "2. Kanban", body: "tablero de la semana" };
+    const closingIndex = deck.pages.findIndex((page) => page.kind === "closing");
+    deck.pages.splice(closingIndex, 0, kanban);
+
+    const stored = mergeOficinasDeckTemplate(deck).pages.find(
+      (page) => page.id === "oficinas-kanban"
+    );
+
+    expect(stored?.visible).toBe(false);
+    expect(stored?.text.body).toBe("tablero de la semana");
+  });
+
+  it("rewords the retitled pages and leaves a custom title alone", () => {
+    const deck = createDefaultOficinasDeck();
+    const assigned = deck.pages.find((page) => page.id === "oficinas-asignadas-dt");
+    const resolved = deck.pages.find((page) => page.id === "oficinas-resueltas-dt");
+
+    if (!assigned || !resolved) {
+      throw new Error("Missing territorial Oficinas pages");
+    }
+
+    // The wording the team had typed into their own stored deck.
+    assigned.text = {
+      ...assigned.text,
+      title: "1.1 Volumetría de incidencias asignadas por Territorial",
+    };
+    resolved.text = { ...resolved.text, title: "1.2 Título del equipo" };
+
+    const merged = mergeOficinasDeckTemplate(deck);
+
+    expect(
+      merged.pages.find((page) => page.id === "oficinas-asignadas-dt")?.text.title
+    ).toBe("1.1 Volumetría de incidencias gestionadas sin validadoras");
+    expect(
+      merged.pages.find((page) => page.id === "oficinas-resueltas-dt")?.text.title
+    ).toBe("1.2 Título del equipo");
+  });
+
+  it("clears the stored Kanban index entry without touching a reused slot", () => {
+    const withSeeded = createDefaultOficinasDeck();
+    const seeded = withSeeded.pages.find((page) => page.id === "index");
+    const withReused = createDefaultOficinasDeck();
+    const reused = withReused.pages.find((page) => page.id === "index");
+
+    if (!seeded || !reused) {
+      throw new Error("Missing index page in default Oficinas deck");
+    }
+
+    seeded.text = { ...seeded.text, item7: "2. Kanban" };
+    reused.text = { ...reused.text, item7: "2. Plan de mejora" };
+
+    expect(
+      mergeOficinasDeckTemplate(withSeeded).pages.find((page) => page.id === "index")
+        ?.text.item7
+    ).toBeUndefined();
+    expect(
+      mergeOficinasDeckTemplate(withReused).pages.find((page) => page.id === "index")
+        ?.text.item7
+    ).toBe("2. Plan de mejora");
   });
 
   it("realigns only the kind of a stored placeholder that the specs promoted", () => {
@@ -106,13 +174,19 @@ describe("mergeOficinasDeckTemplate", () => {
 
   it("never places a recovered page after the closing slide", () => {
     const deck = createDefaultOficinasDeck();
-    deck.pages = deck.pages.filter((page) => page.id !== "oficinas-kanban");
+    // The last page the specs declare, so its only surviving anchors precede it
+    // and a naive append would land it behind the closing slide.
+    deck.pages = deck.pages.filter(
+      (page) => page.id !== "oficinas-recicladores-elemento"
+    );
 
     const merged = mergeOficinasDeckTemplate(deck);
     const closingIndex = merged.pages.findIndex((page) => page.kind === "closing");
 
     expect(closingIndex).toBe(merged.pages.length - 1);
-    expect(merged.pages.some((page) => page.id === "oficinas-kanban")).toBe(true);
+    expect(
+      merged.pages.some((page) => page.id === "oficinas-recicladores-elemento")
+    ).toBe(true);
   });
 
   it("hides the two replaced weekly element pages by default", () => {
@@ -159,21 +233,21 @@ describe("mergeOficinasDeckTemplate", () => {
     ).toBe(false);
   });
 
-  it("replaces the hidden weekly slots before their element pages", () => {
+  it("recovers a missing page into the slot its specs give it", () => {
     const deck = createDefaultOficinasDeck();
     deck.pages = deck.pages.filter(
       (page) =>
-        page.id !== "oficinas-asignadas-total-semanal" &&
-        page.id !== "oficinas-resueltas-total-semanal"
+        page.id !== "oficinas-asignadas-elemento" &&
+        page.id !== "oficinas-resueltas-elemento"
     );
 
     const ids = mergeOficinasDeckTemplate(deck).pages.map((page) => page.id);
 
-    expect(ids.indexOf("oficinas-asignadas-total-semanal")).toBe(
-      ids.indexOf("oficinas-asignadas-elemento") - 1
+    expect(ids.indexOf("oficinas-asignadas-elemento")).toBe(
+      ids.indexOf("oficinas-asignadas-semanal") + 1
     );
-    expect(ids.indexOf("oficinas-resueltas-total-semanal")).toBe(
-      ids.indexOf("oficinas-resueltas-elemento") - 1
+    expect(ids.indexOf("oficinas-resueltas-elemento")).toBe(
+      ids.indexOf("oficinas-resueltas-semanal") + 1
     );
   });
 

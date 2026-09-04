@@ -51,8 +51,13 @@ import {
 } from "@/modules/oficinas/pages/IncidenciasTotalSemanalPage";
 import type { OficinasDataPageProps } from "@/modules/oficinas/pages/PageShell";
 
-/** Index entries the printed report lists, one more than the slide draws by default. */
-const INDEX_ITEMS = ["item1", "item2", "item3", "item4", "item5", "item6", "item7"];
+/**
+ * Index entries the printed report lists.
+ *
+ * Back to the six the index slide draws by default: the seventh was "2.
+ * Kanban", and the section left the report with its pages.
+ */
+const INDEX_ITEMS = ["item1", "item2", "item3", "item4", "item5", "item6"];
 
 const MODULE = getDeckModule("oficinas");
 

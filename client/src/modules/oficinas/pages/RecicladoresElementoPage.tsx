@@ -59,12 +59,18 @@ export default function RecicladoresElementoPage({
       seriesLabel="Elemento"
       compactPresentation
       kpis={[
+        // "Semana 35 - 2026" rather than "2026 S35", the wording the team asked
+        // for across the territorial slides. The bare year is the fallback for
+        // a dataset with no closed week yet, where there is no week to name.
         {
-          label: week === null ? String(year) : `${year} ${weekLabel(week)}`,
+          label: week === null ? String(year) : `Semana ${week} - ${year}`,
           value: total.toLocaleString("es-ES"),
         },
         {
-          label: `${previousYear}${week === null ? "" : ` ${weekLabel(week)}`}`,
+          label:
+            week === null
+              ? String(previousYear)
+              : `Semana ${week} - ${previousYear}`,
           value: previous === null ? "—" : previous.toLocaleString("es-ES"),
         },
         { label: "Variación", value: variationLabel(previous, total) },

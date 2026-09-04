@@ -6,7 +6,7 @@ import {
   seriesYears,
 } from "@shared/modules/oficinas/derived";
 import type { OficinasIncidencias } from "@shared/modules/oficinas/types";
-import { readVariant, variantLabel } from "../aggregate";
+import { DEFAULT_VARIANT, readVariant, variantLabel } from "../aggregate";
 import { oficinasYearSelector } from "../yearSelection";
 import DTPage from "./DTPage";
 import { type OficinasDataPageProps } from "./PageShell";
@@ -27,9 +27,14 @@ interface IncidenciasDTPageProps extends OficinasDataPageProps {
  * per-DT matrix, so a past year is selectable without inventing a directorate
  * split the source never measured.
  *
- * The slide prints the three validator matrices side by side, so the variant
- * selector does not choose a table: it chooses the scope the bars are drawn at,
- * and with it the past years the year selector may offer.
+ * The slide prints two of the three validator matrices side by side, so the
+ * variant selector does not choose a table: it chooses the scope the bars are
+ * drawn at, and with it the past years the year selector may offer.
+ *
+ * The "Validadoras" matrix used to print as a third table and no longer does:
+ * the team asked for it out and for the other two to take the width. The data
+ * is still in the dataset and still reachable from the variant selector, so
+ * nothing was lost, only untangled from the printed slide.
  *
  * The two selectors compose, and the second is bounded by the first.
  * `comparisonSeries` answers which years exist at the scope the page is charting,
@@ -53,6 +58,13 @@ export default function IncidenciasDTPage({
 }: IncidenciasDTPageProps) {
   const variant = readVariant(page.supportType);
   const rows = dtMatrix(section, variant);
+  // The scope used to be printed under the chart on every reading. The team
+  // asked for that line out, and the title now names the default scope, so it
+  // is printed only when the page is charting something the title does not say.
+  // Dropping it outright would let the slide read "sin validadoras" over bars
+  // that count them.
+  const scopeCaption =
+    variant === DEFAULT_VARIANT ? undefined : variantLabel(variant);
   const year =
     dataset.year ??
     latestYear(rows.flatMap(row => row.values)) ??
@@ -71,18 +83,14 @@ export default function IncidenciasDTPage({
           rows: dtMatrix(section, "sin"),
         },
         { caption: "Total con Validadoras", rows: dtMatrix(section, "con") },
-        {
-          caption: "Validadoras",
-          rows: dtMatrix(section, "solo"),
-          aggregates: false,
-        },
       ]}
       year={year}
       masters={dataset.masters}
       totals={variant === "con" ? section?.totalsByWeek : undefined}
       throughWeek={reportWeek(dataset, year)}
       layout="incidencias-territoriales"
-      caption={variantLabel(variant)}
+      weekYearHeadline
+      caption={scopeCaption}
       controls={
         <VariantSelector
           value={variant}

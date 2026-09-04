@@ -34,6 +34,7 @@ export default function RecicladoresDTPage({
       masters={dataset.masters}
       throughWeek={reportWeek(dataset, year)}
       metricLabel="Recicladores"
+      weekYearHeadline
       layout="incidencias-territoriales"
       compactWeekPriority
     />

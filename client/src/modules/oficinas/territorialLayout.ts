@@ -6,9 +6,10 @@ export type DTTerritorialLayout =
 /**
  * Outer flex of each table card.
  *
- * Incident slides deliberately give the three cards the same frame. Their
- * internal columns remain independent, so the Validadoras card can still omit
- * OF, Ratio and Media without changing its data contract.
+ * Incident slides deliberately give every card the same frame, whatever the
+ * week count or the columns inside it. That is what makes the two remaining
+ * tables take half the width each when the third one is gone, with nothing to
+ * adjust here.
  */
 export function dtTableFrameFlex(
   layout: DTTerritorialLayout,
