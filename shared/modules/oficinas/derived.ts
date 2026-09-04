@@ -4,6 +4,7 @@ import type {
   OficinasElementRow,
   OficinasIncidencias,
   OficinasMasters,
+  OficinasPeticiones,
   OficinasRecicladores,
   OficinasRow,
   OficinasValidadoras,
@@ -155,6 +156,46 @@ export function recicladoresSeries(
   );
 
   return [...current, ...previous].sort(
+    (a, b) => a.year - b.year || a.week - b.week
+  );
+}
+
+/**
+ * The request weekly series across every year the dataset holds.
+ *
+ * Same shape as `recicladoresSeries` with one more source, and the order of
+ * precedence is the whole point:
+ *
+ * 1. `byDT`, the template's current-year matrix.
+ * 2. `byDTPrevious`, the template's own year-on-year sheet, for 2025.
+ * 3. `totalsByWeek` for whatever is left, which is how 2024 and 2023 arrive —
+ *    they only exist in the manual historico.
+ *
+ * The two sources disagree on 2025: the template's matrix reports ten more
+ * requests over the first thirty-five weeks than the historico's column does.
+ * Neither is wrong — the historico is a snapshot taken by hand and the ticket
+ * system feeds past weeks back — but the template is what the published slide
+ * has always drawn, so it wins. Letting the historico win instead would have
+ * silently moved a previous-year line the team already sent to the bank.
+ */
+export function peticionesSeries(
+  section: OficinasPeticiones | undefined
+): OficinasWeekValue[] {
+  const current = weeklyTotals(section?.byDT ?? []);
+  const years = new Set(current.map(entry => entry.year));
+  const previous = weeklyTotals(section?.byDTPrevious ?? []).filter(
+    entry => !years.has(entry.year)
+  );
+
+  for (const entry of previous) {
+    years.add(entry.year);
+  }
+
+  const historic = (section?.totalsByWeek ?? []).filter(
+    entry => !years.has(entry.year)
+  );
+
+  return [...current, ...previous, ...historic].sort(
     (a, b) => a.year - b.year || a.week - b.week
   );
 }

@@ -3,6 +3,7 @@ import { previousTypeEntries } from "../client/src/modules/oficinas/peticionesTi
 import { surveyYtdSeries } from "../client/src/modules/oficinas/surveyYtd.ts";
 import { elementHeadlineStats } from "../client/src/modules/oficinas/elementHeadline.ts";
 import { recicladoresYtd } from "../client/src/modules/oficinas/recicladoresYtd.ts";
+import { peticionesSeries } from "../shared/modules/oficinas/derived.ts";
 import { mergeOficinasDataset } from "./parseOficinasPlano.ts";
 import type { OficinasDataset, OficinasRow } from "../shared/modules/oficinas/types.ts";
 
@@ -38,6 +39,29 @@ describe("Oficinas requested integrations", () => {
     expect(result.series.map(entry => entry.accumulated)).toEqual([100, 40, 101, 431]);
     expect(result.latestSeries.map(entry => entry.accumulated)).toEqual([40, 101, 431]);
     expect(result.latestYtd).toBe(431);
+  });
+
+  it("keeps the request comparison on the template where both sources report a year", () => {
+    // Sheet 13 and the historic column both carry 2025, and they disagree: the
+    // template reports 40, the historic snapshot 30. The template is what the
+    // published slide has always drawn, so it has to win. 2024 exists only in
+    // the historic column, so that is where it must come from.
+    const series = peticionesSeries({
+      totalsByWeek: [
+        { year: 2026, week: 1, value: 9 },
+        { year: 2025, week: 1, value: 30 },
+        { year: 2024, week: 1, value: 26 },
+      ],
+      byDT: [row("D.T. SUR", 2026, 1, 9)],
+      byDTPrevious: [row("D.T. SUR", 2025, 1, 40)],
+      byTipo: [],
+    });
+
+    expect(series).toEqual([
+      { year: 2024, week: 1, value: 26 },
+      { year: 2025, week: 1, value: 40 },
+      { year: 2026, week: 1, value: 9 },
+    ]);
   });
 
   it("cuts both years at the report week when accumulating recyclers", () => {

@@ -123,32 +123,100 @@ function readLeftTotals(rows, yearCols) {
   return byYear;
 }
 
+/** Filas que abren un bloque anunciando su año ("2024", "año 2025"). */
+function yearMarkerRows(rows, labelCol) {
+  const markers = [];
+
+  for (let r = 0; r < rows.length; r += 1) {
+    const text = String(rows[r]?.[labelCol] ?? "").trim();
+    const match = text.match(/^(?:a[nñ]o\s*)?(20\d\d)$/i);
+
+    if (match) {
+      markers.push({ row: r, year: Number(match[1]) });
+    }
+  }
+
+  return markers;
+}
+
+/**
+ * Delimita el bloque de un año concreto: su cabecera "Semana" y su fila de
+ * totales, buscadas desde la marca de año y sin cruzar la marca siguiente.
+ *
+ * Antes esta función ignoraba `year` para localizar el bloque: cogía la primera
+ * cabecera y el primer total de la hoja y se limitaba a estampar el año que le
+ * pasaran. Como "RECICLADORES RESUELTAS" apila el bloque de 2025 encima del de
+ * 2024, pedir 2024 devolvía los números de 2025 con la etiqueta cambiada, y el
+ * dataset acabó con un 2024 que era una copia de 2025 en 30 de 35 semanas.
+ *
+ * También distingue los dos bloques que comparten año en "Peticiones IMAC" (el
+ * de territoriales y el de tipologías) por la etiqueta de su fila de totales.
+ *
+ * Una hoja sin marcas de año conserva el comportamiento antiguo, que es lo que
+ * necesitan las rejillas de un solo bloque. Si hay marcas pero ninguna es la
+ * del año pedido, devuelve vacío: mejor no importar nada que importar el año
+ * de al lado.
+ */
+function locateBlock(rows, year, totalRowLabel, labelCol) {
+  const isHeader = (r) =>
+    String(rows[r]?.[labelCol] ?? "").toLowerCase().startsWith("semana");
+  const isTotal = (r) =>
+    String(rows[r]?.[labelCol] ?? "").toUpperCase().trim() === totalRowLabel;
+
+  const markers = yearMarkerRows(rows, labelCol);
+
+  if (markers.length === 0) {
+    const hdrIdx = rows.findIndex((_, r) => isHeader(r));
+    const totalIdx = rows.findIndex((_, r) => isTotal(r));
+
+    return hdrIdx === -1 || totalIdx === -1 ? null : { hdrIdx, totalIdx };
+  }
+
+  for (let m = 0; m < markers.length; m += 1) {
+    if (markers[m].year !== year) {
+      continue;
+    }
+
+    const end = markers[m + 1]?.row ?? rows.length;
+    let hdrIdx = -1;
+
+    for (let r = markers[m].row + 1; r < end; r += 1) {
+      if (hdrIdx === -1 && isHeader(r)) {
+        hdrIdx = r;
+        continue;
+      }
+
+      if (hdrIdx !== -1 && isTotal(r)) {
+        return { hdrIdx, totalIdx: r };
+      }
+    }
+  }
+
+  return null;
+}
+
 /** Bloque DT de la derecha (Semana | OF/Media | 1..52), agrupado por DT normalizada. */
 export function readDTBlock(rows, year, totalRowLabel, labelCol) {
-  const totalRow = rows.find(
-    (r) => String(r[labelCol] ?? "").toUpperCase() === totalRowLabel
-  );
-  const hdrRow = rows.find((r) =>
-    String(r[labelCol] ?? "").toLowerCase().startsWith("semana")
-  );
+  const block = locateBlock(rows, year, totalRowLabel, labelCol);
 
-  if (!totalRow || !hdrRow) {
+  if (!block) {
     return [];
   }
 
+  const hdrRow = rows[block.hdrIdx];
   const weekCols = [];
 
   for (let c = labelCol + 1; c < hdrRow.length; c += 1) {
     const v = hdrRow[c];
 
-    if (typeof v === "number" && v >= 1 && v <= 52) weekCols.push(c);
+    // Se guarda la semana que declara la cabecera, no la posición: una columna
+    // insertada no debe correr toda la serie una semana.
+    if (typeof v === "number" && v >= 1 && v <= 52) weekCols.push({ col: c, week: v });
   }
 
-  const hdrIdx = rows.indexOf(hdrRow);
-  const totalIdx = rows.indexOf(totalRow);
   const out = new Map();
 
-  for (let r = hdrIdx + 1; r < totalIdx; r += 1) {
+  for (let r = block.hdrIdx + 1; r < block.totalIdx; r += 1) {
     const rawLabel = rows[r]?.[labelCol];
 
     if (rawLabel === null || rawLabel === undefined || String(rawLabel).trim() === "") {
@@ -157,7 +225,7 @@ export function readDTBlock(rows, year, totalRowLabel, labelCol) {
 
     const label = normalizeDT(rawLabel);
     const values = weekCols
-      .map((c, i) => ({ year, week: i + 1, value: rows[r][c] }))
+      .map(({ col, week }) => ({ year, week, value: rows[r][col] }))
       .filter((entry) => typeof entry.value === "number");
 
     const existing = out.get(label);
@@ -364,7 +432,35 @@ async function main() {
   );
 
   const recicladores = existing.recicladores ?? {};
-  const byDT = addMissingRows(recicladores.byDT, recicladores2024);
+  // El 2024 guardado por una ejecución anterior son los números de 2025: hasta
+  // hoy `readDTBlock` cogía el primer bloque de la hoja y solo cambiaba el año
+  // que estampaba. Se retiran esas celdas antes de sembrar, porque la siembra
+  // es aditiva y no las pisaría.
+  //
+  // Solo se tocan los años que el template semanal no puede haber traído: trae
+  // el año en curso en `byDT` y el anterior en `byDTPrevious`, así que un 2024
+  // dentro de `byDT` solo puede venir de este script.
+  const seededYears = new Set(recicladores2024.flatMap((row) => row.values.map((v) => v.year)));
+  const currentYears = new Set(
+    (recicladores.byDTPrevious ?? []).flatMap((row) => row.values.map((v) => v.year + 1))
+  );
+  const stale = (recicladores.byDT ?? []).reduce(
+    (count, row) =>
+      count + row.values.filter((v) => seededYears.has(v.year) && !currentYears.has(v.year)).length,
+    0
+  );
+  const cleanedByDT = (recicladores.byDT ?? []).map((row) => ({
+    ...row,
+    values: row.values.filter(
+      (v) => !seededYears.has(v.year) || currentYears.has(v.year)
+    ),
+  }));
+
+  if (stale > 0) {
+    report.push(`recicladores.byDT: -${stale} celdas de un 2024 sembrado mal (eran de 2025)`);
+  }
+
+  const byDT = addMissingRows(cleanedByDT, recicladores2024);
   const byDTPrevious = addMissingRows(recicladores.byDTPrevious, recicladores2025);
 
   existing.recicladores = {
