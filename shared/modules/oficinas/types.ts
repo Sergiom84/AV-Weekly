@@ -360,6 +360,99 @@ export interface OficinasRecicladores {
 }
 
 /* -------------------------------------------------------------------------- */
+/* IMAC requests                                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The IMAC request listing, aggregated by week.
+ *
+ * The only source of the workbook that is not already pivoted: 2.559 rows of
+ * one request each. It is folded here at import and never stored raw — the
+ * dataset lives in a single JSON column, and keeping the listing would multiply
+ * its size for figures no page reads row by row.
+ *
+ * Weeks come from `Fecha_Cierre`, not from `Fecha_Solicitud`. That is not a
+ * preference, it is what reconciles: against sheet 11, the template's own
+ * weekly request total, closing dates match to the digit on 34 of 35 weeks and
+ * request dates on 5. The one week that differs is the first, where the
+ * template counts requests closed in January that were opened in 2025 and this
+ * listing, which only carries the current year, cannot see them.
+ *
+ * The status filter is implicit and comes free with that choice: the 58
+ * rejected and cancelled rows carry `//` as their closing date, so they never
+ * land in a week. Nothing is dropped by name.
+ */
+export interface OficinasImac {
+  /** Requests closed per week. */
+  peticionesByWeek: OficinasWeekValue[];
+  /**
+   * Units delivered per week, summed over `Cantidad_1` to `Cantidad_5`.
+   *
+   * This is the "work done" of the request: one request can carry five
+   * products, so a week of ten requests is not a week of ten interventions.
+   */
+  intervencionesByWeek: OficinasWeekValue[];
+  /** Requests closed per week, split by `Tipo_Peticion`. */
+  byTipo: OficinasRow[];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Monthly totals                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** One cell of a monthly series, keyed `YYYY-MM`. */
+export interface OficinasMonthValue {
+  month: string;
+  value: number;
+}
+
+/** One labelled row of a monthly matrix, used by the territorial closures. */
+export interface OficinasMonthRow {
+  label: string;
+  values: OficinasMonthValue[];
+}
+
+/** Sheet 23: monthly incidents of the branch network. */
+export interface OficinasIncidenciasMensual {
+  month: string;
+  resueltas: number;
+  asignadas: number;
+  asignaciones: number;
+}
+
+/** Sheet 24: monthly recycler openings versus closures. */
+export interface OficinasRecicladoresMensual {
+  month: string;
+  abiertas: number;
+  resueltas: number;
+}
+
+/** Sheet 26: monthly IMAC request flow. */
+export interface OficinasPeticionesMensual {
+  month: string;
+  peticiones: number;
+  realizadas: number;
+  pendientes: number;
+}
+
+/**
+ * The four monthly pivots added as sheets 23-26.
+ *
+ * They are not weekly matrices and must not be forced into `OficinasWeekValue`:
+ * a month is not a week, and sheet 25 is a directorate × month grid.
+ *
+ * Months are stored as reported, including the in-progress one. Pages drop
+ * that last open month using the report week's calendar month, the same
+ * closed-period rule the weekly slides already follow.
+ */
+export interface OficinasMensual {
+  incidencias: OficinasIncidenciasMensual[];
+  recicladores: OficinasRecicladoresMensual[];
+  cierresPorDT: OficinasMonthRow[];
+  peticiones: OficinasPeticionesMensual[];
+}
+
+/* -------------------------------------------------------------------------- */
 /* Surveys                                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -416,6 +509,8 @@ export interface OficinasDataset {
   resueltas?: OficinasIncidencias;
   peticiones?: OficinasPeticiones;
   recicladores?: OficinasRecicladores;
+  imac?: OficinasImac;
+  mensual?: OficinasMensual;
   encuestas?: OficinasEncuestas;
   masters?: OficinasMasters;
   source: DatasetSource;
@@ -430,6 +525,8 @@ export type OficinasSectionKey =
   | "asignadas"
   | "resueltas"
   | "peticiones"
+  | "imac"
+  | "mensual"
   | "recicladores"
   | "encuestas";
 
@@ -461,7 +558,12 @@ export type OficinasPageKind =
   | "ofiPeticionesDTSemanal"
   | "ofiPeticionesTipo"
   | "ofiPeticionesTipoSemanal"
+  | "ofiImac"
   | "ofiEncuestas"
+  | "ofiMensualIncidencias"
+  | "ofiMensualRecicladores"
+  | "ofiMensualCierresDT"
+  | "ofiMensualPeticiones"
   | "ofiRecicladoresDT"
   | "ofiRecicladoresDTSemanal"
   | "ofiRecicladoresElemento"

@@ -34,6 +34,11 @@ import AsignadasDTPage from "@/modules/oficinas/pages/AsignadasDTPage";
 import AsignadasElementoPage from "@/modules/oficinas/pages/AsignadasElementoPage";
 import AsignadasSemanalPage from "@/modules/oficinas/pages/AsignadasSemanalPage";
 import EncuestasPage from "@/modules/oficinas/pages/EncuestasPage";
+import ImacPage from "@/modules/oficinas/pages/ImacPage";
+import MensualCierresPage from "@/modules/oficinas/pages/MensualCierresPage";
+import MensualIncidenciasPage from "@/modules/oficinas/pages/MensualIncidenciasPage";
+import MensualPeticionesPage from "@/modules/oficinas/pages/MensualPeticionesPage";
+import MensualRecicladoresPage from "@/modules/oficinas/pages/MensualRecicladoresPage";
 import PeticionesDTPage from "@/modules/oficinas/pages/PeticionesDTPage";
 import PeticionesDTSemanalPage from "@/modules/oficinas/pages/PeticionesDTSemanalPage";
 import PeticionesTipoPage from "@/modules/oficinas/pages/PeticionesTipoPage";
@@ -55,10 +60,9 @@ import type { OficinasDataPageProps } from "@/modules/oficinas/pages/PageShell";
 /**
  * Index entries the printed report lists.
  *
- * Back to the six the index slide draws by default: the seventh was "2.
- * Kanban", and the section left the report with its pages.
+ * Seven entries: Kanban left, and the monthly block took its slot.
  */
-const INDEX_ITEMS = ["item1", "item2", "item3", "item4", "item5", "item6"];
+const INDEX_ITEMS = ["item1", "item2", "item3", "item4", "item5", "item6", "item7"];
 
 const MODULE = getDeckModule("oficinas");
 
@@ -83,7 +87,12 @@ const DATA_PAGES: Record<
   "oficinas-peticiones-dt": PeticionesDTPage,
   "oficinas-peticiones-tipo-semanal": PeticionesTipoSemanalPage,
   "oficinas-peticiones-tipo": PeticionesTipoPage,
+  "oficinas-imac": ImacPage,
   "oficinas-encuestas": EncuestasPage,
+  "oficinas-mensual-incidencias": MensualIncidenciasPage,
+  "oficinas-mensual-recicladores": MensualRecicladoresPage,
+  "oficinas-mensual-cierres-dt": MensualCierresPage,
+  "oficinas-mensual-peticiones": MensualPeticionesPage,
   "oficinas-recicladores-dt-semanal": RecicladoresDTSemanalPage,
   "oficinas-recicladores-dt": RecicladoresDTPage,
   "oficinas-recicladores-elemento-semanal": RecicladoresElementoSemanalPage,

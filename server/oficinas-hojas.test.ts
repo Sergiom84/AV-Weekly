@@ -264,11 +264,136 @@ describe("Oficinas sheet resolution", () => {
     expect(report.missingNamedSheets).toEqual(["peticionesImac"]);
   });
 
+  it("folds the IMAC listing by closing week, with its units", () => {
+    const listing: Row[] = [
+      [
+        "Peticion",
+        "Tipo_Peticion",
+        "Fecha_Solicitud",
+        "Fecha_Cierre",
+        "Status",
+        "Producto_1",
+        "Cantidad_1",
+        "Producto_2",
+        "Cantidad_2",
+      ],
+      // Lunes 5/1 y viernes 9/1 de 2026 son la ISO semana 2 (la 1 acaba el 4/1).
+      [1, "AMPLIACIÓN", "29/12/2025", "5/1/2026", "Cerrado", "Monitor", 2, "Ratón", 1],
+      [2, "AMPLIACIÓN", "5/1/2026", "9/1/2026", "Cerrado", "Teclado", 1, null, null],
+      [3, "SINIESTRO", "12/1/2026", "12/1/2026", "Cerrado", "Portátil", 4, null, null],
+      // Sin fecha de cierre: rechazada. No entra en ninguna semana.
+      [4, "SINIESTRO", "12/1/2026", "//", "Rechazado", "Portátil", 9, null, null],
+      // Misma tipología escrita sin tilde: una fila, no dos.
+      [5, "AMPLIACION", "12/1/2026", "13/1/2026", "Cerrado", "Monitor", 1, null, null],
+    ];
+
+    const { dataset } = parseOficinasWorkbook(
+      build([...pivots(), { name: IMAC_LISTING, rows: listing }]),
+      2026
+    );
+
+    expect(dataset.imac?.peticionesByWeek).toEqual([
+      { year: 2026, week: 2, value: 2 },
+      { year: 2026, week: 3, value: 2 },
+    ]);
+    // 2 + 1 + 1 en la semana 2; 4 + 1 en la 3. Las 9 unidades de la rechazada
+    // no cuentan: nunca se entregaron.
+    expect(dataset.imac?.intervencionesByWeek).toEqual([
+      { year: 2026, week: 2, value: 4 },
+      { year: 2026, week: 3, value: 5 },
+    ]);
+    expect(dataset.imac?.byTipo).toEqual([
+      {
+        label: "AMPLIACIÓN",
+        values: [
+          { year: 2026, week: 2, value: 2 },
+          { year: 2026, week: 3, value: 1 },
+        ],
+      },
+      { label: "SINIESTRO", values: [{ year: 2026, week: 3, value: 1 }] },
+    ]);
+  });
+
+  it("reads the listing columns by name, not by position", () => {
+    const moved: Row[] = [
+      ["Oficina", "Status", "Cantidad_1", "Fecha_Cierre", "Tipo_Peticion", "Peticion"],
+      ["0182-0001", "Cerrado", 3, "5/1/2026", "AMPLIACIÓN", 1],
+    ];
+
+    const { dataset, report } = parseOficinasWorkbook(
+      build([...pivots(), { name: IMAC_LISTING, rows: moved }]),
+      2026
+    );
+
+    expect(report.missingNamedSheets).toEqual([]);
+    expect(dataset.imac?.peticionesByWeek).toEqual([
+      { year: 2026, week: 2, value: 1 },
+    ]);
+    expect(dataset.imac?.intervencionesByWeek).toEqual([
+      { year: 2026, week: 2, value: 3 },
+    ]);
+  });
+
   it("does not mistake a pivot for the IMAC listing", () => {
     const { report } = parseOficinasWorkbook(currentTemplate(), 2026);
 
     expect(
       report.sheets.filter((sheet) => sheet.named !== null).map((sheet) => sheet.sheet)
     ).toEqual([IMAC_LISTING]);
+  });
+
+  it("reads the monthly sheets in calendar order and drops empty DAR rows", () => {
+    const workbook = build([
+      ...pivots().map((sheet) =>
+        sheet.name.startsWith("23-")
+          ? {
+              name: sheet.name,
+              rows: monthly(
+                ["Fecha", "Resueltas", "Asignadas", "Asignaciones"],
+                [
+                  ["2026/08", 380, 427, 466],
+                  ["2025/05", 0, 31, 33],
+                ]
+              ),
+            }
+          : sheet.name.startsWith("25-")
+            ? {
+                name: sheet.name,
+                rows: [
+                  ["", "Fecha", "2025/09", "2026/08", "Total"],
+                  ["DAR", "", null, null, null],
+                  ["CATALUÑA", "", 645, 86, "731"],
+                  ["--- DESCONOCIDA ---", "", 0, 0, 0],
+                  ["Total", "", 645, 380, "1,025"],
+                ],
+              }
+            : sheet
+      ),
+      { name: IMAC_LISTING, rows: imacListing(1) },
+    ]);
+    const { dataset } = parseOficinasWorkbook(workbook, 2026);
+
+    expect(dataset.mensual?.incidencias.map((row) => row.month)).toEqual([
+      "2025-05",
+      "2026-08",
+    ]);
+    expect(dataset.mensual?.incidencias[1]).toEqual({
+      month: "2026-08",
+      resueltas: 380,
+      asignadas: 427,
+      asignaciones: 466,
+    });
+    expect(dataset.mensual?.cierresPorDT).toEqual([
+      {
+        label: "D.T. CATALUÑA",
+        values: [
+          { month: "2025-09", value: 645 },
+          { month: "2026-08", value: 86 },
+        ],
+      },
+    ]);
+    expect(dataset.mensual?.peticiones).toEqual([
+      { month: "2026-08", peticiones: 113, realizadas: 111, pendientes: 2 },
+    ]);
   });
 });

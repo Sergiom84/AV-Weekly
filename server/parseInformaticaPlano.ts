@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { isoWeek, isoWeekYear } from "./isoWeek.ts";
 import {
   INFORMATICA_SHEETS,
   type InformaticaCitaAnualRow,
@@ -126,29 +127,10 @@ function dateFromSerial(serial: number): Date {
   return new Date(EXCEL_EPOCH + Math.trunc(serial) * 86400000);
 }
 
-/** ISO week number of a UTC date. */
-function isoWeek(date: Date): number {
-  const dayOfWeek = (date.getUTCDay() + 6) % 7;
-  const thursday = new Date(date.getTime() + (3 - dayOfWeek) * 86400000);
-  const firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
-  const firstOffset = (firstThursday.getUTCDay() + 6) % 7;
-  const firstWeekThursday = new Date(
-    firstThursday.getTime() + (3 - firstOffset) * 86400000
-  );
-
-  return 1 + Math.round((thursday.getTime() - firstWeekThursday.getTime()) / (7 * 86400000));
-}
-
-/**
- * ISO week-year of a UTC date: the year of the Thursday of its week.
- *
- * Exported because week 1 and week 53 straddle the calendar year, so anything
- * that groups weeks needs this rather than `getUTCFullYear()`.
- */
-export function isoWeekYear(date: Date): number {
-  const dayOfWeek = (date.getUTCDay() + 6) % 7;
-  return new Date(date.getTime() + (3 - dayOfWeek) * 86400000).getUTCFullYear();
-}
+// Both live in `isoWeek.ts` since Oficinas started grouping its IMAC listing by
+// the same rule. Re-exported here so the modules that already read the week-year
+// off this parser keep their import.
+export { isoWeekYear } from "./isoWeek.ts";
 
 /** `YYYY/MM` of a UTC date. */
 function monthLabelOf(date: Date): string {

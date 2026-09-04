@@ -111,7 +111,7 @@ describe("mergeOficinasDeckTemplate", () => {
     expect(
       mergeOficinasDeckTemplate(withSeeded).pages.find((page) => page.id === "index")
         ?.text.item7
-    ).toBeUndefined();
+    ).toBe("1.6 Resumen mensual");
     expect(
       mergeOficinasDeckTemplate(withReused).pages.find((page) => page.id === "index")
         ?.text.item7

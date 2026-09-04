@@ -1,8 +1,10 @@
 import * as XLSX from "xlsx";
+import { isoWeek, isoWeekYear } from "./isoWeek.ts";
 import {
   normalizeDT,
   pickSpelling,
   spellingKey,
+  OFICINAS_DT_OTHERS,
   OFICINAS_IMAC_COLUMNS,
   OFICINAS_NAMED_SHEET_ROLES,
   OFICINAS_SHEET_ROLES,
@@ -13,9 +15,16 @@ import {
   type OficinasElementRow,
   type OficinasEncuestaMes,
   type OficinasEncuestas,
+  type OficinasImac,
   type OficinasIncidencias,
+  type OficinasIncidenciasMensual,
+  type OficinasMensual,
+  type OficinasMonthRow,
+  type OficinasMonthValue,
   type OficinasPeticiones,
+  type OficinasPeticionesMensual,
   type OficinasRecicladores,
+  type OficinasRecicladoresMensual,
   type OficinasRow,
   type OficinasValidadoras,
   type OficinasWeekValue,
@@ -470,6 +479,147 @@ function readDistribution(grid: Grid): number[] {
   return [0, 1, 2, 3, 4].map((index) => num(row[index]));
 }
 
+/* -------------------------------------------------------------------------- */
+/* IMAC listing                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A `d/m/aaaa` cell as a UTC date, or null.
+ *
+ * The listing writes its dates as text, with no leading zeros and with `//` for
+ * "not closed". Day and month are read in that order because the source is a
+ * Spanish export and the file proves it: it carries days above twelve in the
+ * first position, which an American reading could not produce.
+ */
+function readListingDate(value: Cell): Date | null {
+  const match = text(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, day, month, year] = match.map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  // Rejects 31/02: `Date.UTC` rolls it into March instead of failing.
+  return date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? date
+    : null;
+}
+
+/** Column index of each header name, matched case-insensitively. */
+function columnsOf(grid: Grid): Map<string, number> {
+  const columns = new Map<string, number>();
+
+  (grid[0] ?? []).forEach((cell, index) => {
+    const name = text(cell).toLowerCase();
+
+    if (name !== "" && !columns.has(name)) {
+      columns.set(name, index);
+    }
+  });
+
+  return columns;
+}
+
+/**
+ * Folds the IMAC listing into weekly figures.
+ *
+ * Columns are found by name, not by position: this is the one sheet of the
+ * workbook that is a raw export, and its columns have no reason to stay put.
+ *
+ * A row with no readable closing date is skipped, which is also the whole
+ * status filter — rejected and cancelled requests carry `//` there. Counting
+ * them would publish work that was never done.
+ */
+function readImacListing(grid: Grid): OficinasImac {
+  const columns = columnsOf(grid);
+  const closed = columns.get("fecha_cierre");
+  const tipo = columns.get("tipo_peticion");
+  const quantities = [1, 2, 3, 4, 5]
+    .map((index) => columns.get(`cantidad_${index}`))
+    .filter((index): index is number => index !== undefined);
+
+  if (closed === undefined) {
+    return { peticionesByWeek: [], intervencionesByWeek: [], byTipo: [] };
+  }
+
+  const requests = new Map<string, OficinasWeekValue>();
+  const units = new Map<string, OficinasWeekValue>();
+  const byTipo = new Map<
+    string,
+    { labels: Map<string, SpellingVariant>; weeks: Map<string, OficinasWeekValue> }
+  >();
+
+  const add = (
+    target: Map<string, OficinasWeekValue>,
+    year: number,
+    week: number,
+    value: number
+  ) => {
+    const key = `${year}:${week}`;
+    const current = target.get(key);
+
+    if (current) {
+      current.value += value;
+    } else {
+      target.set(key, { year, week, value });
+    }
+  };
+
+  for (let r = 1; r < grid.length; r += 1) {
+    const date = readListingDate(grid[r]?.[closed]);
+
+    if (!date) {
+      continue;
+    }
+
+    const year = isoWeekYear(date);
+    const week = isoWeek(date);
+
+    add(requests, year, week, 1);
+    add(
+      units,
+      year,
+      week,
+      quantities.reduce((sum, index) => sum + num(grid[r]?.[index]), 0)
+    );
+
+    const label = text(grid[r]?.[tipo ?? -1]);
+
+    if (label === "") {
+      continue;
+    }
+
+    // Folded by spelling like every other label of the module, so "AMPLIACION"
+    // and "AMPLIACIÓN" are one row and not two half-sized ones.
+    const key = spellingKey(label);
+    const bucket = byTipo.get(key) ?? { labels: new Map(), weeks: new Map() };
+    const variant = bucket.labels.get(label);
+
+    if (variant) {
+      variant.count += 1;
+    } else {
+      bucket.labels.set(label, { label, count: 1, order: bucket.labels.size });
+    }
+
+    add(bucket.weeks, year, week, 1);
+    byTipo.set(key, bucket);
+  }
+
+  const sorted = (values: Iterable<OficinasWeekValue>) =>
+    Array.from(values).sort((a, b) => a.year - b.year || a.week - b.week);
+
+  return {
+    peticionesByWeek: sorted(requests.values()),
+    intervencionesByWeek: sorted(units.values()),
+    byTipo: Array.from(byTipo.values()).map((bucket) => ({
+      label: pickSpelling(Array.from(bucket.labels.values())),
+      values: sorted(bucket.weeks.values()),
+    })),
+  };
+}
+
 /** `YYYY/MM` or `YYYY-MM` as `YYYY-MM`. Anything else is dropped. */
 function readMonth(value: Cell): string | null {
   const match = text(value).match(/^(\d{4})[/-](\d{1,2})$/);
@@ -479,6 +629,141 @@ function readMonth(value: Cell): string | null {
   }
 
   return `${match[1]}-${match[2].padStart(2, "0")}`;
+}
+
+/** Column index of a header name, matched case-insensitively. */
+function headerIndex(grid: Grid, name: string): number | undefined {
+  const needle = name.toLowerCase();
+  const index = (grid[0] ?? []).findIndex((cell) => text(cell).toLowerCase() === needle);
+
+  return index >= 0 ? index : undefined;
+}
+
+/**
+ * A long monthly sheet (`Fecha` plus named value columns), sorted by month.
+ *
+ * The 2025/05 row of sheet 23 sits at the bottom of the export; sorting puts
+ * it in calendar order instead of leaving a hole at the start of the axis.
+ */
+function readMonthlyRecords<T extends { month: string }>(
+  grid: Grid | null,
+  fields: { key: Exclude<keyof T, "month">; header: string }[]
+): T[] {
+  if (!grid) {
+    return [];
+  }
+
+  const fecha = headerIndex(grid, "Fecha");
+
+  if (fecha === undefined) {
+    return [];
+  }
+
+  const columns = fields
+    .map((field) => ({ ...field, index: headerIndex(grid, field.header) }))
+    .filter((field): field is typeof field & { index: number } => field.index !== undefined);
+  const rows: T[] = [];
+
+  for (let r = 1; r < grid.length; r += 1) {
+    const month = readMonth(grid[r]?.[fecha]);
+
+    if (!month) {
+      continue;
+    }
+
+    const record = { month } as T;
+
+    for (const column of columns) {
+      (record as Record<string, string | number>)[column.key as string] = num(
+        grid[r]?.[column.index]
+      );
+    }
+
+    rows.push(record);
+  }
+
+  return rows.sort((a, b) => a.month.localeCompare(b.month));
+}
+
+/**
+ * Sheet 25: directorate × month.
+ *
+ * The empty `DAR` group row is dropped. `--- DESCONOCIDA ---` is the same
+ * unnamed bucket the weekly pivots call `OTROS`. The two sources must not
+ * become two rows on the slide.
+ */
+function readMonthlyMatrix(grid: Grid | null): OficinasMonthRow[] {
+  if (!grid || grid.length === 0) {
+    return [];
+  }
+
+  const months: { col: number; month: string }[] = [];
+
+  (grid[0] ?? []).forEach((cell, col) => {
+    const month = readMonth(cell);
+
+    if (month) {
+      months.push({ col, month });
+    }
+  });
+
+  if (months.length === 0) {
+    return [];
+  }
+
+  months.sort((a, b) => a.month.localeCompare(b.month));
+  const rows: OficinasMonthRow[] = [];
+
+  for (let r = 1; r < grid.length; r += 1) {
+    const raw = text(grid[r]?.[0]);
+
+    if (raw === "" || /^dar$/i.test(raw) || /^total/i.test(raw)) {
+      continue;
+    }
+
+    const label = /desconocida/i.test(raw)
+      ? OFICINAS_DT_OTHERS
+      : normalizeDT(raw);
+    const values: OficinasMonthValue[] = months.map(({ col, month }) => ({
+      month,
+      value: num(grid[r]?.[col]),
+    }));
+
+    if (values.every((entry) => entry.value === 0)) {
+      continue;
+    }
+
+    rows.push({ label, values });
+  }
+
+  return rows;
+}
+
+function readMensual(byPrefix: Map<number, { name: string; grid: Grid }>): OficinasMensual {
+  return {
+    incidencias: readMonthlyRecords<OficinasIncidenciasMensual>(gridOf(byPrefix, 23), [
+      { key: "resueltas", header: "Resueltas" },
+      { key: "asignadas", header: "Asignadas" },
+      { key: "asignaciones", header: "Asignaciones" },
+    ]),
+    recicladores: readMonthlyRecords<OficinasRecicladoresMensual>(gridOf(byPrefix, 24), [
+      { key: "abiertas", header: "Abiertas" },
+      { key: "resueltas", header: "Resueltas" },
+    ]),
+    cierresPorDT: readMonthlyMatrix(gridOf(byPrefix, 25)),
+    peticiones: readMonthlyRecords<OficinasPeticionesMensual>(gridOf(byPrefix, 26), [
+      { key: "peticiones", header: "Peticiones" },
+      { key: "realizadas", header: "Realizadas" },
+      { key: "pendientes", header: "Pendientes" },
+    ]),
+  };
+}
+
+function gridOf(
+  byPrefix: Map<number, { name: string; grid: Grid }>,
+  prefix: number
+): Grid | null {
+  return byPrefix.get(prefix)?.grid ?? null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -616,6 +901,10 @@ export function parseOficinasWorkbook(
     byElemento: matrix(17, { year, shareCells: true }),
   };
 
+  const listing = byName.get("peticionesImac")?.grid;
+  const imac = listing ? readImacListing(listing) : undefined;
+  const mensual = readMensual(byPrefix);
+
   const encuestas = readEncuestas(byPrefix);
 
   const weeks = Array.from(new Set(
@@ -644,6 +933,8 @@ export function parseOficinasWorkbook(
     resueltas,
     peticiones,
     recicladores,
+    imac,
+    mensual,
     encuestas,
     source: { sourceFile: null, uploadedAt: null },
     sheetsFound,
@@ -825,6 +1116,99 @@ function mergeIncidencias(
 }
 
 /**
+ * Folds the IMAC section, per `(year, week)` like every weekly series.
+ *
+ * The listing only ever carries the current year, so an upload replaces the
+ * weeks it brings and leaves the ones a previous export left behind. That is
+ * what lets the section keep a history the source itself does not have.
+ */
+function mergeImac(
+  existing: OficinasImac | undefined,
+  incoming: OficinasImac | undefined
+): OficinasImac | undefined {
+  if (!incoming) {
+    return existing;
+  }
+
+  return {
+    peticionesByWeek: mergeValues(
+      existing?.peticionesByWeek,
+      incoming.peticionesByWeek
+    ),
+    intervencionesByWeek: mergeValues(
+      existing?.intervencionesByWeek,
+      incoming.intervencionesByWeek
+    ),
+    byTipo: mergeRows(existing?.byTipo, incoming.byTipo),
+  };
+}
+
+function mergeMonthValues(
+  existing: OficinasMonthValue[] | undefined,
+  incoming: OficinasMonthValue[] | undefined
+): OficinasMonthValue[] {
+  const replaced = new Set((incoming ?? []).map((entry) => entry.month));
+  const kept = (existing ?? []).filter((entry) => !replaced.has(entry.month));
+
+  return [...kept, ...(incoming ?? [])].sort((a, b) => a.month.localeCompare(b.month));
+}
+
+function mergeMonthRecords<T extends { month: string }>(
+  existing: T[] | undefined,
+  incoming: T[] | undefined
+): T[] {
+  if (!incoming || incoming.length === 0) {
+    return existing ?? [];
+  }
+
+  const replaced = new Set(incoming.map((entry) => entry.month));
+  const kept = (existing ?? []).filter((entry) => !replaced.has(entry.month));
+
+  return [...kept, ...incoming].sort((a, b) => a.month.localeCompare(b.month));
+}
+
+function mergeMonthRows(
+  existing: OficinasMonthRow[] | undefined,
+  incoming: OficinasMonthRow[] | undefined
+): OficinasMonthRow[] {
+  if (!incoming || incoming.length === 0) {
+    return existing ?? [];
+  }
+
+  const byKey = new Map((existing ?? []).map((row) => [spellingKey(row.label), row]));
+  const merged: OficinasMonthRow[] = incoming.map((row) => ({
+    ...(byKey.get(spellingKey(row.label)) ?? {}),
+    ...row,
+    values: mergeMonthValues(byKey.get(spellingKey(row.label))?.values, row.values),
+  }));
+  const seen = new Set(incoming.map((row) => spellingKey(row.label)));
+
+  for (const row of existing ?? []) {
+    if (!seen.has(spellingKey(row.label))) {
+      merged.push(row);
+    }
+  }
+
+  return merged;
+}
+
+function mergeMensual(
+  existing: OficinasMensual | undefined,
+  incoming: OficinasMensual | undefined
+): OficinasMensual | undefined {
+  if (!incoming) {
+    return existing;
+  }
+
+  return {
+    incidencias: mergeMonthRecords(existing?.incidencias, incoming.incidencias),
+    recicladores: mergeMonthRecords(existing?.recicladores, incoming.recicladores),
+    cierresPorDT: mergeMonthRows(existing?.cierresPorDT, incoming.cierresPorDT),
+    peticiones: mergeMonthRecords(existing?.peticiones, incoming.peticiones),
+  };
+}
+
+/**
  * Folds the survey section.
  *
  * Months merge by key like weeks do. The score distributions do not: they are a
@@ -897,6 +1281,8 @@ export function mergeOficinasDataset(
           ),
         }
       : existing?.recicladores,
+    imac: mergeImac(existing?.imac, incoming.imac),
+    mensual: mergeMensual(existing?.mensual, incoming.mensual),
     encuestas: mergeEncuestas(existing?.encuestas, incoming.encuestas),
     masters: existing?.masters ?? incoming.masters,
     source,

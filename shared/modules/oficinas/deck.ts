@@ -212,6 +212,12 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     sections: ["peticiones"],
   },
   {
+    id: "oficinas-imac",
+    kind: "ofiImac",
+    title: "1.3 Volumetría de peticiones IMAC",
+    sections: ["imac"],
+  },
+  {
     id: "oficinas-seccion-encuestas",
     kind: "section",
     title: "1.4 Volumetría Encuestas Peticiones",
@@ -253,6 +259,31 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     title: "1.5 Recicladores por elemento, acumulado anual",
     sections: ["recicladores"],
   },
+  { id: "oficinas-seccion-mensual", kind: "section", title: "1.6 Resumen mensual" },
+  {
+    id: "oficinas-mensual-incidencias",
+    kind: "ofiMensualIncidencias",
+    title: "1.6 Oficinas: resueltas, asignadas y asignaciones",
+    sections: ["mensual"],
+  },
+  {
+    id: "oficinas-mensual-recicladores",
+    kind: "ofiMensualRecicladores",
+    title: "1.7 Recicladores: abiertas y resueltas",
+    sections: ["mensual"],
+  },
+  {
+    id: "oficinas-mensual-cierres-dt",
+    kind: "ofiMensualCierresDT",
+    title: "1.8 Cierres de incidencias por territorial",
+    sections: ["mensual"],
+  },
+  {
+    id: "oficinas-mensual-peticiones",
+    kind: "ofiMensualPeticiones",
+    title: "1.9 Peticiones IMAC: peticiones, realizadas y pendientes",
+    sections: ["mensual"],
+  },
 ];
 
 /** Sections a page needs, by page id. Empty for the pages with no dataset. */
@@ -290,6 +321,18 @@ function sectionHasRows(dataset: OficinasDataset, section: OficinasSectionKey): 
       return (
         (dataset.recicladores?.byDT?.length ?? 0) > 0 ||
         (dataset.recicladores?.byElemento?.length ?? 0) > 0
+      );
+    case "imac":
+      return (
+        (dataset.imac?.peticionesByWeek?.length ?? 0) > 0 ||
+        (dataset.imac?.byTipo?.length ?? 0) > 0
+      );
+    case "mensual":
+      return (
+        (dataset.mensual?.incidencias.length ?? 0) > 0 ||
+        (dataset.mensual?.recicladores.length ?? 0) > 0 ||
+        (dataset.mensual?.cierresPorDT.length ?? 0) > 0 ||
+        (dataset.mensual?.peticiones.length ?? 0) > 0
       );
     case "encuestas":
       return (dataset.encuestas?.porMes?.length ?? 0) > 0;
@@ -360,8 +403,7 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
       id: "index",
       kind: "index",
       supportType: null,
-      // Six entries, the number the index slide draws by default, since the
-      // seventh ("2. Kanban") went out of the report with its pages.
+      // Seven entries: Kanban left, and the monthly block took its slot.
       text: {
         title: "Contenido",
         item1: "1. Revisión de métricas",
@@ -370,6 +412,7 @@ export function createDefaultOficinasDeck(): OficinasDeckState {
         item4: "1.3 Peticiones",
         item5: "1.4 Volumetría Encuestas Peticiones",
         item6: "1.5 Recicladores",
+        item7: "1.6 Resumen mensual",
       },
       visible: true,
       weekSelection: null,
@@ -452,9 +495,10 @@ export function mergeOficinasDeckTemplate(deck: OficinasDeckState): OficinasDeck
       // stored deck after the Kanban pages leave. Cleared only when it still
       // reads what the deck seeded, never when someone reused the slot.
       if (page.id === "index" && page.text.item7 === "2. Kanban") {
-        const text = { ...migrated.text };
-        delete text.item7;
-        migrated = { ...migrated, text };
+        migrated = {
+          ...migrated,
+          text: { ...migrated.text, item7: "1.6 Resumen mensual" },
+        };
       }
 
       if (

@@ -278,6 +278,32 @@ export function reportPeriod(year: number, week: number): string {
   return weekCoverLabel(week, year);
 }
 
+/**
+ * Calendar month of the report week's Thursday, `YYYY-MM`.
+ *
+ * Monthly slides drop anything after this month so an in-progress September
+ * does not sit next to a full August and read as a collapse.
+ */
+export function reportMonth(
+  dataset: OficinasDataset | null,
+  year: number
+): string | null {
+  const week = reportWeek(dataset, year);
+
+  if (week === null) {
+    return null;
+  }
+
+  const jan4 = Date.UTC(year, 0, 4);
+  const day = new Date(jan4).getUTCDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const thursday =
+    jan4 + (mondayOffset + 3) * 86_400_000 + (week - 1) * 7 * 86_400_000;
+  const date = new Date(thursday);
+
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Matrices                                                                    */
 /* -------------------------------------------------------------------------- */

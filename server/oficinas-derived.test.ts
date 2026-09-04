@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   comparisonSeries,
   rankedRowsByAverage,
+  reportMonth,
   reportPeriod,
   reportWeek,
   rowTotal,
@@ -47,6 +48,7 @@ describe("Oficinas report period", () => {
     };
 
     expect(reportWeek(dataset, 2026)).toBe(33);
+    expect(reportMonth(dataset, 2026)).toBe("2026-08");
   });
 
   it("excludes values after the selected report week from annual totals", () => {
