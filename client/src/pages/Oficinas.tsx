@@ -40,6 +40,7 @@ import PeticionesTipoPage from "@/modules/oficinas/pages/PeticionesTipoPage";
 import PeticionesTipoSemanalPage from "@/modules/oficinas/pages/PeticionesTipoSemanalPage";
 import RecicladoresDTPage from "@/modules/oficinas/pages/RecicladoresDTPage";
 import RecicladoresDTSemanalPage from "@/modules/oficinas/pages/RecicladoresDTSemanalPage";
+import RecicladoresElementoAnualPage from "@/modules/oficinas/pages/RecicladoresElementoAnualPage";
 import RecicladoresElementoPage from "@/modules/oficinas/pages/RecicladoresElementoPage";
 import RecicladoresElementoSemanalPage from "@/modules/oficinas/pages/RecicladoresElementoSemanalPage";
 import ResueltasDTPage from "@/modules/oficinas/pages/ResueltasDTPage";
@@ -87,6 +88,7 @@ const DATA_PAGES: Record<
   "oficinas-recicladores-dt": RecicladoresDTPage,
   "oficinas-recicladores-elemento-semanal": RecicladoresElementoSemanalPage,
   "oficinas-recicladores-elemento": RecicladoresElementoPage,
+  "oficinas-recicladores-elemento-anual": RecicladoresElementoAnualPage,
 };
 
 function scrollToPage(pageId: string) {

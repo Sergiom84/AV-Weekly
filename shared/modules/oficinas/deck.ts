@@ -31,8 +31,20 @@ interface PageSpec {
   sections?: OficinasSectionKey[];
 }
 
-/** Printed comparison pages replaced by the new total-only weekly readings. */
-const HIDDEN_WEEKLY_ELEMENT_PAGE_IDS = new Set([
+/**
+ * The two weekly element readings, hidden while the total-only pages stood in
+ * for them and brought back now that those pages are retired.
+ *
+ * They are the printed weekly-by-element slides, which is what the team asked
+ * to have beside the annual ones. Restoring them was the alternative to
+ * cloning two pages that already existed and were switched off.
+ *
+ * The restore is conditioned on the title the page still carries (see
+ * `RETITLED_PAGES`), so it happens once: the same merge rewrites that title, so
+ * from the next save on the condition no longer matches and hiding either page
+ * again is the team's decision, not something this undoes on every read.
+ */
+const RESTORED_WEEKLY_ELEMENT_PAGE_IDS = new Set([
   "oficinas-asignadas-semanal",
   "oficinas-resueltas-semanal",
 ]);
@@ -86,6 +98,23 @@ const RETITLED_PAGES: Record<string, { from: string[]; to: string }> = {
   "oficinas-asignadas-elemento": {
     from: ["1.1 Incidencias asignadas por elemento"],
     to: "1.1 Incidencias gestionadas por elemento",
+  },
+  "oficinas-asignadas-semanal": {
+    from: [
+      "1.1 Comparativa de incidencias asignadas sin validadoras",
+      "1.1 Comparativa de incidencias asignadas por elemento, sin validadoras",
+      // The stored deck carries a double space after the comma.
+      "1.1 Comparativa de incidencias asignadas por elemento,  sin validadoras",
+    ],
+    to: "1.1 Incidencias gestionadas por elemento, semanal",
+  },
+  "oficinas-resueltas-semanal": {
+    from: [
+      "1.2 Comparativa de incidencias resueltas sin validadoras",
+      "1.2 Comparativa de incidencias resueltas por elemento, sin validadoras",
+      "1.2 Comparativa de incidencias resueltas por elemento,  sin validadoras",
+    ],
+    to: "1.2 Incidencias resueltas por elemento, semanal",
   },
 };
 
@@ -142,7 +171,7 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
   {
     id: "oficinas-asignadas-semanal",
     kind: "ofiAsignadasSemanal",
-    title: "1.1 Comparativa de incidencias asignadas sin validadoras",
+    title: "1.1 Incidencias gestionadas por elemento, semanal",
     sections: ["asignadas"],
   },
   {
@@ -154,7 +183,7 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
   {
     id: "oficinas-resueltas-semanal",
     kind: "ofiResueltasSemanal",
-    title: "1.2 Comparativa de incidencias resueltas sin validadoras",
+    title: "1.2 Incidencias resueltas por elemento, semanal",
     sections: ["resueltas"],
   },
   {
@@ -216,6 +245,12 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     id: "oficinas-recicladores-elemento",
     kind: "ofiRecicladoresElemento",
     title: "1.5 Recicladores por elemento",
+    sections: ["recicladores"],
+  },
+  {
+    id: "oficinas-recicladores-elemento-anual",
+    kind: "ofiRecicladoresElementoAnual",
+    title: "1.5 Recicladores por elemento, acumulado anual",
     sections: ["recicladores"],
   },
 ];
@@ -284,7 +319,7 @@ function createPage(spec: PageSpec): OficinasDeckPage {
     id: spec.id,
     kind: spec.kind,
     supportType: null,
-    visible: !HIDDEN_WEEKLY_ELEMENT_PAGE_IDS.has(spec.id),
+    visible: true,
     weekSelection: null,
     years: null,
     overrides: {},
@@ -391,17 +426,22 @@ export function mergeOficinasDeckTemplate(deck: OficinasDeckState): OficinasDeck
     (page) => {
       let migrated = page;
 
-      if (HIDDEN_WEEKLY_ELEMENT_PAGE_IDS.has(page.id) && page.visible !== false) {
-        migrated = { ...migrated, visible: false };
-      }
-
       if (RETIRED_PAGE_IDS.has(page.id) && page.visible !== false) {
         migrated = { ...migrated, visible: false };
       }
 
       const retitled = RETITLED_PAGES[page.id];
+      // Read before the retitle below rewrites it, since both the retitle and
+      // the one-off restore key on the wording the deck came in with.
+      const wasSeededTitle = Boolean(
+        retitled && retitled.from.includes(page.text.title ?? "")
+      );
 
-      if (retitled && retitled.from.includes(page.text.title ?? "")) {
+      if (wasSeededTitle && RESTORED_WEEKLY_ELEMENT_PAGE_IDS.has(page.id)) {
+        migrated = { ...migrated, visible: true };
+      }
+
+      if (wasSeededTitle && retitled) {
         migrated = {
           ...migrated,
           text: { ...migrated.text, title: retitled.to },

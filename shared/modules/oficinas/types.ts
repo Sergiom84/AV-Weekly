@@ -465,6 +465,7 @@ export type OficinasPageKind =
   | "ofiRecicladoresDT"
   | "ofiRecicladoresDTSemanal"
   | "ofiRecicladoresElemento"
+  | "ofiRecicladoresElementoAnual"
   | "ofiRecicladoresElementoSemanal";
 
 /** Series a page reports on. Oficinas pages are not typed by series. */

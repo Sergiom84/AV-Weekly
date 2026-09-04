@@ -112,6 +112,7 @@ export const DECK_MODULES: DeckModule[] = [
         ofiRecicladoresDT: "Recicladores por DT",
         ofiRecicladoresDTSemanal: "Recicladores por DT, comparativa semanal",
         ofiRecicladoresElemento: "Recicladores por elemento",
+        ofiRecicladoresElementoAnual: "Recicladores por elemento, acumulado anual",
         ofiRecicladoresElementoSemanal: "Recicladores por elemento, comparativa semanal",
       },
       storagePrefix: "av-weekly:oficinas-sidebar-collapsed:",

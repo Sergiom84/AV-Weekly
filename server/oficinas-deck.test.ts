@@ -189,22 +189,14 @@ describe("mergeOficinasDeckTemplate", () => {
     ).toBe(true);
   });
 
-  it("hides the two replaced weekly element pages by default", () => {
+  it("seeds every page of a new deck visible", () => {
     const deck = createDefaultOficinasDeck();
 
-    expect(
-      deck.pages.find((page) => page.id === "oficinas-asignadas-semanal")?.visible
-    ).toBe(false);
-    expect(
-      deck.pages.find((page) => page.id === "oficinas-resueltas-semanal")?.visible
-    ).toBe(false);
+    expect(deck.pages.filter((page) => page.visible !== true)).toEqual([]);
   });
 
-  it("hides both replaced pages while preserving unrelated visibility", () => {
+  it("brings the weekly element pages back once, then leaves them alone", () => {
     const deck = createDefaultOficinasDeck();
-    const assigned = deck.pages.find(
-      (page) => page.id === "oficinas-asignadas-semanal"
-    );
     const resolved = deck.pages.find(
       (page) => page.id === "oficinas-resueltas-semanal"
     );
@@ -212,25 +204,43 @@ describe("mergeOficinasDeckTemplate", () => {
       (page) => page.id === "oficinas-asignadas-elemento"
     );
 
-    if (!assigned || !resolved || !element) {
+    if (!resolved || !element) {
       throw new Error("Missing seeded Oficinas pages");
     }
 
-    assigned.visible = true;
-    resolved.visible = true;
+    // The stored deck as the previous migration left it: hidden, and still
+    // carrying the title it was seeded with.
+    resolved.visible = false;
+    resolved.text = {
+      ...resolved.text,
+      title: "1.2 Comparativa de incidencias resueltas por elemento, sin validadoras",
+    };
     element.visible = false;
 
-    const merged = mergeOficinasDeckTemplate(deck);
+    const restored = mergeOficinasDeckTemplate(deck).pages.find(
+      (page) => page.id === resolved.id
+    );
 
+    expect(restored?.visible).toBe(true);
+    expect(restored?.text.title).toBe("1.2 Incidencias resueltas por elemento, semanal");
+    // A page the restore does not name keeps whatever the user chose.
     expect(
-      merged.pages.find((page) => page.id === assigned.id)?.visible
+      mergeOficinasDeckTemplate(deck).pages.find((page) => page.id === element.id)
+        ?.visible
     ).toBe(false);
-    expect(
-      merged.pages.find((page) => page.id === resolved.id)?.visible
-    ).toBe(false);
-    expect(
-      merged.pages.find((page) => page.id === element.id)?.visible
-    ).toBe(false);
+
+    // Second pass over the already-migrated deck: the title no longer matches,
+    // so hiding the page again is not undone on the next read.
+    const hiddenAgain = mergeOficinasDeckTemplate({
+      ...deck,
+      pages: deck.pages.map((page) =>
+        page.id === resolved.id
+          ? { ...restored!, visible: false }
+          : page
+      ),
+    }).pages.find((page) => page.id === resolved.id);
+
+    expect(hiddenAgain?.visible).toBe(false);
   });
 
   it("recovers a missing page into the slot its specs give it", () => {
