@@ -1,11 +1,10 @@
-import CategoryBarChart, {
-  type CategorySeries,
-} from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
-import SeriesLineChart, {
-  type LineSeries,
-} from "@/components/deck/SeriesLineChart";
+import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import ValueGrid from "@/components/deck/ValueGrid";
+import {
+  defaultMonthWindow,
+  resolveMonthSelection,
+} from "@shared/deck/core";
 import {
   distributionTotal,
   surveyAverage,
@@ -14,6 +13,7 @@ import { decimal, monthLabel, oficinasColor, percent } from "../aggregate";
 import { surveyYtdSeries } from "../surveyYtd";
 import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
 import PageShell, { type OficinasDataPageProps } from "./PageShell";
+import ScoreBarChart from "./ScoreBarChart";
 
 /** Row keys of the monthly series, and of the three distributions. */
 const RESPONSES_ROW = "encuestas";
@@ -34,12 +34,14 @@ const SCORES: {
  * by month, so the page is monthly and says so on its axis rather than folding
  * the months into week numbers, which would be a fabricated conversion.
  *
- * Two readings side by side. On the left the response count per month, which is
- * the only survey figure with any range — the scores sit at five almost every
- * month and a line of them is a flat rule. On the right the cumulative 1-to-5
- * distribution of the three scores, which is where that flatness becomes a fact
- * worth printing: it is drawn natively instead of pasted as the image the
- * current report carries.
+ * The body is the monthly score, drawn as the Informática deck draws it, which
+ * is what the Soporte Oficinas team asked for. It replaced two readings: the
+ * accumulated response count, whose figure survives in the headline cards, and
+ * the cumulative 1-to-5 distribution, which the team asked to take out.
+ *
+ * The distribution is still imported and still editable below in edit mode: the
+ * "Valoradas con 5" card is computed from it, so dropping the grid would leave
+ * a published figure with no way to correct it.
  *
  * The headline averages are weighted by responses, not means of the monthly
  * means: a month with four answers must not weigh as one with a hundred.
@@ -64,21 +66,22 @@ export default function EncuestasPage({
     };
   });
 
-  const series: LineSeries[] = [
-    { key: "acumulado", label: "Acumulado mensual", color: oficinasColor(0) },
-  ];
-
   const ytd = surveyYtdSeries(responses);
-  const data = ytd.latestSeries.map(entry => ({
-    mes: monthLabel(entry.month),
-    acumulado: entry.accumulated,
-  }));
 
-  const scoreSeries: CategorySeries[] = SCORES.map((score, index) => ({
-    key: score.field,
-    label: score.label,
-    color: oficinasColor(index),
-  }));
+  // Same trailing window as the Informática slide. The series starts in August
+  // 2024 and grows a month at a time, so an unbounded axis would keep shrinking
+  // the bars until the labels stopped fitting.
+  const monthSelection = page.monthSelection ?? defaultMonthWindow(15);
+  const availableMonths = months.map(month => month.month);
+  const shownMonths = new Set(
+    resolveMonthSelection(monthSelection, availableMonths)
+  );
+  const scoreData = months
+    .filter(month => shownMonths.has(month.month))
+    .map(month => ({
+      mes: monthLabel(month.month),
+      valoracion: month.global,
+    }));
 
   const distributionCells = SCORES.map(score =>
     [1, 2, 3, 4, 5].map(value => {
@@ -96,16 +99,6 @@ export default function EncuestasPage({
     })
   );
 
-  const distributionData = [1, 2, 3, 4, 5].map((value, index) => {
-    const row: Record<string, number | string> = { nota: String(value) };
-
-    SCORES.forEach((score, position) => {
-      row[score.field] = distributionCells[position][index].value ?? 0;
-    });
-
-    return row;
-  });
-
   const latestYear = ytd.latestYear ?? "";
   const latestYtd = ytd.latestYtd;
   const globalTotal = distributionTotal(distribucion?.global);
@@ -114,6 +107,15 @@ export default function EncuestasPage({
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
+      {editing && (
+        <MonthRangeSelector
+          selection={monthSelection}
+          available={availableMonths}
+          format={monthLabel}
+          onChange={next => onChange({ monthSelection: next })}
+        />
+      )}
+
       <KpiRow
         compact
         items={[
@@ -129,25 +131,12 @@ export default function EncuestasPage({
         ]}
       />
 
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-[1.5cqi]">
-        <div className="flex min-h-0 flex-col">
-          <p className="shrink-0 pb-[0.4cqi] font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
-            Acumulado mensual de encuestas
-          </p>
-          <SeriesLineChart categoryKey="mes" series={series} data={data} />
-        </div>
-
-        <div className="flex min-h-0 flex-col">
-          <p className="shrink-0 pb-[0.4cqi] font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
-            Distribución de la valoración, 1 a 5
-          </p>
-          <CategoryBarChart
-            categoryKey="nota"
-            series={scoreSeries}
-            data={distributionData}
-            fitGroupedValueLabels
-            centerGroupedValueLabels
-          />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <p className="shrink-0 pb-[0.4cqi] font-mono text-[1.15cqi] uppercase tracking-wide text-muted-foreground">
+          Valoración global por mes
+        </p>
+        <div className="min-h-0 flex-1">
+          <ScoreBarChart data={scoreData} />
         </div>
       </div>
 
