@@ -10,12 +10,17 @@ import type {
  *
  * The source is a single workbook, the "Template oficinas envío email
  * presentación.xlsx" the Soporte Oficinas team exports every week. It carries
- * 22 already-pivoted sheets and no formulas: the team refreshes the pivots and
- * sends the values.
+ * 26 already-pivoted sheets and one raw listing, with no formulas: the team
+ * refreshes the pivots and sends the values.
  *
  * Sheet names are truncated to Excel's 31 characters and their tails get
- * reworded ("2-Listado asignadas (criterio M"), so a sheet is identified by the
+ * reworded ("2-Listado asignadas (criterio M"), so a pivot is identified by the
  * numeric prefix `N-` of its name and never by its full text.
+ *
+ * The raw listing is the exception, and it is why the prefix cannot be the only
+ * rule: it ships as "1-Peticiones IMAC Año En Curso ", which repeats the prefix
+ * of "1-Asignadas por semanas (año en". Excel allows the duplicate and the team
+ * numbers its tabs by section, not by uniqueness. See `OFICINAS_IMAC_COLUMNS`.
  *
  * The matrices are WIDE and grow one column per week, so the header row is read
  * dynamically. Every matrix shares one layout:
@@ -65,7 +70,34 @@ export const OFICINAS_SHEET_ROLES: Record<number, string> = {
   20: "Distribución de la valoración global",
   21: "Distribución de la valoración de apertura",
   22: "Distribución de la valoración de resolución",
+  23: "Incidencias por mes: resueltas, asignadas y asignaciones",
+  24: "Recicladores por mes: abiertas y resueltas",
+  25: "Incidencias por mes y territorial",
+  26: "Peticiones IMAC por mes: peticiones, realizadas y pendientes",
 };
+
+/** Contract key of a sheet the workbook identifies by its columns, not by its prefix. */
+export type OficinasNamedSheet = "peticionesImac";
+
+export const OFICINAS_NAMED_SHEET_ROLES: Record<OficinasNamedSheet, string> = {
+  peticionesImac: "Peticiones IMAC del año en curso, listado sin pivotar",
+};
+
+/**
+ * Header columns that identify the IMAC request listing.
+ *
+ * It is the one sheet found by its columns instead of by its prefix, because
+ * its prefix is not its own: the tab ships as "1-Peticiones IMAC Año En Curso "
+ * next to "1-Asignadas por semanas (año en". Under the prefix rule alone
+ * whichever of the two came second was dropped without a word, and which one
+ * that is depends on the tab order of the export.
+ *
+ * Matching on columns rather than on the name also survives the tail rewording
+ * the team does every few weeks — the same reason the pivots are keyed by
+ * prefix and not by full text. No pivot can collide with it: their row 0 is the
+ * week header (`["", "Semana", 1, 2, ...]`), which carries none of these names.
+ */
+export const OFICINAS_IMAC_COLUMNS = ["Peticion", "Tipo_Peticion", "Status"] as const;
 
 /* -------------------------------------------------------------------------- */
 /* Territorial directorates                                                    */

@@ -3,7 +3,10 @@ import {
   normalizeDT,
   pickSpelling,
   spellingKey,
+  OFICINAS_IMAC_COLUMNS,
+  OFICINAS_NAMED_SHEET_ROLES,
   OFICINAS_SHEET_ROLES,
+  type OficinasNamedSheet,
   type SpellingVariant,
   type OficinasDataset,
   type OficinasDistribucion,
@@ -23,9 +26,11 @@ import {
  *
  * Three things shape it:
  *
- * - Sheets are found by the numeric prefix of their name, never by the full
+ * - Pivots are found by the numeric prefix of their name, never by the full
  *   name. Excel truncates tab names at 31 characters and the team rewords the
  *   tails, so "2-Listado asignadas (criterio M" is all the workbook carries.
+ *   The raw IMAC listing is the exception: its prefix is a duplicate of another
+ *   sheet's, so it is found by its columns instead. See `isImacListing`.
  * - The matrices grow one column per week, so the week header is read from row
  *   0 instead of assuming a width. A workbook with 34 weeks and one with 52 go
  *   through the same code.
@@ -42,9 +47,18 @@ import {
 export interface OficinasSheetReport {
   /** Sheet name as written in the workbook. */
   sheet: string;
-  /** Numeric prefix, or null when the name does not start with one. */
+  /**
+   * Numeric prefix as written, or null when the name does not start with one.
+   *
+   * It is the prefix of the name and not the slot the sheet was read into: the
+   * IMAC listing repeats another sheet's prefix, and reporting it as `null`
+   * would hide from the import log the very duplicate that made the sheet
+   * unreachable in the first place. `named` says how it was actually resolved.
+   */
   prefix: number | null;
-  /** What that prefix is expected to carry. */
+  /** Contract key when the sheet was resolved by its columns instead. */
+  named: OficinasNamedSheet | null;
+  /** What that prefix or key is expected to carry. */
   role: string | null;
   /** Data rows read, excluding the header and the "Total" row. */
   rows: number;
@@ -58,6 +72,8 @@ export interface OficinasImportReport {
   sheetsFound: string[];
   /** Prefixes the contract declares that the workbook did not carry. */
   missingSheets: number[];
+  /** Named sheets the contract declares that the workbook did not carry. */
+  missingNamedSheets: OficinasNamedSheet[];
   /** Weeks of the current year read from this upload, ascending. */
   weeks: number[];
   /** Year applied to the current-year sheets. */
@@ -139,6 +155,25 @@ function sheetPrefix(name: string): number | null {
   const match = name.trim().match(/^(\d+)\s*-/);
 
   return match ? Number(match[1]) : null;
+}
+
+/**
+ * True when the sheet is the raw IMAC request listing.
+ *
+ * Read off row 0 rather than off the tab name: the listing ships as
+ * "1-Peticiones IMAC Año En Curso ", a prefix "1-Asignadas por semanas (año en"
+ * already owns, so under the prefix rule the workbook silently lost whichever
+ * of the two the export happened to put second.
+ *
+ * The columns are matched as a set and not by position, because the column
+ * order is not part of anything the team promised: a positional check would
+ * turn an inserted column into a silently unread sheet, which is the failure
+ * this function exists to remove. See `OFICINAS_IMAC_COLUMNS`.
+ */
+function isImacListing(grid: Grid): boolean {
+  const header = new Set((grid[0] ?? []).map((cell) => text(cell).toLowerCase()));
+
+  return OFICINAS_IMAC_COLUMNS.every((column) => header.has(column.toLowerCase()));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -465,6 +500,7 @@ export function parseOficinasWorkbook(
 ): OficinasParseResult {
   const previousYear = year - 1;
   const byPrefix = new Map<number, { name: string; grid: Grid }>();
+  const byName = new Map<OficinasNamedSheet, { name: string; grid: Grid }>();
   const sheets: OficinasSheetReport[] = [];
   const sheetsFound: string[] = [];
 
@@ -472,8 +508,19 @@ export function parseOficinasWorkbook(
     const prefix = sheetPrefix(name);
     const grid = sheetGrid(workbook, name);
     const layout = readMatrixLayout(grid);
+    // Claimed before the prefix rule runs, so the listing never competes for a
+    // slot that belongs to a pivot. That order is what makes the import
+    // independent of the tab order of the export.
+    const named: OficinasNamedSheet | null = isImacListing(grid)
+      ? "peticionesImac"
+      : null;
 
-    if (prefix !== null && !byPrefix.has(prefix)) {
+    if (named !== null) {
+      if (!byName.has(named)) {
+        byName.set(named, { name, grid });
+        sheetsFound.push(name);
+      }
+    } else if (prefix !== null && !byPrefix.has(prefix)) {
       byPrefix.set(prefix, { name, grid });
       sheetsFound.push(name);
     }
@@ -481,7 +528,13 @@ export function parseOficinasWorkbook(
     sheets.push({
       sheet: name,
       prefix,
-      role: prefix === null ? null : (OFICINAS_SHEET_ROLES[prefix] ?? null),
+      named,
+      role:
+        named !== null
+          ? OFICINAS_NAMED_SHEET_ROLES[named]
+          : prefix === null
+            ? null
+            : (OFICINAS_SHEET_ROLES[prefix] ?? null),
       rows: Math.max(0, grid.length - (layout ? layout.firstDataRow : 1)),
       weeks: layout?.weeks ?? [],
     });
@@ -582,6 +635,10 @@ export function parseOficinasWorkbook(
     .map(Number)
     .filter((prefix) => !byPrefix.has(prefix));
 
+  const missingNamedSheets = (
+    Object.keys(OFICINAS_NAMED_SHEET_ROLES) as OficinasNamedSheet[]
+  ).filter((key) => !byName.has(key));
+
   const dataset: OficinasDataset = {
     asignadas,
     resueltas,
@@ -595,7 +652,7 @@ export function parseOficinasWorkbook(
 
   return {
     dataset,
-    report: { sheets, sheetsFound, missingSheets, weeks, year },
+    report: { sheets, sheetsFound, missingSheets, missingNamedSheets, weeks, year },
   };
 }
 
