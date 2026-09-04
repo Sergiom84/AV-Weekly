@@ -46,13 +46,28 @@ describe("Oficinas weekly template (real workbook)", () => {
       (entry) => (byWeek.get(entry.week) ?? 0) !== entry.value
     );
 
-    expect(listing?.rows).toBe(2559);
-    expect(sheet11).toHaveLength(36);
-    expect(diffs.map((entry) => entry.week)).toEqual([1, 36]);
-    expect(byWeek.get(1) ?? 0).toBe(6);
-    expect(sheet11.find((entry) => entry.week === 1)?.value).toBe(9);
-    expect(byWeek.get(36) ?? 0).toBe(0);
-    expect(sheet11.find((entry) => entry.week === 36)?.value).toBe(30);
-    expect(diffs).toHaveLength(2);
+    // Asserted as invariants and not as this week's figures: the team exports a
+    // new workbook every Monday, one row and one column longer, so pinning
+    // 2.559 rows or 36 weeks would turn a passing suite red every week for no
+    // reason and train everyone to ignore it.
+    const weeks = sheet11.map((entry) => entry.week).sort((a, b) => a - b);
+    const first = weeks[0];
+    const last = weeks[weeks.length - 1];
+
+    expect(listing?.rows).toBeGreaterThan(1_000);
+    expect(weeks.length).toBeGreaterThan(30);
+
+    // Every week reconciles to the digit except two, and both for a reason the
+    // source itself explains:
+    //
+    // - the first, where the pivot counts requests closed in January that were
+    //   opened the year before and this listing, "Año En Curso", cannot see;
+    // - the last, still open when the listing was exported.
+    //
+    // Anything else means the listing stopped being read by closing date.
+    expect(diffs.map((entry) => entry.week)).toEqual([first, last]);
+    expect(byWeek.get(first) ?? 0).toBeLessThan(
+      sheet11.find((entry) => entry.week === first)!.value
+    );
   });
 });

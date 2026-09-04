@@ -1,5 +1,6 @@
 import {
   comparisonSeries,
+  dtMatrix,
   latestYear,
   rankedRows,
   reportWeek,
@@ -8,15 +9,29 @@ import {
 } from "@shared/modules/oficinas/derived";
 import { disambiguate } from "../aggregate";
 import { oficinasYearSelector } from "../yearSelection";
+import { SEMANAL_ELEMENT_SAMPLE } from "../semanalLayout";
 import type { OficinasDataPageProps } from "./PageShell";
 import SemanalPage from "./SemanalPage";
 
 /**
  * `1.1 Incidencias gestionadas por elemento, semanal`.
  *
- * Same anatomy as the recycler element weekly slide: the table is the whole
- * element matrix, ranked, with its total, and the bars are the year comparison
- * at the published "sin validadoras" scope.
+ * Chart and table answer two different questions here, which is why they are
+ * not the same figures:
+ *
+ * - The bars are the whole section without validators. That is the scope the
+ *   historico was measured at, so it is the only one a past year may be charted
+ *   against. Charting the element matrix instead would draw 5.069 incidents
+ *   against past years of 4.466 and turn a flat year into a rise of thirteen
+ *   per cent.
+ * - The table is a sample of elements, not the seventy-nine the matrix carries.
+ *   The published slide lists eight and says so in its footnote, and eight is
+ *   also what the box holds: the full matrix renders four times taller than its
+ *   slot, so the rows past the seventeenth and the closing total end up behind
+ *   a scrollbar, which does not print.
+ *
+ * The sample is why there is no total row: a total of eight rows out of
+ * seventy-nine is a figure nothing on the slide supports.
  */
 
 export default function AsignadasSemanalPage({
@@ -26,18 +41,19 @@ export default function AsignadasSemanalPage({
   dataset,
 }: OficinasDataPageProps) {
   const section = dataset.asignadas;
+  const matrix = dtMatrix(section, "sin");
   const year =
     dataset.year ??
-    latestYear(section?.byElement?.flatMap(row => row.values)) ??
+    latestYear(matrix.flatMap(row => row.values)) ??
     new Date().getFullYear();
   const throughWeek = reportWeek(dataset, year);
-  const ranked = rankedRows(
+  const sample = rankedRows(
     section?.byElement ?? [],
     year,
     throughWeek ?? undefined
-  );
-  const labels = disambiguate(ranked);
-  const rows = ranked.map((row, index) => ({
+  ).slice(0, SEMANAL_ELEMENT_SAMPLE);
+  const labels = disambiguate(sample);
+  const rows = sample.map((row, index) => ({
     label: labels[index],
     values: row.values,
   }));
@@ -51,12 +67,13 @@ export default function AsignadasSemanalPage({
       rows={rows}
       rowHeader="Elemento"
       year={year}
-      totals={weeklyTotals(section?.byElement ?? [])}
+      totals={weeklyTotals(matrix)}
       comparison={comparison}
       throughWeek={throughWeek}
-      totalRow
+      caption="Sin validadoras"
+      totalRow={false}
       rankByAverage
-      layout="volumetrias-semanales"
+      layout="comparativas-semanales"
       yearSelector={oficinasYearSelector({
         seriesYears: seriesYears(comparison),
         year,

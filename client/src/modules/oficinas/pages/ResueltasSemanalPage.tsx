@@ -1,5 +1,6 @@
 import {
   comparisonSeries,
+  dtMatrix,
   latestYear,
   rankedRows,
   reportWeek,
@@ -8,13 +9,17 @@ import {
 } from "@shared/modules/oficinas/derived";
 import { disambiguate } from "../aggregate";
 import { oficinasYearSelector } from "../yearSelection";
+import { SEMANAL_ELEMENT_SAMPLE } from "../semanalLayout";
 import type { OficinasDataPageProps } from "./PageShell";
 import SemanalPage from "./SemanalPage";
 
 /**
  * `1.2 Incidencias resueltas por elemento, semanal`.
  *
- * The assigned weekly-by-element slide over the resolved matrix.
+ * The assigned weekly-by-element slide over the resolved matrix, and it shares
+ * its two rules: the bars are the section without validators, the scope the
+ * past years were measured at, and the table is the printed sample of elements
+ * rather than the seventy the matrix carries.
  */
 
 export default function ResueltasSemanalPage({
@@ -24,18 +29,19 @@ export default function ResueltasSemanalPage({
   dataset,
 }: OficinasDataPageProps) {
   const section = dataset.resueltas;
+  const matrix = dtMatrix(section, "sin");
   const year =
     dataset.year ??
-    latestYear(section?.byElement?.flatMap(row => row.values)) ??
+    latestYear(matrix.flatMap(row => row.values)) ??
     new Date().getFullYear();
   const throughWeek = reportWeek(dataset, year);
-  const ranked = rankedRows(
+  const sample = rankedRows(
     section?.byElement ?? [],
     year,
     throughWeek ?? undefined
-  );
-  const labels = disambiguate(ranked);
-  const rows = ranked.map((row, index) => ({
+  ).slice(0, SEMANAL_ELEMENT_SAMPLE);
+  const labels = disambiguate(sample);
+  const rows = sample.map((row, index) => ({
     label: labels[index],
     values: row.values,
   }));
@@ -49,12 +55,13 @@ export default function ResueltasSemanalPage({
       rows={rows}
       rowHeader="Elemento"
       year={year}
-      totals={weeklyTotals(section?.byElement ?? [])}
+      totals={weeklyTotals(matrix)}
       comparison={comparison}
       throughWeek={throughWeek}
-      totalRow
+      caption="Sin validadoras"
+      totalRow={false}
       rankByAverage
-      layout="volumetrias-semanales"
+      layout="comparativas-semanales"
       yearSelector={oficinasYearSelector({
         seriesYears: seriesYears(comparison),
         year,

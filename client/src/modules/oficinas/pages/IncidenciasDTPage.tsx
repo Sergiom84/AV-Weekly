@@ -82,7 +82,7 @@ export default function IncidenciasDTPage({
           caption: "Comparativa",
           rows: dtMatrix(section, "sin"),
         },
-        { caption: "Total", rows: dtMatrix(section, "con") },
+        { caption: "Total con Validadoras", rows: dtMatrix(section, "con") },
       ]}
       year={year}
       masters={dataset.masters}

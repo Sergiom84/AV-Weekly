@@ -6,6 +6,16 @@
  * chart rules here; the page only looks up the name it was given.
  */
 
+/**
+ * Elements the two weekly-by-element slides list.
+ *
+ * Eight is what the published slide prints and what the table box holds: the
+ * full matrix of seventy-nine rows renders four times taller than its slot, so
+ * everything past the seventeenth row — the closing total included — falls
+ * behind a scrollbar that no printed report or PDF ever shows.
+ */
+export const SEMANAL_ELEMENT_SAMPLE = 8;
+
 export type SemanalLayout =
   | "standard-semanal"
   | "comparativas-semanales"
