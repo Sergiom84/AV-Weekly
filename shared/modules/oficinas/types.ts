@@ -526,7 +526,10 @@ export type OficinasSectionKey =
   | "resueltas"
   | "peticiones"
   | "imac"
-  | "mensual"
+  | "mensualIncidencias"
+  | "mensualRecicladores"
+  | "mensualCierresDT"
+  | "mensualPeticiones"
   | "recicladores"
   | "encuestas";
 

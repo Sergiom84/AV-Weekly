@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  closedReportMonths,
   comparisonSeries,
   rankedRowsByAverage,
   reportMonth,
@@ -49,6 +50,22 @@ describe("Oficinas report period", () => {
 
     expect(reportWeek(dataset, 2026)).toBe(33);
     expect(reportMonth(dataset, 2026)).toBe("2026-08");
+    expect(
+      closedReportMonths(
+        ["2026-07", "2026-08", "2026-09"],
+        dataset,
+        2026,
+        new Date(Date.UTC(2026, 8, 4))
+      )
+    ).toEqual(["2026-07", "2026-08"]);
+    expect(
+      closedReportMonths(
+        ["2026-07", "2026-08", "2026-09"],
+        dataset,
+        2026,
+        new Date(Date.UTC(2026, 7, 28))
+      )
+    ).toEqual(["2026-07"]);
   });
 
   it("excludes values after the selected report week from annual totals", () => {
@@ -176,3 +193,35 @@ describe("Oficinas table ordering", () => {
     ).toEqual(["ALTO", "MEDIO", "BAJO"]);
   });
 });
+
+describe("IMAC merge", () => {
+  it("drops weeks the new listing no longer closes", () => {
+    const stored: OficinasDataset = {
+      imac: {
+        peticionesByWeek: [
+          { year: 2025, week: 1, value: 8 },
+          { year: 2026, week: 36, value: 30 },
+        ],
+        intervencionesByWeek: [{ year: 2026, week: 36, value: 40 }],
+        byTipo: [],
+      },
+      source: { sourceFile: null, uploadedAt: null },
+    };
+    const incoming: OficinasDataset = {
+      imac: {
+        peticionesByWeek: [{ year: 2026, week: 2, value: 1 }],
+        intervencionesByWeek: [{ year: 2026, week: 2, value: 3 }],
+        byTipo: [],
+      },
+      source: { sourceFile: "template.xlsx", uploadedAt: null },
+      year: 2026,
+    };
+    const merged = mergeOficinasDataset(stored, incoming, incoming.source);
+
+    expect(merged.imac?.peticionesByWeek).toEqual([
+      { year: 2025, week: 1, value: 8 },
+      { year: 2026, week: 2, value: 1 },
+    ]);
+  });
+});
+

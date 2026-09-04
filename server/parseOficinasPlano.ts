@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { parseExcelDate, parseExcelMonth } from "./excelDate.ts";
 import { isoWeek, isoWeekYear } from "./isoWeek.ts";
 import {
   normalizeDT,
@@ -483,30 +484,6 @@ function readDistribution(grid: Grid): number[] {
 /* IMAC listing                                                                */
 /* -------------------------------------------------------------------------- */
 
-/**
- * A `d/m/aaaa` cell as a UTC date, or null.
- *
- * The listing writes its dates as text, with no leading zeros and with `//` for
- * "not closed". Day and month are read in that order because the source is a
- * Spanish export and the file proves it: it carries days above twelve in the
- * first position, which an American reading could not produce.
- */
-function readListingDate(value: Cell): Date | null {
-  const match = text(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-
-  if (!match) {
-    return null;
-  }
-
-  const [, day, month, year] = match.map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-
-  // Rejects 31/02: `Date.UTC` rolls it into March instead of failing.
-  return date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-    ? date
-    : null;
-}
-
 /** Column index of each header name, matched case-insensitively. */
 function columnsOf(grid: Grid): Map<string, number> {
   const columns = new Map<string, number>();
@@ -568,7 +545,7 @@ function readImacListing(grid: Grid): OficinasImac {
   };
 
   for (let r = 1; r < grid.length; r += 1) {
-    const date = readListingDate(grid[r]?.[closed]);
+    const date = parseExcelDate(grid[r]?.[closed]);
 
     if (!date) {
       continue;
@@ -620,15 +597,9 @@ function readImacListing(grid: Grid): OficinasImac {
   };
 }
 
-/** `YYYY/MM` or `YYYY-MM` as `YYYY-MM`. Anything else is dropped. */
+/** `YYYY/MM`, serial or Date as `YYYY-MM`. Anything else is dropped. */
 function readMonth(value: Cell): string | null {
-  const match = text(value).match(/^(\d{4})[/-](\d{1,2})$/);
-
-  if (!match) {
-    return null;
-  }
-
-  return `${match[1]}-${match[2].padStart(2, "0")}`;
+  return parseExcelMonth(value);
 }
 
 /** Column index of a header name, matched case-insensitively. */
@@ -712,7 +683,10 @@ function readMonthlyMatrix(grid: Grid | null): OficinasMonthRow[] {
   }
 
   months.sort((a, b) => a.month.localeCompare(b.month));
-  const rows: OficinasMonthRow[] = [];
+  const buckets = new Map<
+    string,
+    { labels: Map<string, SpellingVariant>; values: Map<string, number> }
+  >();
 
   for (let r = 1; r < grid.length; r += 1) {
     const raw = text(grid[r]?.[0]);
@@ -724,19 +698,35 @@ function readMonthlyMatrix(grid: Grid | null): OficinasMonthRow[] {
     const label = /desconocida/i.test(raw)
       ? OFICINAS_DT_OTHERS
       : normalizeDT(raw);
-    const values: OficinasMonthValue[] = months.map(({ col, month }) => ({
-      month,
-      value: num(grid[r]?.[col]),
-    }));
+    const key = spellingKey(label);
+    const bucket = buckets.get(key) ?? {
+      labels: new Map(),
+      values: new Map(),
+    };
+    const variant = bucket.labels.get(label);
 
-    if (values.every((entry) => entry.value === 0)) {
-      continue;
+    if (variant) {
+      variant.count += 1;
+    } else {
+      bucket.labels.set(label, { label, count: 1, order: bucket.labels.size });
     }
 
-    rows.push({ label, values });
+    for (const { col, month } of months) {
+      bucket.values.set(month, (bucket.values.get(month) ?? 0) + num(grid[r]?.[col]));
+    }
+
+    buckets.set(key, bucket);
   }
 
-  return rows;
+  return Array.from(buckets.values())
+    .map((bucket) => ({
+      label: pickSpelling(Array.from(bucket.labels.values())),
+      values: months.map(({ month }) => ({
+        month,
+        value: bucket.values.get(month) ?? 0,
+      })),
+    }))
+    .filter((row) => row.values.some((entry) => entry.value !== 0));
 }
 
 function readMensual(byPrefix: Map<number, { name: string; grid: Grid }>): OficinasMensual {
@@ -1116,12 +1106,25 @@ function mergeIncidencias(
 }
 
 /**
- * Folds the IMAC section, per `(year, week)` like every weekly series.
+ * Folds the IMAC section.
  *
- * The listing only ever carries the current year, so an upload replaces the
- * weeks it brings and leaves the ones a previous export left behind. That is
- * what lets the section keep a history the source itself does not have.
+ * The listing is a full-year extract of the current year. Weeks that year no
+ * longer reports (a later export with no S36 closures) must not keep the old
+ * count, so every year the incoming file mentions is replaced wholesale.
+ * Other years, if a previous listing ever left any, stay.
  */
+function mergeYearWeeks(
+  existing: OficinasWeekValue[] | undefined,
+  incoming: OficinasWeekValue[] | undefined
+): OficinasWeekValue[] {
+  const years = new Set((incoming ?? []).map((entry) => entry.year));
+  const kept = (existing ?? []).filter((entry) => !years.has(entry.year));
+
+  return [...kept, ...(incoming ?? [])].sort(
+    (a, b) => a.year - b.year || a.week - b.week
+  );
+}
+
 function mergeImac(
   existing: OficinasImac | undefined,
   incoming: OficinasImac | undefined
@@ -1130,16 +1133,34 @@ function mergeImac(
     return existing;
   }
 
+  const byKey = new Map((existing?.byTipo ?? []).map((row) => [spellingKey(row.label), row]));
+  const byTipo = (incoming.byTipo ?? []).map((row) => ({
+    ...row,
+    values: mergeYearWeeks(byKey.get(spellingKey(row.label))?.values, row.values),
+  }));
+  const seen = new Set((incoming.byTipo ?? []).map((row) => spellingKey(row.label)));
+
+  for (const row of existing?.byTipo ?? []) {
+    if (!seen.has(spellingKey(row.label))) {
+      const years = new Set(incoming.peticionesByWeek.map((entry) => entry.year));
+      const values = row.values.filter((entry) => !years.has(entry.year));
+
+      if (values.length > 0) {
+        byTipo.push({ ...row, values });
+      }
+    }
+  }
+
   return {
-    peticionesByWeek: mergeValues(
+    peticionesByWeek: mergeYearWeeks(
       existing?.peticionesByWeek,
       incoming.peticionesByWeek
     ),
-    intervencionesByWeek: mergeValues(
+    intervencionesByWeek: mergeYearWeeks(
       existing?.intervencionesByWeek,
       incoming.intervencionesByWeek
     ),
-    byTipo: mergeRows(existing?.byTipo, incoming.byTipo),
+    byTipo,
   };
 }
 

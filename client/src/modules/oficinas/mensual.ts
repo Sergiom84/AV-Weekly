@@ -1,16 +1,13 @@
-import { reportMonth } from "@shared/modules/oficinas/derived";
+import { closedReportMonths } from "@shared/modules/oficinas/derived";
 import type { OficinasDataset, OficinasMonthRow } from "@shared/modules/oficinas/types";
 
-/** Months on or before the report week's calendar month, ascending. */
+/** Months a monthly Oficinas slide may print. */
 export function closedMonths(
   months: string[],
   dataset: OficinasDataset,
   year: number
 ): string[] {
-  const through = reportMonth(dataset, year);
-  const unique = Array.from(new Set(months)).sort();
-
-  return through ? unique.filter(month => month <= through) : unique;
+  return closedReportMonths(months, dataset, year);
 }
 
 export function monthTotal(row: OficinasMonthRow, months: string[]): number {

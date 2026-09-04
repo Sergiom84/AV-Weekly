@@ -264,25 +264,25 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     id: "oficinas-mensual-incidencias",
     kind: "ofiMensualIncidencias",
     title: "1.6 Oficinas: resueltas, asignadas y asignaciones",
-    sections: ["mensual"],
+    sections: ["mensualIncidencias"],
   },
   {
     id: "oficinas-mensual-recicladores",
     kind: "ofiMensualRecicladores",
     title: "1.7 Recicladores: abiertas y resueltas",
-    sections: ["mensual"],
+    sections: ["mensualRecicladores"],
   },
   {
     id: "oficinas-mensual-cierres-dt",
     kind: "ofiMensualCierresDT",
     title: "1.8 Cierres de incidencias por territorial",
-    sections: ["mensual"],
+    sections: ["mensualCierresDT"],
   },
   {
     id: "oficinas-mensual-peticiones",
     kind: "ofiMensualPeticiones",
     title: "1.9 Peticiones IMAC: peticiones, realizadas y pendientes",
-    sections: ["mensual"],
+    sections: ["mensualPeticiones"],
   },
 ];
 
@@ -327,13 +327,14 @@ function sectionHasRows(dataset: OficinasDataset, section: OficinasSectionKey): 
         (dataset.imac?.peticionesByWeek?.length ?? 0) > 0 ||
         (dataset.imac?.byTipo?.length ?? 0) > 0
       );
-    case "mensual":
-      return (
-        (dataset.mensual?.incidencias.length ?? 0) > 0 ||
-        (dataset.mensual?.recicladores.length ?? 0) > 0 ||
-        (dataset.mensual?.cierresPorDT.length ?? 0) > 0 ||
-        (dataset.mensual?.peticiones.length ?? 0) > 0
-      );
+    case "mensualIncidencias":
+      return (dataset.mensual?.incidencias.length ?? 0) > 0;
+    case "mensualRecicladores":
+      return (dataset.mensual?.recicladores.length ?? 0) > 0;
+    case "mensualCierresDT":
+      return (dataset.mensual?.cierresPorDT.length ?? 0) > 0;
+    case "mensualPeticiones":
+      return (dataset.mensual?.peticiones.length ?? 0) > 0;
     case "encuestas":
       return (dataset.encuestas?.porMes?.length ?? 0) > 0;
     default:

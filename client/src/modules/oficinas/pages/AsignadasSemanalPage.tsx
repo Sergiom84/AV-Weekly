@@ -1,6 +1,5 @@
 import {
   comparisonSeries,
-  dtMatrix,
   latestYear,
   rankedRows,
   reportWeek,
@@ -13,22 +12,12 @@ import type { OficinasDataPageProps } from "./PageShell";
 import SemanalPage from "./SemanalPage";
 
 /**
- * `1.1 Comparativa de incidencias asignadas sin validadoras`.
+ * `1.1 Incidencias gestionadas por elemento, semanal`.
  *
- * Chart and table answer two different questions on this slide, which is why
- * they are not the same figures:
- *
- * - The bars are the whole section without validators. That is the scope the
- *   printed slide names in its own title and the scope the historico was
- *   measured at, so it is the only one a past year may be charted against.
- * - The table is a sample of elements, not the seventy-six the matrix carries.
- *   The printed slide lists eight and says so in its footnote; a total of that
- *   sample would be a figure nothing on the slide supports, so the closing row
- *   is left out exactly as the print leaves it out.
+ * Same anatomy as the recycler element weekly slide: the table is the whole
+ * element matrix, ranked, with its total, and the bars are the year comparison
+ * at the published "sin validadoras" scope.
  */
-
-/** Elements the printed slide samples, ranked by their year total. */
-const SAMPLE_ROWS = 8;
 
 export default function AsignadasSemanalPage({
   page,
@@ -37,24 +26,21 @@ export default function AsignadasSemanalPage({
   dataset,
 }: OficinasDataPageProps) {
   const section = dataset.asignadas;
-  const matrix = dtMatrix(section, "sin");
   const year =
     dataset.year ??
-    latestYear(matrix.flatMap(row => row.values)) ??
+    latestYear(section?.byElement?.flatMap(row => row.values)) ??
     new Date().getFullYear();
   const throughWeek = reportWeek(dataset, year);
-
-  const sample = rankedRows(
+  const ranked = rankedRows(
     section?.byElement ?? [],
     year,
     throughWeek ?? undefined
-  ).slice(0, SAMPLE_ROWS);
-  const labels = disambiguate(sample);
-  const rows = sample.map((row, index) => ({
+  );
+  const labels = disambiguate(ranked);
+  const rows = ranked.map((row, index) => ({
     label: labels[index],
     values: row.values,
   }));
-
   const comparison = comparisonSeries(section, "sin");
 
   return (
@@ -65,13 +51,12 @@ export default function AsignadasSemanalPage({
       rows={rows}
       rowHeader="Elemento"
       year={year}
-      totals={weeklyTotals(matrix)}
+      totals={weeklyTotals(section?.byElement ?? [])}
       comparison={comparison}
       throughWeek={throughWeek}
-      caption="Sin validadoras"
-      totalRow={false}
+      totalRow
       rankByAverage
-      layout="comparativas-semanales"
+      layout="volumetrias-semanales"
       yearSelector={oficinasYearSelector({
         seriesYears: seriesYears(comparison),
         year,

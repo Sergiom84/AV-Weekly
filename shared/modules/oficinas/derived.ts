@@ -304,6 +304,32 @@ export function reportMonth(
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+function calendarMonth(asOf: Date): string {
+  return `${asOf.getUTCFullYear()}-${String(asOf.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Months a monthly slide may print.
+ *
+ * Capped at the report week's month, and the open calendar month is always
+ * dropped: if the closed week already sits in September, a partial September
+ * must not sit next to a full August.
+ */
+export function closedReportMonths(
+  months: string[],
+  dataset: OficinasDataset | null,
+  year: number,
+  asOf: Date = new Date()
+): string[] {
+  const through = reportMonth(dataset, year);
+  const open = calendarMonth(asOf);
+  const unique = Array.from(new Set(months)).sort();
+
+  return unique.filter(
+    month => month < open && (through === null || month <= through)
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Matrices                                                                    */
 /* -------------------------------------------------------------------------- */

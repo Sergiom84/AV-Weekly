@@ -396,4 +396,46 @@ describe("Oficinas sheet resolution", () => {
       { month: "2026-08", peticiones: 113, realizadas: 111, pendientes: 2 },
     ]);
   });
+
+  it("folds DESCONOCIDA and a blank directorate into one OTROS row", () => {
+    const workbook = build([
+      ...pivots().map((sheet) =>
+        sheet.name.startsWith("25-")
+          ? {
+              name: sheet.name,
+              rows: [
+                ["", "Fecha", "2026/08", "Total"],
+                ["--- DESCONOCIDA ---", "", 4, 4],
+                ["(en blanco)", "", 2, 2],
+                ["CATALUÑA", "", 10, 10],
+              ],
+            }
+          : sheet
+      ),
+      { name: IMAC_LISTING, rows: imacListing(1) },
+    ]);
+    const { dataset } = parseOficinasWorkbook(workbook, 2026);
+    const otros = dataset.mensual?.cierresPorDT.find((row) => row.label === "OTROS");
+
+    expect(otros?.values).toEqual([{ month: "2026-08", value: 6 }]);
+  });
+
+  it("reads IMAC closing dates from Excel serials", () => {
+    const serial = (Date.UTC(2026, 0, 5) - Date.UTC(1899, 11, 30)) / 86_400_000;
+    const listing: Row[] = [
+      ["Peticion", "Tipo_Peticion", "Fecha_Cierre", "Status", "Cantidad_1"],
+      [1, "AMPLIACIÓN", serial, "Cerrado", 3],
+    ];
+    const { dataset } = parseOficinasWorkbook(
+      build([...pivots(), { name: IMAC_LISTING, rows: listing }]),
+      2026
+    );
+
+    expect(dataset.imac?.peticionesByWeek).toEqual([
+      { year: 2026, week: 2, value: 1 },
+    ]);
+    expect(dataset.imac?.intervencionesByWeek).toEqual([
+      { year: 2026, week: 2, value: 3 },
+    ]);
+  });
 });
