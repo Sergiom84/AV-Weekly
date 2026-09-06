@@ -4,6 +4,7 @@ import {
   latestYear,
   rankedRows,
   reportWeek,
+  seriesWeeks,
   seriesYears,
   weeklyTotals,
 } from "@shared/modules/oficinas/derived";
@@ -58,6 +59,20 @@ export default function AsignadasSemanalPage({
     values: row.values,
   }));
   const comparison = comparisonSeries(section, "sin");
+  // Chart and table come from different pivots of the template: the chart is
+  // the territorial matrix without validators, running to the report week; the
+  // table is the element matrix, which counts validators as one more element
+  // and stops a week earlier. The two do not reconcile week by week, so the
+  // slide names what each half is instead of letting one caption cover both.
+  const elementWeeks = seriesWeeks(
+    (section?.byElement ?? []).flatMap(row => row.values),
+    year
+  );
+  const elementLast = elementWeeks[elementWeeks.length - 1] ?? null;
+  const scope =
+    elementLast === null
+      ? "Gráfica sin validadoras · Tabla por elemento, con validadoras"
+      : `Gráfica sin validadoras · Tabla por elemento, con validadoras, hasta S${elementLast}`;
 
   return (
     <SemanalPage
@@ -70,7 +85,7 @@ export default function AsignadasSemanalPage({
       totals={weeklyTotals(matrix)}
       comparison={comparison}
       throughWeek={throughWeek}
-      caption="Sin validadoras"
+      caption={scope}
       totalRow={false}
       rankByAverage
       layout="comparativas-semanales"

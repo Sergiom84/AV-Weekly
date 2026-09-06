@@ -11,6 +11,7 @@ import {
 } from "@shared/deck/core";
 import {
   latestYear,
+  rankedRows,
   reportWeek,
   seriesWeeks,
   valueAt,
@@ -45,9 +46,9 @@ const UNITS_ROW = "intervenciones";
  * is no historic equivalent, so there is no year comparison here and none is
  * invented.
  *
- * The table underneath is the request type, which is the breakdown the source
- * supports. It closes with its total because it is the whole matrix and not a
- * sample: every closed request has a type.
+ * The table underneath opens with the same two series the chart draws, which is
+ * the table the team asked for, and follows with the request types, the only
+ * breakdown the source supports.
  */
 export default function ImacPage({
   page,
@@ -116,6 +117,16 @@ export default function ImacPage({
     selectedWeeks.includes(weeks[index])
   );
 
+  // The team asked for "the assigned requests and the work done per week", so
+  // both series lead the table and the request types follow underneath. The
+  // "Peticiones" row is the sum of those types, which is why no total closes
+  // the table.
+  const tableRows = [
+    { label: "Peticiones", values: requests },
+    { label: "Intervenciones", values: units },
+    ...rankedRows(imac?.byTipo ?? [], year, throughWeek ?? undefined),
+  ];
+
   const lastWeek = weeks[weeks.length - 1] ?? null;
   const valueOf = (row: (typeof seriesRows)[number]) =>
     lastWeek === null
@@ -167,13 +178,17 @@ export default function ImacPage({
 
       <div className="min-h-0 flex-[2]">
         <SemanalTable
-          rowHeader="Tipo de petición"
-          rows={imac?.byTipo ?? []}
+          rowHeader="Serie"
+          rows={tableRows}
           year={year}
           visibleWeeks={selectedWeeks}
-          mediaWeeks={semanalMediaWeeks(imac?.byTipo ?? [], year, throughWeek)}
-          totalRow
-          rankByAverage
+          mediaWeeks={semanalMediaWeeks(tableRows, year, throughWeek)}
+          // The two series open the table and the types follow, so the closing
+          // total is left out: it would add the units to the requests and to
+          // the types that already are those requests, three times the same
+          // week under one figure.
+          totalRow={false}
+          rankByAverage={false}
           layout={semanalLayoutRules("volumetrias-semanales")}
         />
       </div>

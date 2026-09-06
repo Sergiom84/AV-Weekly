@@ -3,6 +3,7 @@ import CategoryBarChart, {
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
+import { useFitTableScale } from "@/hooks/useFitTableScale";
 import {
   defaultMonthWindow,
   resolveMonthSelection,
@@ -43,6 +44,10 @@ export default function MensualGroupedPage({
   rows,
   series,
 }: MensualGroupedPageProps) {
+  const { containerRef, tableRef } = useFitTableScale<
+    HTMLDivElement,
+    HTMLTableElement
+  >({ deps: [rows.length, series.length] });
   const year = dataset.year ?? new Date().getFullYear();
   const available = closedMonths(
     rows.map(row => row.month),
@@ -86,7 +91,7 @@ export default function MensualGroupedPage({
             : []
         }
       />
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-[3] flex-col">
         <CategoryBarChart
           categoryKey="mes"
           series={chartSeries}
@@ -94,6 +99,54 @@ export default function MensualGroupedPage({
           allCategories
           fitGroupedValueLabels
         />
+      </div>
+
+      {/* The table the team asked for beside each monthly chart: the same
+          series and the same months, read as figures instead of as heights. */}
+      <div className="min-h-0 flex-[2]">
+        <div ref={containerRef} className="h-full max-h-full w-full overflow-auto">
+          <table
+            ref={tableRef}
+            className="w-full min-w-full table-fixed border-collapse font-mono text-[length:calc(var(--fit-scale,1)*1.15cqi)] leading-none tabular-nums"
+          >
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th className="px-[0.2cqi] py-[0.25cqi] text-left font-normal">Serie</th>
+                {months.map(month => (
+                  <th
+                    key={month}
+                    className="px-[0.1cqi] py-[0.25cqi] text-center font-normal"
+                  >
+                    {monthLabel(month)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {series.map(entry => (
+                <tr key={entry.key} className="border-b border-border/60 last:border-b-0">
+                  <th
+                    scope="row"
+                    className="truncate px-[0.2cqi] py-[0.2cqi] text-left font-normal"
+                  >
+                    {entry.label}
+                  </th>
+                  {months.map(month => {
+                    const row = rows.find(item => item.month === month);
+
+                    return (
+                      <td key={month} className="px-[0.1cqi] py-[0.2cqi] text-center">
+                        {row === undefined
+                          ? ""
+                          : metric(row, entry.key).toLocaleString("es-ES")}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </PageShell>
   );

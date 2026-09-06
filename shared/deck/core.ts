@@ -122,13 +122,40 @@ export function formatChartMetric(value: number): string {
  * Width reserved for a quantitative Y axis. Recharts otherwise defaults to a
  * fixed narrow gutter that clips the leading digit of values such as 1.600.
  */
+/**
+ * Smallest "nice" number at or above `value`, from the 1 / 2 / 2.5 / 5 / 10
+ * ladder charting libraries round their top tick to.
+ *
+ * Needed because the axis is not labelled with the data: Recharts picks round
+ * tick values and the top one sits at or above the maximum. A chart peaking at
+ * 982 is labelled up to 1.000, which is two characters wider than anything in
+ * the data.
+ */
+function niceCeiling(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const step = [1, 2, 2.5, 5, 10].find(
+    (candidate) => value <= candidate * magnitude
+  );
+
+  return (step ?? 10) * magnitude;
+}
+
 export function metricAxisWidth(values: unknown[]): number {
-  const longest = values.reduce<number>((max, value) => {
-    const numeric = Number(value);
-    return Number.isFinite(numeric)
-      ? Math.max(max, formatChartMetric(numeric).length)
-      : max;
-  }, 1);
+  const numbers = values
+    .map(Number)
+    .filter((value): value is number => Number.isFinite(value));
+  const peak = numbers.reduce((max, value) => Math.max(max, Math.abs(value)), 0);
+  // The rounded-up tick is measured alongside the values themselves: without
+  // it the gutter fits "982" and Recharts then draws "1.000" into it, printing
+  // ".000" on the slide.
+  const longest = [...numbers, niceCeiling(peak)].reduce<number>(
+    (max, value) => Math.max(max, formatChartMetric(value).length),
+    1
+  );
 
   return Math.min(80, Math.max(44, longest * 11 + 12));
 }
