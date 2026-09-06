@@ -3,9 +3,14 @@ import { previousTypeEntries } from "../client/src/modules/oficinas/peticionesTi
 import { surveyYtdSeries } from "../client/src/modules/oficinas/surveyYtd.ts";
 import { elementHeadlineStats } from "../client/src/modules/oficinas/elementHeadline.ts";
 import { recicladoresYtd } from "../client/src/modules/oficinas/recicladoresYtd.ts";
+import { imacSeries } from "../client/src/modules/oficinas/imacSeries.ts";
 import { peticionesSeries } from "../shared/modules/oficinas/derived.ts";
 import { mergeOficinasDataset } from "./parseOficinasPlano.ts";
-import type { OficinasDataset, OficinasRow } from "../shared/modules/oficinas/types.ts";
+import type {
+  OficinasDataset,
+  OficinasDeckPage,
+  OficinasRow,
+} from "../shared/modules/oficinas/types.ts";
 
 const row = (label: string, year: number, week: number, value: number): OficinasRow => ({
   label,
@@ -62,6 +67,53 @@ describe("Oficinas requested integrations", () => {
       { year: 2025, week: 1, value: 40 },
       { year: 2026, week: 1, value: 9 },
     ]);
+  });
+
+  it("feeds the IMAC chart and its table the same corrected figures", () => {
+    const page = {
+      overrides: {
+        "peticiones:S35": 99,
+        "intervenciones:S35": 777,
+        // A week corrected to empty: a gap, never a zero.
+        "peticiones:S34": null,
+      },
+    } as unknown as OficinasDeckPage;
+
+    const [requests, units] = imacSeries(page, 2026, [34, 35], [
+      {
+        key: "peticiones",
+        label: "Peticiones",
+        values: [
+          { year: 2026, week: 34, value: 8 },
+          { year: 2026, week: 35, value: 10 },
+        ],
+      },
+      {
+        key: "intervenciones",
+        label: "Intervenciones",
+        values: [
+          { year: 2026, week: 34, value: 30 },
+          { year: 2026, week: 35, value: 40 },
+        ],
+      },
+    ]);
+
+    // What the chart draws.
+    expect(requests.cells.map(cell => cell.value)).toEqual([null, 99]);
+    expect(units.cells.map(cell => cell.value)).toEqual([30, 777]);
+
+    // What the table prints: the same figures, not the imported 8, 10 and 40.
+    expect(requests.row).toEqual({
+      label: "Peticiones",
+      values: [{ year: 2026, week: 35, value: 99 }],
+    });
+    expect(units.row).toEqual({
+      label: "Intervenciones",
+      values: [
+        { year: 2026, week: 34, value: 30 },
+        { year: 2026, week: 35, value: 777 },
+      ],
+    });
   });
 
   it("cuts both years at the report week when accumulating recyclers", () => {

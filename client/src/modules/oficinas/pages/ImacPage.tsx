@@ -14,7 +14,6 @@ import {
   rankedRows,
   reportWeek,
   seriesWeeks,
-  valueAt,
 } from "@shared/modules/oficinas/derived";
 import {
   CURRENT_YEAR_COLOR,
@@ -23,7 +22,8 @@ import {
   semanalMediaWeeks,
   weekLabel,
 } from "../aggregate";
-import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
+import { imacSeries } from "../imacSeries";
+import { withOverride } from "../overrides";
 import { semanalLayoutRules } from "../semanalLayout";
 import PageShell, { type OficinasDataPageProps } from "./PageShell";
 import SemanalTable from "./SemanalTable";
@@ -70,36 +70,19 @@ export default function ImacPage({
     page.weekSelection ?? defaultWeekSelection(weeks[weeks.length - 1] ?? 1);
   const selectedWeeks = resolveWeekSelection(weekSelection, weeks);
 
-  const seriesRows = [
-    {
-      key: REQUESTS_ROW,
-      label: "Peticiones",
-      color: CURRENT_YEAR_COLOR,
-      source: requests,
-    },
-    {
-      key: UNITS_ROW,
-      label: "Intervenciones",
-      color: PREVIOUS_YEAR_COLOR,
-      source: units,
-    },
-  ].map(entry => ({
-    ...entry,
-    cells: weeks.map(week => {
-      const key = cellKey(entry.key, weekLabel(week));
-
-      return {
-        key,
-        value: overriddenValue(page, key, valueAt(entry.source, year, week)),
-        overridden: isOverridden(page, key),
-      };
-    }),
-  }));
+  const COLORS: Record<string, string> = {
+    [REQUESTS_ROW]: CURRENT_YEAR_COLOR,
+    [UNITS_ROW]: PREVIOUS_YEAR_COLOR,
+  };
+  const seriesRows = imacSeries(page, year, weeks, [
+    { key: REQUESTS_ROW, label: "Peticiones", values: requests },
+    { key: UNITS_ROW, label: "Intervenciones", values: units },
+  ]);
 
   const series: WeeklySeries[] = seriesRows.map(entry => ({
     key: entry.key,
     label: entry.label,
-    color: entry.color,
+    color: COLORS[entry.key],
   }));
 
   const data = weeks.map((week, index) => {
@@ -122,8 +105,7 @@ export default function ImacPage({
   // "Peticiones" row is the sum of those types, which is why no total closes
   // the table.
   const tableRows = [
-    { label: "Peticiones", values: requests },
-    { label: "Intervenciones", values: units },
+    ...seriesRows.map(entry => entry.row),
     ...rankedRows(imac?.byTipo ?? [], year, throughWeek ?? undefined),
   ];
 
@@ -198,7 +180,7 @@ export default function ImacPage({
           columns={weeks.map(weekLabel)}
           rows={seriesRows.map(entry => ({
             label: entry.label,
-            color: entry.color,
+            color: COLORS[entry.key],
             cells: entry.cells,
           }))}
           onChange={(key, value) => onChange(withOverride(page, key, value))}
