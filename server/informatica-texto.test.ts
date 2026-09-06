@@ -318,7 +318,7 @@ describe("texto generado por el script de Drive", () => {
 });
 
 describe("punto de entrada del deck", () => {
-  it("ofrece la subida de texto plano de Drive", () => {
+  it("ofrece una sola entrada, el texto plano de Drive", () => {
     const uploads = getDeckModule("informatica").deck?.uploads ?? [];
 
     expect(uploads[0]).toMatchObject({
@@ -328,8 +328,12 @@ describe("punto de entrada del deck", () => {
       multiple: false,
       accept: ".txt,.tsv,.csv",
     });
-    // The raw workbooks keep their own slot while the Drive flow beds in.
-    expect(uploads.map((slot) => slot.id)).toContain("plano");
+    // Esta prueba esperaba además un hueco "plano" mientras el flujo de Drive
+    // se asentaba. Ya no lo hay: el registro declara una única entrada y su
+    // comentario dice por qué —la ruta del libro sigue existiendo en el
+    // servidor, pero no se ofrece en la barra lateral—. Se afirma el contrato
+    // vigente, que es una sola entrada, en vez de retirar la comprobación.
+    expect(uploads).toHaveLength(1);
   });
 
   it("declara todas las secciones del contrato, incluso las opcionales", () => {
