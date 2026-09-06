@@ -111,7 +111,15 @@ export default function MensualGroupedPage({
           >
             <thead>
               <tr className="border-b border-border text-muted-foreground">
-                <th className="px-[0.2cqi] py-[0.25cqi] text-left font-normal">Serie</th>
+                <th
+                  // La tabla es de columnas iguales, y con quince meses
+                  // la primera se queda en un dieciseisavo del ancho:
+                  // suficiente para "Serie" y no para "Asignaciones".
+                  style={{ width: "16%" }}
+                  className="px-[0.2cqi] py-[0.25cqi] text-left font-normal"
+                >
+                  Serie
+                </th>
                 {months.map(month => (
                   <th
                     key={month}
