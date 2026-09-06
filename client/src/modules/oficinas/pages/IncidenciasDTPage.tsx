@@ -79,7 +79,7 @@ export default function IncidenciasDTPage({
       rows={rows}
       tables={[
         {
-          caption: "Comparativa",
+          caption: "Comparativa sin validadoras",
           rows: dtMatrix(section, "sin"),
         },
         { caption: "Total con Validadoras", rows: dtMatrix(section, "con") },

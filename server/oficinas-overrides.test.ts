@@ -22,9 +22,9 @@ function pageSources(): { name: string; source: string }[] {
  * the same measure must resolve the manual corrections once, in a helper, and
  * feed both from it.
  *
- * Pinned as a sweep of the sources because the suite runs on Node with no DOM,
- * so there is no way to render a slide and compare the two halves. It is a
- * blunt instrument, and it is aimed at a failure that already happened: the
+ * This source sweep is an additional architectural guard. The component's
+ * actual chart/table props are tested without a DOM in imac-page.test.ts.
+ * The guard is aimed at a failure that already happened: the
  * IMAC table was added reading the imported series while the chart read the
  * corrected one, so a week typed as 99 printed 99 in the bars and 10 in the
  * table underneath, on the same slide.

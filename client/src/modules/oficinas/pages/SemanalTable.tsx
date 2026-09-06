@@ -75,13 +75,14 @@ export default function SemanalTable({
     <div ref={containerRef} className="h-full max-h-full w-full overflow-auto">
       <table
         ref={tableRef}
+        lang="es"
         className="w-full min-w-full table-fixed border-collapse font-mono text-[length:calc(var(--fit-scale,1)*1.15cqi)] leading-none tabular-nums"
       >
         <thead>
           <tr className="border-b border-border text-muted-foreground">
             <th
               scope="col"
-              className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] ${layout.centerRowHeader ? "text-center" : "text-left"} font-normal ${
+              className={`whitespace-normal hyphens-auto leading-tight py-[calc(var(--fit-scale,1)*0.3cqi)] ${layout.centerRowHeader ? "text-center" : "text-left"} font-normal ${
                 layout.comparisonLabels ? "border-r border-border" : ""
               }`}
               style={{ width: leadingColumnWidth }}
@@ -113,7 +114,7 @@ export default function SemanalTable({
             <tr key={entry.label} className="border-b border-border/60">
               <th
                 scope="row"
-                className={`truncate py-[calc(var(--fit-scale,1)*0.25cqi)] ${layout.centerRowHeader ? "text-center" : "text-left"} font-normal ${
+                className={`whitespace-normal hyphens-auto leading-tight py-[calc(var(--fit-scale,1)*0.25cqi)] ${layout.centerRowHeader ? "text-center" : "text-left"} font-normal ${
                   layout.comparisonLabels ? "border-r border-border" : ""
                 }`}
                 title={entry.label}
@@ -145,7 +146,7 @@ export default function SemanalTable({
             >
               <th
                 scope="row"
-                className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] ${layout.centerRowHeader ? "text-center" : "text-left"} ${
+                className={`whitespace-normal hyphens-auto leading-tight py-[calc(var(--fit-scale,1)*0.3cqi)] ${layout.centerRowHeader ? "text-center" : "text-left"} ${
                   layout.comparisonLabels ? "border-r border-border" : ""
                 }`}
               >

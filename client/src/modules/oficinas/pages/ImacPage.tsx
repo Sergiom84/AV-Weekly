@@ -149,7 +149,7 @@ export default function ImacPage({
 
       <KpiRow items={items} compact />
 
-      <div className="flex min-h-0 flex-[3] flex-col">
+      <div className="flex min-h-0 flex-[2.5] flex-col sm:flex-[3]">
         <WeeklyBarChart
           weeks={selectedWeeks}
           series={series}
@@ -158,7 +158,7 @@ export default function ImacPage({
         />
       </div>
 
-      <div className="min-h-0 flex-[2]">
+      <div className="min-h-0 flex-[2.5] sm:flex-[2]">
         <SemanalTable
           rowHeader="Serie"
           rows={tableRows}
