@@ -115,9 +115,16 @@ export default function CategorySharePage({
     <PageShell page={page} editing={editing} onChange={onChange}>
       <KpiRow items={kpis} compact={compactPresentation} />
 
+      {/* On a phone the table needs the room more than the bars do: the fit
+          hook stops shrinking at its legibility floor, so on a narrow screen
+          the densest element tables were leaving their last row under the
+          scroll. The printed slide is unaffected — it renders at desktop
+          width, where these ratios are the ones the deck has always used. */}
       <div
         className={`flex min-h-0 flex-col ${
-          compactPresentation ? "flex-[2.55]" : "flex-[3]"
+          compactPresentation
+            ? "flex-[1.8] sm:flex-[2.55]"
+            : "flex-[2.2] sm:flex-[3]"
         }`}
       >
         <CategoryBarChart
@@ -129,7 +136,13 @@ export default function CategorySharePage({
         />
       </div>
 
-      <div className={`min-h-0 ${compactPresentation ? "flex-[2.45]" : "flex-[2]"}`}>
+      <div
+        className={`min-h-0 ${
+          compactPresentation
+            ? "flex-[3.2] sm:flex-[2.45]"
+            : "flex-[2.8] sm:flex-[2]"
+        }`}
+      >
         <ShareTable
           rows={ranked.map(cell => ({
             label: cell.label,
