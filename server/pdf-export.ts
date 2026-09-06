@@ -12,6 +12,59 @@ export interface DeckPdfRequest {
   department: string;
 }
 
+/** Just enough of an Express request to resolve the origin, so this stays testable. */
+export interface OriginHeaders {
+  get: (name: string) => string | undefined;
+  protocol: string;
+}
+
+/**
+ * Origin the headless browser must open to find the deck.
+ *
+ * In production one process serves both the API and the built client, so its
+ * own port is the right answer. In development they are two: Vite serves the
+ * deck on `CLIENT_PORT` and this API answers on `PORT`. Pointing the renderer
+ * at the API port there loads a page with no slides on it, and the export dies
+ * on `Waiting for selector 'main section[id^="slide-"]'` — which is what
+ * happened to every request that carried no `Referer`: a curl, a script, or the
+ * endpoint opened straight in a tab.
+ *
+ * So the request's own headers are trusted, since a browser knows where the
+ * user is, but never when they point back at this API: that answer is known to
+ * be wrong in development, and the client port is the only origin that serves
+ * the deck.
+ */
+export function resolveClientOrigin(
+  req: OriginHeaders,
+  env: Readonly<Record<string, string | undefined>> = process.env
+): string {
+  if (env.NODE_ENV === "production") {
+    return `http://127.0.0.1:${env.PORT ?? 3000}`;
+  }
+
+  const apiPort = String(env.PORT ?? 3501);
+
+  for (const header of [req.get("referer"), req.get("origin"), req.get("host")]) {
+    if (!header) {
+      continue;
+    }
+
+    try {
+      const url = new URL(
+        header.includes("://") ? header : `${req.protocol}://${header}`
+      );
+
+      if (url.port !== apiPort) {
+        return url.origin;
+      }
+    } catch {
+      // Malformed header: fall through to the next candidate.
+    }
+  }
+
+  return `http://127.0.0.1:${env.CLIENT_PORT ?? 3500}`;
+}
+
 /** Download name shared by every department, dated in the user's business timezone. */
 export function reportPdfFilename(
   department: string,

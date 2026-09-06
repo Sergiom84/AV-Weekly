@@ -109,7 +109,7 @@ import {
   parseTendenciaWorkbook,
 } from "./parseTendenciaMensual.js";
 import { configuredCredentials } from "./auth.js";
-import { createDeckPdfSender } from "./pdf-export.js";
+import { createDeckPdfSender, resolveClientOrigin } from "./pdf-export.js";
 import { persistDeckWithHistory } from "./deck-persistence.js";
 import {
   MAX_INFORMATICA_FILE_SIZE_BYTES,
@@ -1719,26 +1719,6 @@ router.post("/api/oficinas/reset-deck", async (_req, res) => {
  * server). Production always renders through the loopback server so request
  * headers can never redirect authentication credentials to another origin.
  */
-function resolveClientOrigin(req: import("express").Request): string {
-  if (process.env.NODE_ENV === "production") {
-    return `http://127.0.0.1:${process.env.PORT ?? 3000}`;
-  }
-
-  for (const header of [req.get("referer"), req.get("origin")]) {
-    if (!header) {
-      continue;
-    }
-
-    try {
-      return new URL(header).origin;
-    } catch {
-      // Malformed header: fall through to the next candidate.
-    }
-  }
-
-  return `${req.protocol}://${req.get("host")}`;
-}
-
 /** Renders `path` as a PDF, one slide per page, via a headless render of the real app. */
 async function renderDeckPdf(
   origin: string,

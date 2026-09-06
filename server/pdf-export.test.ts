@@ -5,8 +5,55 @@ import { filenameFromDisposition } from "../shared/deck/pdf-download.ts";
 import {
   createDeckPdfSender,
   reportPdfFilename,
+  resolveClientOrigin,
   type DeckPdfRenderer,
 } from "./pdf-export.js";
+
+/** A request carrying only the headers the origin resolution reads. */
+function headers(values: Record<string, string>) {
+  return {
+    protocol: "http",
+    get: (name: string) => values[name.toLowerCase()],
+  };
+}
+
+describe("origen que abre el renderizador", () => {
+  const dev = { PORT: "3501", CLIENT_PORT: "3500" };
+
+  it("usa su propio puerto en producción, donde sirve el cliente compilado", () => {
+    expect(
+      resolveClientOrigin(headers({}), { NODE_ENV: "production", PORT: "3000" })
+    ).toBe("http://127.0.0.1:3000");
+  });
+
+  it("sigue el Referer del navegador cuando lo hay", () => {
+    expect(
+      resolveClientOrigin(
+        headers({ referer: "http://localhost:3500/oficinas" }),
+        dev
+      )
+    ).toBe("http://localhost:3500");
+  });
+
+  it("cae al puerto del cliente cuando la petición no trae cabeceras", () => {
+    // Un curl o un script: antes devolvía el host de la API, que en desarrollo
+    // no sirve el deck, y la exportación moría esperando las diapositivas.
+    expect(resolveClientOrigin(headers({}), dev)).toBe("http://127.0.0.1:3500");
+  });
+
+  it("ignora una cabecera que apunta a la propia API", () => {
+    // El endpoint abierto en una pestaña, que es lo primero que uno prueba.
+    expect(
+      resolveClientOrigin(
+        headers({
+          referer: "http://localhost:3501/api/oficinas/pdf",
+          host: "localhost:3501",
+        }),
+        dev
+      )
+    ).toBe("http://127.0.0.1:3500");
+  });
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
