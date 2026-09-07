@@ -353,6 +353,7 @@ export default function Oficinas() {
               onSelectPage={scrollToPage}
               onPresent={() => setPresenting(true)}
               pdfFilenamePrefix="Oficinas"
+              pdfHref="/api/oficinas/pdf"
             />
           </ResizableSidebar>
 

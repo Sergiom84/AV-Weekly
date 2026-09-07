@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play, Printer, Trash2 } from "lucide-react";
+import { Download, Play, Printer, Trash2 } from "lucide-react";
 import { isPageVisible } from "@shared/deck/core";
 import type { DeckPage } from "@shared/deck/core";
+import { filenameFromDisposition } from "@shared/deck/pdf-download";
 import type { DeckActionResult, DeckStateOf } from "@/hooks/useDeckData";
 import {
   AlertDialog,
@@ -62,6 +63,17 @@ interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
   exportActions?: SidebarExportAction[];
   /** Module label used to suggest the PDF filename in the print dialog. */
   pdfFilenamePrefix: string;
+  /**
+   * Endpoint that renders the deck server-side, e.g. `/api/aga/pdf`.
+   *
+   * The two export buttons are not redundant. Printing keeps the preview and
+   * the page controls, but the name of the resulting file belongs to the
+   * browser and to the print driver: with "Microsoft Print to PDF" the Windows
+   * save dialog comes up empty however the document is titled. This one is a
+   * real download, so `Content-Disposition` names it, at the cost of a
+   * server-side render that takes its time and admits one export at a time.
+   */
+  pdfHref: string;
 }
 
 function formatUploadedAt(value: string | null): string | null {
@@ -289,8 +301,62 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   onPresent,
   exportActions = [],
   pdfFilenamePrefix,
+  pdfHref,
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  // A ref as well as the state: two clicks in the same render would both pass
+  // the state check and start two renders on a server that allows one.
+  const pdfLock = useRef(false);
+
+  const downloadPdf = useCallback(async () => {
+    if (pdfLock.current) {
+      return;
+    }
+
+    pdfLock.current = true;
+    setPdfBusy(true);
+    setPdfError(null);
+
+    try {
+      const response = await fetch(pdfHref);
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+
+        setPdfError(body?.error ?? "No se pudo generar el PDF");
+        return;
+      }
+
+      if (!(response.headers.get("content-type") ?? "").includes("pdf")) {
+        setPdfError("No se pudo generar el PDF");
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = filenameFromDisposition(
+        response.headers.get("content-disposition"),
+        "informe.pdf"
+      );
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setPdfError("No se pudo generar el PDF");
+    } finally {
+      pdfLock.current = false;
+      setPdfBusy(false);
+    }
+  }, [pdfHref]);
+
   const manualCorrections = pages.flatMap((page, index) => {
     const pageVisible = isPageVisible(page);
     const slideNumber = pageVisible
@@ -486,10 +552,29 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
             variant="outline"
             size="sm"
             className="w-full justify-start gap-2"
+            disabled={pdfBusy}
+            aria-busy={pdfBusy}
+            onClick={() => void downloadPdf()}
+          >
+            <Download className="h-4 w-4" />
+            {pdfBusy ? "Generando" : "Descargar PDF"}
+          </Button>
+
+          {pdfError && (
+            <p className="font-mono text-xs text-destructive" role="alert">
+              {pdfError}
+            </p>
+          )}
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2"
             onClick={() => printDeckAsPdf(pdfFilenamePrefix)}
           >
             <Printer className="h-4 w-4" />
-            Guardar PDF
+            Imprimir
           </Button>
         </CardContent>
       </SidebarSection>

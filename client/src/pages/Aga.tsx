@@ -343,6 +343,7 @@ export default function Aga() {
               onSelectPage={scrollToPage}
               onPresent={() => setPresenting(true)}
               pdfFilenamePrefix="AGA"
+              pdfHref="/api/aga/pdf"
             />
           </ResizableSidebar>
 

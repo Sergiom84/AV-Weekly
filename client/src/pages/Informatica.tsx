@@ -323,6 +323,7 @@ export default function Informatica() {
               onSelectPage={scrollToPage}
               onPresent={() => setPresenting(true)}
               pdfFilenamePrefix="Informática"
+              pdfHref="/api/informatica/pdf"
             />
           </ResizableSidebar>
 

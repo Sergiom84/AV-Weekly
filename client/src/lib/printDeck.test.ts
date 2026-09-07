@@ -40,7 +40,7 @@ describe("PDF print title", () => {
     const utcBeforeMadridMidnight = new Date("2026-09-02T22:30:00.000Z");
 
     expect(formatPdfPrintTitle("AGA", utcBeforeMadridMidnight)).toBe(
-      "AGA_informe_03_09_26",
+      "AGA_03-09-26_Informe",
     );
   });
 
@@ -48,7 +48,7 @@ describe("PDF print title", () => {
     const context = createEnvironment();
     const date = new Date("2026-09-02T10:00:00.000Z");
     context.environment.print = vi.fn(() => {
-      expect(context.getTitle()).toBe("Oficinas_informe_02_09_26");
+      expect(context.getTitle()).toBe("Oficinas_02-09-26_Informe");
     });
 
     printDeckAsPdf("Oficinas", date, context.environment);

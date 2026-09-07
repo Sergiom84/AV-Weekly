@@ -348,6 +348,7 @@ export default function Informe() {
               onPresent={() => setPresenting(true)}
               exportActions={exportActions}
               pdfFilenamePrefix="AV"
+              pdfHref="/api/informe/pdf"
             />
           </ResizableSidebar>
 

@@ -1,4 +1,4 @@
-import { MONTH_NAMES_ES, weekCoverLabel } from "../../deck/core.ts";
+import { weekCoverLabel } from "../../deck/core.ts";
 
 /**
  * Calendar conventions of the AGA report.
@@ -81,10 +81,11 @@ export function agaWeekLabel(extractionDate: string, explicitWeek?: number | nul
 /**
  * Human-readable period for the cover, derived from the latest dataset week.
  *
- * The extraction day is stated after the period because the two are not the
- * same date and the cover was read as if they were: "31 agosto-6 septiembre"
- * is the completed week the figures describe, while the snapshot of positions
- * in management is the photograph taken on Monday the 7th.
+ * The span runs from the Monday that opens the reported week to the Monday the
+ * files are pulled, not to the Sunday that closes it: the deck is read as
+ * "what happened up to the cut", and a cover that stopped on the 6th read as
+ * if the figures did too. The week number stays the completed AGA week, so
+ * "Semana 36" and "31 agosto-7 septiembre" name the same report.
  */
 export function agaPeriodLabel(
   extractionDate: string,
@@ -94,16 +95,8 @@ export function agaPeriodLabel(
 
   if (!period) return "";
 
-  const cover = weekCoverLabel(period.week, period.year, {
+  return weekCoverLabel(period.week, period.year, {
     start: period.start,
-    end: period.end,
+    end: dateOnly(extractionDate) ? extractionDate : period.end,
   });
-  const extraction = dateOnly(extractionDate);
-
-  if (!extraction) return cover;
-
-  const day = extraction.getUTCDate();
-  const month = MONTH_NAMES_ES[extraction.getUTCMonth()];
-
-  return `${cover} · extracción ${day} ${month}`;
 }

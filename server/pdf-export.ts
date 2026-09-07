@@ -1,4 +1,8 @@
 import type { Request, Response } from "express";
+import {
+  madridDateParts,
+  reportFileBaseName,
+} from "../shared/deck/pdf-download.ts";
 
 export type DeckPdfRenderer = (
   origin: string,
@@ -102,21 +106,9 @@ export function reportPdfFilename(
   department: string,
   date: Date = new Date()
 ): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Madrid",
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-  }).formatToParts(date);
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find(part => part.type === type)?.value ?? "";
-  const safeDepartment = department
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Za-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+  const { day, month, year } = madridDateParts(date);
 
-  return `${safeDepartment}_${value("day")}-${value("month")}-${value("year")}_Informe.pdf`;
+  return `${reportFileBaseName(department, day, month, year)}.pdf`;
 }
 
 /**

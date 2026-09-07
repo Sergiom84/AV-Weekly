@@ -1,4 +1,18 @@
-const PRINT_TITLE_FALLBACK_MS = 1_000;
+import {
+  madridDateParts,
+  reportFileBaseName,
+} from "@shared/deck/pdf-download";
+
+/**
+ * Safety net for a browser that never fires `afterprint`, not a timer the
+ * normal path relies on.
+ *
+ * It used to be one second, which restored the tab title while the print
+ * preview was still open: the dialog then spooled the job under the restored
+ * title instead of the report's. Five minutes is longer than anyone leaves the
+ * preview open and still bounds how long a stale title can linger.
+ */
+const PRINT_TITLE_FALLBACK_MS = 300_000;
 
 interface PdfPrintEnvironment {
   getTitle: () => string;
@@ -26,18 +40,17 @@ function browserPrintEnvironment(): PdfPrintEnvironment {
   };
 }
 
-/** Filename suggested by the browser print dialog through document.title. */
+/**
+ * Filename suggested by the browser print dialog through document.title.
+ *
+ * Same shape as the download the server names, so the two export buttons do
+ * not produce differently named files. It is only a suggestion: the print
+ * driver has the last word, and "Microsoft Print to PDF" ignores it.
+ */
 export function formatPdfPrintTitle(moduleName: string, date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Madrid",
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-  }).formatToParts(date);
-  const readPart = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find(part => part.type === type)?.value ?? "";
+  const { day, month, year } = madridDateParts(date);
 
-  return `${moduleName}_informe_${readPart("day")}_${readPart("month")}_${readPart("year")}`;
+  return reportFileBaseName(moduleName, day, month, year);
 }
 
 export function printDeckAsPdf(
