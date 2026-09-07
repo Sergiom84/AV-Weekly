@@ -1,6 +1,7 @@
 import {
   MONTH_LABELS,
   defaultMonthWindow,
+  extendMonthRangeToLatest,
   resolveMonthSelection,
 } from "@shared/deck/core";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
@@ -43,7 +44,12 @@ export default function GestionadasOfficePage({
   dataset,
 }: GestionadasOfficePageProps) {
   const availableMonths = dataset.office?.months ?? [];
-  const monthSelection = page.monthSelection ?? defaultMonthWindow(12);
+  // The saved end follows the newest reported month, so a range written in
+  // September does not hide October.
+  const monthSelection = extendMonthRangeToLatest(
+    page.monthSelection ?? defaultMonthWindow(12),
+    availableMonths.at(-1)
+  );
   const months = resolveMonthSelection(monthSelection, availableMonths);
   const families = dataset.office?.families ?? [];
   const labels = families.map(family => family.label);

@@ -244,6 +244,53 @@ export function followLatestWeekSelection(
   return { mode: "window", from: 1, to: 1, weeks: [], size };
 }
 
+/**
+ * A saved range with its end moved forward to the latest period available.
+ *
+ * A range is written by the from/to dropdowns and never moves on its own, so a
+ * slide saved as "S24 a S35" keeps hiding the week imported the following
+ * Monday. What the dropdowns mean in this report is "from S24 to now", and the
+ * end is only ever raised: the start the user picked is respected, and a window
+ * or a list is returned untouched.
+ *
+ * It is applied where the axis is a running history, not by `resolveWeek-
+ * Selection` itself: a page whose axis is a fixed calendar has no "latest" to
+ * extend to, and widening a deliberately narrow range there would be wrong.
+ */
+export function extendWeekRangeToLatest(
+  selection: WeekSelection,
+  available: number[]
+): WeekSelection {
+  if (selection.mode !== "range" || available.length === 0) {
+    return selection;
+  }
+
+  const latest = Math.max(...available);
+  const to = Math.max(selection.from, selection.to);
+
+  return to >= latest ? selection : { ...selection, to: latest };
+}
+
+/**
+ * The month equivalent, against the latest month that carries data.
+ *
+ * The latest month is passed in rather than read from `available`: slides 3.1
+ * and 3.2 draw the twelve calendar months, so their `available` ends in
+ * December all year and extending to it would add three empty columns.
+ */
+export function extendMonthRangeToLatest(
+  selection: MonthSelection,
+  latest: string | undefined
+): MonthSelection {
+  if (selection.mode !== "range" || !latest) {
+    return selection;
+  }
+
+  const to = selection.from > selection.to ? selection.from : selection.to;
+
+  return to >= latest ? selection : { ...selection, to: latest };
+}
+
 /** Resolves a selection into the concrete, ordered list of weeks to render. */
 export function resolveWeekSelection(
   selection: WeekSelection | undefined,

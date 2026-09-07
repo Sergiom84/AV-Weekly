@@ -109,7 +109,11 @@ import {
   parseTendenciaWorkbook,
 } from "./parseTendenciaMensual.js";
 import { configuredCredentials } from "./auth.js";
-import { createDeckPdfSender, resolveClientOrigin } from "./pdf-export.js";
+import {
+  createDeckPdfSender,
+  latestReportDate,
+  resolveClientOrigin,
+} from "./pdf-export.js";
 import { persistDeckWithHistory } from "./deck-persistence.js";
 import {
   MAX_INFORMATICA_FILE_SIZE_BYTES,
@@ -1807,14 +1811,34 @@ function sendDeckPdf(
   req: import("express").Request,
   res: import("express").Response,
   routePath: string,
-  department: string
+  department: string,
+  date?: Date
 ) {
   const origin = resolveClientOrigin(req);
   void sendCoordinatedDeckPdf(req, res, {
     origin,
     path: routePath,
     department,
+    date,
   });
+}
+
+/**
+ * The Monday the AGA deck is reporting on.
+ *
+ * The download is named after the period inside the file, not after the day it
+ * was exported: the report is regularly regenerated on the Tuesday, and a
+ * filename that said 08-09-26 for the week 36 report would file it wrong.
+ * Anything unreadable falls back to today rather than failing the export.
+ */
+async function agaReportDate(): Promise<Date | undefined> {
+  try {
+    const dataset = await readStoredAgaDataset();
+
+    return latestReportDate((dataset?.weeks ?? []).map(entry => entry.week));
+  } catch {
+    return undefined;
+  }
 }
 
 router.get("/api/informe/pdf", (req, res) => {
@@ -1825,8 +1849,8 @@ router.get("/api/informatica/pdf", (req, res) => {
   sendDeckPdf(req, res, "/informatica", "Informatica");
 });
 
-router.get("/api/aga/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/aga", "AGA");
+router.get("/api/aga/pdf", async (req, res) => {
+  sendDeckPdf(req, res, "/aga", "AGA", await agaReportDate());
 });
 
 router.get("/api/oficinas/pdf", (req, res) => {

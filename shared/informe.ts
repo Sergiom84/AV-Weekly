@@ -27,6 +27,8 @@ export {
   MONTH_LABELS,
   TRAILING_WEEK_WINDOW,
   defaultWeekSelection,
+  extendMonthRangeToLatest,
+  extendWeekRangeToLatest,
   followLatestWeekSelection,
   formatChartMetric,
   isPageVisible,

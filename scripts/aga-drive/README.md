@@ -30,8 +30,13 @@ una sección hay que tocar los tres sitios.
 1. Subir a la carpeta los tres ficheros tal cual llegan, sin renombrarlos ni
    tocarlos: el GPS de peticiones pendientes, el `Gestionado` de ZPT025 y el de
    licencias Office.
-2. Poner la fecha de extracción (el lunes) en `Configuración`.
-3. `⭐ AGA Weekly > Procesar semana`.
+2. Poner la fecha de extracción (el lunes) en `Configuración`, con apóstrofo
+   delante: `'2026-09-07`.
+3. `⭐ AGA Weekly > Procesar semana`. Antes de empezar sale un recordatorio con
+   los dos fallos que llegan al informe y que nada aguas abajo puede reparar:
+   la fecha convertida por Sheets y los edificios que faltan en el mapa. Muestra
+   lo que la hoja tiene escrito ahora mismo en la celda de la fecha, y se puede
+   cancelar.
 4. Comprobar los totales en la pestaña `Comprobación`.
 5. Copiar la pestaña `PLANO` entera y subirla en AV Weekly, en
    `AGA > Texto plano (Drive)`. También vale

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { filenameFromDisposition } from "../shared/deck/pdf-download.ts";
 import {
   createDeckPdfSender,
+  latestReportDate,
   reportPdfFilename,
   resolveClientOrigin,
   type DeckPdfRenderer,
@@ -129,7 +130,7 @@ describe("PDF export coordination", () => {
     const firstResponse = await first;
     expect(firstResponse.status).toBe(200);
     expect(firstResponse.headers.get("content-disposition")).toMatch(
-      /^attachment; filename="Informe_AV_\d{2}_\d{2}_\d{2}\.pdf"$/
+      /^attachment; filename="AV_\d{2}-\d{2}-\d{2}_Informe\.pdf"$/
     );
 
     const next = await fetch(url);
@@ -155,31 +156,46 @@ describe("PDF export coordination", () => {
 });
 
 describe("PDF download filename", () => {
-  it("uses the requested department and a two-digit Madrid date", () => {
+  it("names the file department, date and Informe, with no path separator", () => {
     expect(
       reportPdfFilename("Oficinas", new Date("2026-08-21T10:00:00Z"))
-    ).toBe("Informe_Oficinas_21_08_26.pdf");
+    ).toBe("Oficinas_21-08-26_Informe.pdf");
     expect(
       reportPdfFilename("Informática", new Date("2026-08-21T10:00:00Z"))
-    ).toBe("Informe_Informatica_21_08_26.pdf");
+    ).toBe("Informatica_21-08-26_Informe.pdf");
     expect(reportPdfFilename("AV", new Date("2026-08-21T10:00:00Z"))).toBe(
-      "Informe_AV_21_08_26.pdf"
+      "AV_21-08-26_Informe.pdf"
     );
+    expect(
+      reportPdfFilename("AGA", new Date("2026-09-07T12:00:00Z"))
+    ).not.toContain("/");
+  });
+
+  it("takes the date from the period the deck carries, not from today", () => {
+    // El informe se regenera a menudo el martes; el nombre tiene que seguir
+    // diciendo la semana que hay dentro del fichero.
+    const weeks = ["2026-08-24", "2026-09-07", "2026-08-31"];
+
+    expect(reportPdfFilename("AGA", latestReportDate(weeks))).toBe(
+      "AGA_07-09-26_Informe.pdf"
+    );
+    expect(latestReportDate([])).toBeUndefined();
+    expect(latestReportDate(["fecha-antigua"])).toBeUndefined();
   });
 
   it("uses Madrid's next day instead of the UTC date near midnight", () => {
     expect(reportPdfFilename("AGA", new Date("2026-08-21T22:30:00Z"))).toBe(
-      "Informe_AGA_22_08_26.pdf"
+      "AGA_22-08-26_Informe.pdf"
     );
   });
 
   it("reads the attachment name from Content-Disposition", () => {
     expect(
       filenameFromDisposition(
-        'attachment; filename="Informe_Oficinas_21_08_26.pdf"',
+        'attachment; filename="Oficinas_21-08-26_Informe.pdf"',
         "informe.pdf"
       )
-    ).toBe("Informe_Oficinas_21_08_26.pdf");
+    ).toBe("Oficinas_21-08-26_Informe.pdf");
     expect(filenameFromDisposition(null, "informe.pdf")).toBe("informe.pdf");
   });
 });

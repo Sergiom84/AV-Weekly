@@ -3,7 +3,11 @@ import CategoryBarChart, {
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
-import { defaultWeekSelection, resolveWeekSelection } from "@shared/deck/core";
+import {
+  defaultWeekSelection,
+  extendWeekRangeToLatest,
+  resolveWeekSelection,
+} from "@shared/deck/core";
 import type { AgaDataset } from "@shared/modules/aga/types";
 import { agaColor, variationLabel, weekLabel, weekNumber } from "../aggregate";
 import {
@@ -44,8 +48,11 @@ export default function GestionadasTotalPage({
   const availableWeeks = totals
     .map(entry => weekNumber(entry.week))
     .filter((week): week is number => week !== null);
-  const selection =
-    page.weekSelection ?? defaultWeekSelection(availableWeeks.at(-1) ?? 1);
+  // The saved end follows the newest week: see `extendWeekRangeToLatest`.
+  const selection = extendWeekRangeToLatest(
+    page.weekSelection ?? defaultWeekSelection(availableWeeks.at(-1) ?? 1),
+    availableWeeks
+  );
   const selectedWeeks = new Set(
     resolveWeekSelection(selection, availableWeeks)
   );

@@ -4,8 +4,56 @@ import {
   calendarMonthLabel,
   defaultCalendarMonthRange,
   defaultMonthWindow,
+  extendMonthRangeToLatest,
+  extendWeekRangeToLatest,
+  followLatestWeekSelection,
   resolveMonthSelection,
+  resolveWeekSelection,
 } from "../shared/deck/core.ts";
+
+describe("un rango guardado sigue al último periodo", () => {
+  it("estira el final de un rango de semanas sin mover el inicio", () => {
+    const saved = { mode: "range", from: 34, to: 35, weeks: [] } as const;
+    const available = [33, 34, 35, 36];
+
+    expect(extendWeekRangeToLatest(saved, available)).toEqual({
+      mode: "range",
+      from: 34,
+      to: 36,
+      weeks: [],
+    });
+    expect(
+      resolveWeekSelection(extendWeekRangeToLatest(saved, available), available)
+    ).toEqual([34, 35, 36]);
+  });
+
+  it("no toca una ventana, una lista ni un rango que ya llega al final", () => {
+    const available = [33, 34, 35, 36];
+    const window = followLatestWeekSelection(2);
+    const list = { mode: "list", from: 1, to: 1, weeks: [33, 35] } as const;
+    const current = { mode: "range", from: 30, to: 36, weeks: [] } as const;
+
+    expect(extendWeekRangeToLatest(window, available)).toBe(window);
+    expect(extendWeekRangeToLatest(list, available)).toBe(list);
+    expect(extendWeekRangeToLatest(current, available)).toBe(current);
+    expect(extendWeekRangeToLatest(current, [])).toBe(current);
+  });
+
+  it("estira el final de un rango de meses hasta el mes informado", () => {
+    const saved = { mode: "range", from: "01", to: "09", months: [] } as const;
+
+    expect(extendMonthRangeToLatest(saved, "10")).toEqual({
+      mode: "range",
+      from: "01",
+      to: "10",
+      months: [],
+    });
+    // Sin mes informado, o con uno anterior, el rango se queda como está: es
+    // lo que impide que 3.1 y 3.2 dibujen columnas vacías hasta diciembre.
+    expect(extendMonthRangeToLatest(saved, undefined)).toBe(saved);
+    expect(extendMonthRangeToLatest(saved, "08")).toBe(saved);
+  });
+});
 
 describe("AGA monthly window (2.8 Office)", () => {
   const history = [

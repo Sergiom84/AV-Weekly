@@ -6,6 +6,7 @@ import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import {
   COMPARED_WEEK_WINDOW,
+  extendWeekRangeToLatest,
   followLatestWeekSelection,
   resolveWeekSelection,
   type WeekSelection,
@@ -81,14 +82,20 @@ export default function ManagedBreakdown({
   const defaultSelection: WeekSelection = followLatestWeekSelection(
     COMPARED_WEEK_WINDOW
   );
-  const selection = page.weekSelection ?? defaultSelection;
+  const selection = extendWeekRangeToLatest(
+    page.weekSelection ?? defaultSelection,
+    availableWeeks
+  );
   const selectedWeeks = new Set(
     resolveWeekSelection(selection, availableWeeks)
   );
-  const weeks = allWeeks.filter(week => {
-    const number = weekNumber(week);
-    return number !== null && selectedWeeks.has(number);
-  });
+  // Two weeks whatever the selection resolves to: see `TwoWeekCompare`.
+  const weeks = allWeeks
+    .filter(week => {
+      const number = weekNumber(week);
+      return number !== null && selectedWeeks.has(number);
+    })
+    .slice(-COMPARED_WEEK_WINDOW);
   const allImported = breakdownForWeeks(rows, weeks);
   const labels = allImported.map(row => row.label);
   const hiddenRows = page.hiddenRows ?? [];

@@ -1160,8 +1160,95 @@ function readConfig() {
 /* Main action                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The extraction cell exactly as the sheet holds it, for the reminder.
+ *
+ * Read raw and never thrown from: the whole point is to show a cell that is
+ * already wrong, before `readConfig` refuses it. A `Date` here is the defect
+ * itself — Sheets converted the text — so it is shown as a date, which is what
+ * makes the swapped day and month visible.
+ */
+function extraccionEscrita() {
+  try {
+    var sheet = sheetByName(TAB.config, false);
+
+    if (!sheet) return '';
+
+    var values = sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 1), 2).getValues();
+
+    for (var index = 0; index < values.length; index += 1) {
+      if (text(values[index][0]) === CONFIG_KEYS.extraction) {
+        var value = values[index][1];
+
+        return value instanceof Date
+          ? 'convertida por Sheets a ' + isoDate(new Date(Date.UTC(
+              value.getFullYear(), value.getMonth(), value.getDate()
+            )))
+          : text(value);
+      }
+    }
+  } catch (err) {
+    // A malformed sheet must not block the reminder.
+  }
+
+  return '';
+}
+
+/**
+ * Reminder shown before the week is processed.
+ *
+ * The two defects it names are the two that reached a published report and
+ * that nothing downstream can repair on its own:
+ *
+ * - An extraction date typed without the apostrophe. Sheets reads `07/09/2026`
+ *   as month first and stores 9 July; every week of section 1 is then filed
+ *   under S28 and the deck charts a second one.
+ * - A building missing from the mapping tab. Its positions carry no location,
+ *   so slide 2.4 draws bars that add up to less than the week.
+ *
+ * It runs before `readConfig` so it is seen even when the date is the problem,
+ * and it is cancellable: the point is to be read, not clicked through.
+ */
+function recordatorioAntesDeProcesar(ui) {
+  var escrita = extraccionEscrita();
+  var lines = [
+    'Antes de procesar, comprueba dos cosas.',
+    '',
+    '1. La fecha de extracción, en la pestaña "' + TAB.config + '".',
+    '   Es el lunes en que se sacan los ficheros y se escribe con apóstrofo',
+    '   delante, como texto:   \'2026-09-07',
+    '   Sin el apóstrofo, Sheets la convierte y el 7 de septiembre se guarda',
+    '   como 9 de julio: el informe sale con la semana equivocada.'
+  ];
+
+  if (escrita !== '') {
+    lines.push('   Ahora mismo la hoja dice: ' + escrita);
+  }
+
+  lines.push(
+    '',
+    '2. Los edificios nuevos, en la pestaña "' + TAB.buildings + '".',
+    '   Si subes el fichero de Edificios a la carpeta, la pestaña se actualiza',
+    '   sola y no hay nada que hacer.',
+    '   Si no, añade una fila: el edificio tal cual lo escribe el export en la',
+    '   primera columna, y su ubicación en la segunda.',
+    '   Un edificio sin ubicación cuenta como "Sin clasificar" y la 2.4 deja de',
+    '   cuadrar con el total de la semana.',
+    '',
+    '¿Continúo?'
+  );
+
+  return ui.alert('⭐ AGA Weekly', lines.join('\n'), ui.ButtonSet.OK_CANCEL) ===
+    ui.Button.OK;
+}
+
 function procesarSemana() {
   var ui = SpreadsheetApp.getUi();
+
+  if (!recordatorioAntesDeProcesar(ui)) {
+    return;
+  }
+
   var config = readConfig();
   var mappings = {
     departments: readDepartments(),
@@ -1561,8 +1648,9 @@ function writeInstructions() {
     ['Cada semana'],
     ['1. Sube a la carpeta de Drive los tres ficheros tal cual llegan, sin tocarlos:'],
     ['   · el GPS de peticiones pendientes, · el Gestionado de ZPT025, · el de licencias Office.'],
-    ['2. En la pestaña "' + TAB.config + '", pon la fecha de extracción (el lunes en que se sacan).'],
-    ['3. Menú "⭐ AGA Weekly" > "Procesar semana".'],
+    ['2. En la pestaña "' + TAB.config + '", pon la fecha de extracción (el lunes en que se sacan),'],
+    ['   con apóstrofo delante para que no se convierta:   \'2026-09-07'],
+    ['3. Menú "⭐ AGA Weekly" > "Procesar semana". Sale un recordatorio antes de empezar.'],
     ['4. Revisa la pestaña "' + TAB.check + '": son los mismos totales de las tablas dinámicas.'],
     ['5. Copia la pestaña "' + TAB.plano + '" entera y súbela en AV Weekly > AGA > Texto plano (Drive).'],
     ['   También puedes usar "Guardar PLANO como .txt en la carpeta" y subir el fichero.'],
@@ -1585,8 +1673,18 @@ function writeInstructions() {
   sheet.clear();
   sheet.getRange(1, 1, lines.length, 1).setValues(lines);
   sheet.setColumnWidth(1, 820);
-  sheet.getRange(1, 1, 1, 1).setFontWeight('bold');
-  sheet.getRange(3, 1, 1, 1).setFontWeight('bold');
-  sheet.getRange(12, 1, 1, 1).setFontWeight('bold');
-  sheet.getRange(21, 1, 1, 1).setFontWeight('bold');
+  // Headings found by their text, not by a row number: adding one line to the
+  // steps above used to leave the bold rows pointing at the wrong sentences.
+  var headings = [
+    '⭐ AGA Weekly — informe semanal de AGA',
+    'Cada semana',
+    'Qué hace cada pestaña',
+    'Si aparece un departamento, proyecto o edificio nuevo'
+  ];
+
+  for (var index = 0; index < lines.length; index += 1) {
+    if (headings.indexOf(lines[index][0]) !== -1) {
+      sheet.getRange(index + 1, 1, 1, 1).setFontWeight('bold');
+    }
+  }
 }

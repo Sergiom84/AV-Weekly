@@ -6,6 +6,7 @@ import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import {
   COMPARED_WEEK_WINDOW,
+  extendWeekRangeToLatest,
   followLatestWeekSelection,
   resolveWeekSelection,
   type WeekSelection,
@@ -56,14 +57,22 @@ export default function TwoWeekCompare({
   const defaultSelection: WeekSelection = followLatestWeekSelection(
     COMPARED_WEEK_WINDOW
   );
-  const selection = page.weekSelection ?? defaultSelection;
+  const selection = extendWeekRangeToLatest(
+    page.weekSelection ?? defaultSelection,
+    availableWeeks
+  );
   const selectedWeeks = new Set(
     resolveWeekSelection(selection, availableWeeks)
   );
-  const selectedEntries = entries.filter(entry => {
-    const week = weekNumber(entry.week, entry.reportWeek);
-    return week !== null && selectedWeeks.has(week);
-  });
+  // The slide compares two weeks whatever the selection resolves to. A range
+  // saved on this page would otherwise draw a third series once it is extended,
+  // and the headline would compare the last two of three charted weeks.
+  const selectedEntries = entries
+    .filter(entry => {
+      const week = weekNumber(entry.week, entry.reportWeek);
+      return week !== null && selectedWeeks.has(week);
+    })
+    .slice(-COMPARED_WEEK_WINDOW);
   const breakdowns = selectedEntries.map(breakdownOf);
   const labels = orderedLabels(breakdowns);
   const hiddenRows = page.hiddenRows ?? [];

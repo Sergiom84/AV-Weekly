@@ -10,6 +10,12 @@ export interface DeckPdfRequest {
   origin: string;
   path: string;
   department: string;
+  /**
+   * Date the download is named after. Defaults to today, which is only right
+   * while the report is exported the same day it is imported; a module that
+   * knows the period it is showing passes that instead.
+   */
+  date?: Date;
 }
 
 /** Just enough of an Express request to resolve the origin, so this stays testable. */
@@ -65,7 +71,33 @@ export function resolveClientOrigin(
   return `http://127.0.0.1:${env.CLIENT_PORT ?? 3500}`;
 }
 
-/** Download name shared by every department, dated in the user's business timezone. */
+/**
+ * The date a download is named after, taken from the periods the deck carries.
+ *
+ * Midday UTC, so rendering it in Madrid cannot land on the day before or after
+ * across a daylight-saving boundary. Anything that is not an ISO date is
+ * ignored rather than parsed loosely: a bad key would name the file after
+ * 1970.
+ */
+export function latestReportDate(
+  weeks: readonly string[]
+): Date | undefined {
+  const latest = weeks
+    .filter(week => /^\d{4}-\d{2}-\d{2}$/.test(week))
+    .sort()
+    .at(-1);
+
+  return latest ? new Date(`${latest}T12:00:00Z`) : undefined;
+}
+
+/**
+ * Download name shared by every department, dated in the user's business
+ * timezone: `AGA_07-09-26_Informe.pdf`.
+ *
+ * Department first, because that is how the files are filed and sorted. The
+ * date is written with hyphens: the day-month-year separator the reports use
+ * on paper is a slash, and a slash is a path separator in every filesystem.
+ */
 export function reportPdfFilename(
   department: string,
   date: Date = new Date()
@@ -84,7 +116,7 @@ export function reportPdfFilename(
     .replace(/[^A-Za-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 
-  return `Informe_${safeDepartment}_${value("day")}_${value("month")}_${value("year")}.pdf`;
+  return `${safeDepartment}_${value("day")}-${value("month")}-${value("year")}_Informe.pdf`;
 }
 
 /**
@@ -132,7 +164,7 @@ export function createDeckPdfSender(renderer: DeckPdfRenderer) {
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${reportPdfFilename(options.department)}"`
+        `attachment; filename="${reportPdfFilename(options.department, options.date)}"`
       );
       res.send(pdf);
     } catch (err) {

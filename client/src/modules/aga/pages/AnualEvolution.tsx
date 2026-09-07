@@ -3,6 +3,7 @@ import {
   MONTH_LABELS,
   calendarMonthLabel,
   defaultCalendarMonthRange,
+  extendMonthRangeToLatest,
   resolveMonthSelection,
 } from "@shared/deck/core";
 import type { AgaYearSeries } from "@shared/modules/aga/types";
@@ -48,7 +49,21 @@ export default function AnualEvolution({
   const selectedYears = page.years
     ? page.years.filter(year => availableYears.includes(year))
     : availableYears;
-  const monthSelection = page.monthSelection ?? defaultCalendarMonthRange();
+  // The end of a saved range follows the running year, not the axis: the axis
+  // is January to December all year long, so extending to it would add empty
+  // columns. The last month the newest year reports is the real edge.
+  const running = years.reduce<AgaYearSeries | undefined>(
+    (best, serie) => (best && best.year >= serie.year ? best : serie),
+    undefined
+  );
+  const lastReported = (running?.values ?? []).reduce<number>(
+    (found, value, index) => (value === null || value === undefined ? found : index),
+    -1
+  );
+  const monthSelection = extendMonthRangeToLatest(
+    page.monthSelection ?? defaultCalendarMonthRange(),
+    lastReported >= 0 ? CALENDAR_MONTH_KEYS[lastReported] : undefined
+  );
   const monthKeys = resolveMonthSelection(monthSelection, CALENDAR_MONTH_KEYS);
   const monthIndexes = monthKeys.map(key => Number(key) - 1);
   const entries = years
