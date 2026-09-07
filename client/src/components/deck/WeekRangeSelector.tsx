@@ -14,12 +14,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+/** A trailing window offered as a button, so a saved range can be undone. */
+interface WeekFollowOption {
+  size: number;
+  label: string;
+}
+
+/**
+ * The windows every week axis offers: the whole reported year and the last
+ * twenty. A page that charts a fixed number of weeks passes its own.
+ */
+const DEFAULT_FOLLOWS: WeekFollowOption[] = [
+  { size: ALL_REPORTED_WEEKS_WINDOW, label: "Todas" },
+  { size: TRAILING_WEEK_WINDOW, label: "Últimas 20 semanas" },
+];
+
 interface WeekRangeSelectorProps {
   selection: WeekSelection;
   available: number[];
   onChange: (selection: WeekSelection) => void;
   disabled?: boolean;
   format?: (week: number) => string;
+  follows?: WeekFollowOption[];
 }
 
 export default function WeekRangeSelector({
@@ -28,6 +44,7 @@ export default function WeekRangeSelector({
   onChange,
   disabled,
   format = week => `S${week}`,
+  follows = DEFAULT_FOLLOWS,
 }: WeekRangeSelectorProps) {
   if (available.length === 0) {
     return null;
@@ -56,12 +73,9 @@ export default function WeekRangeSelector({
     onChange(followLatestWeekSelection(size));
   };
 
-  const followsAll =
+  const followsSize = (size: number) =>
     selection.mode === "window" &&
-    (selection.size ?? TRAILING_WEEK_WINDOW) >= ALL_REPORTED_WEEKS_WINDOW;
-  const followsTrailing =
-    selection.mode === "window" &&
-    (selection.size ?? TRAILING_WEEK_WINDOW) === TRAILING_WEEK_WINDOW;
+    (selection.size ?? TRAILING_WEEK_WINDOW) === size;
 
   return (
     <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
@@ -120,28 +134,20 @@ export default function WeekRangeSelector({
       </div>
 
       <div className="flex items-center gap-1">
-        <Button
-          type="button"
-          size="sm"
-          variant={followsAll ? "default" : "outline"}
-          aria-pressed={followsAll}
-          className="h-7 px-2 font-mono text-xs"
-          disabled={disabled}
-          onClick={() => setWindow(ALL_REPORTED_WEEKS_WINDOW)}
-        >
-          Todas
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={followsTrailing && !followsAll ? "default" : "outline"}
-          aria-pressed={followsTrailing && !followsAll}
-          className="h-7 px-2 font-mono text-xs"
-          disabled={disabled}
-          onClick={() => setWindow(TRAILING_WEEK_WINDOW)}
-        >
-          Últimas 20 semanas
-        </Button>
+        {follows.map(option => (
+          <Button
+            key={option.size}
+            type="button"
+            size="sm"
+            variant={followsSize(option.size) ? "default" : "outline"}
+            aria-pressed={followsSize(option.size)}
+            className="h-7 px-2 font-mono text-xs"
+            disabled={disabled}
+            onClick={() => setWindow(option.size)}
+          >
+            {option.label}
+          </Button>
+        ))}
       </div>
     </div>
   );

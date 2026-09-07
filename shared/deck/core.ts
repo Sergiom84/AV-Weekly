@@ -228,6 +228,15 @@ export const TRAILING_WEEK_WINDOW = 20;
  */
 export const ALL_REPORTED_WEEKS_WINDOW = 53;
 
+/**
+ * Window of the slides that compare exactly two weeks.
+ *
+ * They must follow the latest pair rather than name it: an absolute `range`
+ * saved once keeps the slide on the weeks it was saved with, and the report
+ * silently compares a stale pair the following Monday.
+ */
+export const COMPARED_WEEK_WINDOW = 2;
+
 /** Trailing window that recomputes against the latest available weeks. */
 export function followLatestWeekSelection(
   size: number = TRAILING_WEEK_WINDOW

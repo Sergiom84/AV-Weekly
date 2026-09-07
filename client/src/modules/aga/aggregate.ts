@@ -5,6 +5,7 @@ import type {
 } from "@shared/modules/aga/types";
 import { agaWeekLabel } from "@shared/modules/aga/calendar";
 import { agaReportingPeriod } from "@shared/modules/aga/calendar";
+import { COMPARED_WEEK_WINDOW } from "@shared/deck/core";
 
 /**
  * Aggregation helpers for the AGA dataset.
@@ -44,6 +45,16 @@ export function weekNumber(
 ): number | null {
   return agaReportingPeriod(date, reportWeek)?.week ?? null;
 }
+
+/**
+ * The only window the two-week slides offer.
+ *
+ * Without it the selector can set a range but never leave one, and a slide
+ * pinned to a past pair has to be repaired in the database.
+ */
+export const COMPARED_WEEK_FOLLOWS = [
+  { size: COMPARED_WEEK_WINDOW, label: "Últimas 2 semanas" },
+];
 
 /** The last `count` weeks of the history, still ascending by date. */
 export function lastWeeks(

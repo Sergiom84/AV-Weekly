@@ -4,9 +4,15 @@ import CategoryBarChart, {
 import KpiRow from "@/components/deck/KpiRow";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
-import { resolveWeekSelection, type WeekSelection } from "@shared/deck/core";
+import {
+  COMPARED_WEEK_WINDOW,
+  followLatestWeekSelection,
+  resolveWeekSelection,
+  type WeekSelection,
+} from "@shared/deck/core";
 import type { AgaCount, AgaDataset } from "@shared/modules/aga/types";
 import {
+  COMPARED_WEEK_FOLLOWS,
   countsByLabel,
   agaColor,
   orderedLabels,
@@ -46,12 +52,10 @@ export default function TwoWeekCompare({
   const availableWeeks = entries
     .map(entry => weekNumber(entry.week, entry.reportWeek))
     .filter((week): week is number => week !== null);
-  const defaultSelection: WeekSelection = {
-    mode: "list",
-    from: availableWeeks[Math.max(0, availableWeeks.length - 2)] ?? 1,
-    to: availableWeeks[availableWeeks.length - 1] ?? 1,
-    weeks: availableWeeks.slice(-2),
-  };
+  // A trailing window, not the concrete pair: see `COMPARED_WEEK_WINDOW`.
+  const defaultSelection: WeekSelection = followLatestWeekSelection(
+    COMPARED_WEEK_WINDOW
+  );
   const selection = page.weekSelection ?? defaultSelection;
   const selectedWeeks = new Set(
     resolveWeekSelection(selection, availableWeeks)
@@ -124,6 +128,7 @@ export default function TwoWeekCompare({
             <WeekRangeSelector
               selection={selection}
               available={availableWeeks}
+              follows={COMPARED_WEEK_FOLLOWS}
               onChange={weekSelection => onChange({ weekSelection })}
             />
           )}
@@ -148,6 +153,7 @@ export default function TwoWeekCompare({
           series={series}
           data={data}
           angledCategories
+          fitCategoryStart={page.id === "aga-comparativa-departamento"}
         />
       </div>
     </PageShell>

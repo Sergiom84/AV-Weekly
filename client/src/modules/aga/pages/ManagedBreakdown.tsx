@@ -4,14 +4,19 @@ import CategoryBarChart, {
 import KpiRow from "@/components/deck/KpiRow";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
-import { resolveWeekSelection, type WeekSelection } from "@shared/deck/core";
+import {
+  COMPARED_WEEK_WINDOW,
+  followLatestWeekSelection,
+  resolveWeekSelection,
+  type WeekSelection,
+} from "@shared/deck/core";
 import {
   breakdownForWeeks,
-  locationShareAt,
-  topLocationShare,
+  statedLocationTotal,
 } from "@shared/modules/aga/managed";
 import type { AgaBreakdownRow, AgaDataset } from "@shared/modules/aga/types";
 import {
+  COMPARED_WEEK_FOLLOWS,
   COMPARE_COLORS,
   agaColor,
   variationLabel,
@@ -70,12 +75,12 @@ export default function ManagedBreakdown({
   const availableWeeks = allWeeks
     .map(week => weekNumber(week))
     .filter((week): week is number => week !== null);
-  const defaultSelection: WeekSelection = {
-    mode: "list",
-    from: availableWeeks[Math.max(0, availableWeeks.length - 2)] ?? 1,
-    to: availableWeeks[availableWeeks.length - 1] ?? 1,
-    weeks: availableWeeks.slice(-2),
-  };
+  // A trailing window, not the concrete pair: an absolute range freezes on the
+  // weeks it was saved with and the slide keeps comparing them upload after
+  // upload, which is how slides 2.2 to 2.7 got stuck on S34–S35.
+  const defaultSelection: WeekSelection = followLatestWeekSelection(
+    COMPARED_WEEK_WINDOW
+  );
   const selection = page.weekSelection ?? defaultSelection;
   const selectedWeeks = new Set(
     resolveWeekSelection(selection, availableWeeks)
@@ -129,41 +134,40 @@ export default function ManagedBreakdown({
   const totalAt = (index: number) =>
     entries.reduce((sum, entry) => sum + (entry.cells[index]?.value ?? 0), 0);
 
-  const locationShare =
-    topShare && weeks.length > 0
-      ? locationShareAt(dataset.managed, weeks[weeks.length - 1])
-      : topShare
-        ? topLocationShare(dataset.managed)
-        : null;
-  const items = weeks.map((week, index) => {
-    const isLatestLocation =
-      topShare && index === weeks.length - 1 && locationShare;
+  /**
+   * The total the slide states for a week, and the one every figure derived
+   * from it has to use: the headline, the variation and the share.
+   *
+   * Slide 2.4 used to state the declared total next to a variation computed on
+   * the sum of the bars, which are not the same number when a building is
+   * unmapped, so the two disagreed by the positions that carry no location.
+   */
+  const statedAt = (index: number) =>
+    topShare
+      ? statedLocationTotal(dataset.managed, weeks[index], totalAt(index))
+      : { total: totalAt(index), complete: true };
+  const totalFor = (index: number) => statedAt(index).total;
 
-    return {
-      label:
-        isLatestLocation && !locationShare.complete
-          ? `Subtotal ${weekLabel(week)}`
-          : weekLabel(week),
-      value: (isLatestLocation
-        ? locationShare.total
-        : totalAt(index)
-      ).toLocaleString("es-ES"),
-    };
-  });
+  const items = weeks.map((week, index) => ({
+    label: statedAt(index).complete
+      ? weekLabel(week)
+      : `Subtotal ${weekLabel(week)}`,
+    value: totalFor(index).toLocaleString("es-ES"),
+  }));
 
   if (weeks.length > 1) {
     items.push({
       label: "Variación",
       value: variationLabel(
-        totalAt(weeks.length - 2),
-        totalAt(weeks.length - 1)
+        totalFor(weeks.length - 2),
+        totalFor(weeks.length - 1)
       ),
     });
   }
 
   if (topShare && weeks.length > 0) {
     const last = weeks.length - 1;
-    const total = locationShare?.total ?? totalAt(last);
+    const total = totalFor(last);
     const top = entries.reduce(
       (best, entry) =>
         best === null || (entry.cells[last]?.value ?? 0) > best.count
@@ -176,7 +180,7 @@ export default function ManagedBreakdown({
       items.push(
         { label: top.label, value: top.count.toLocaleString("es-ES") },
         {
-          label: locationShare?.complete
+          label: statedAt(last).complete
             ? `Cuota ${top.label}`
             : `Cuota ${top.label} sobre subtotal`,
           value: `${((top.count / total) * 100).toFixed(1).replace(".", ",")}%`,
@@ -196,6 +200,7 @@ export default function ManagedBreakdown({
             <WeekRangeSelector
               selection={selection}
               available={availableWeeks}
+              follows={COMPARED_WEEK_FOLLOWS}
               onChange={weekSelection => onChange({ weekSelection })}
             />
           )}
@@ -233,6 +238,7 @@ export default function ManagedBreakdown({
           series={series}
           data={data}
           angledCategories
+          fitCategoryStart={page.id !== "aga-gestionadas-ubicacion"}
         />
       </div>
     </PageShell>

@@ -9,6 +9,7 @@ import {
   breakdownForWeeks,
   locationShareAt,
   managedWeeklyDelta,
+  statedLocationTotal,
   topLocationShare,
 } from "../shared/modules/aga/managed.ts";
 import {
@@ -182,6 +183,53 @@ describe("métricas AGA", () => {
     expect(fallback).toMatchObject({
       total: 297,
       drawnTotal: 297,
+      complete: false,
+    });
+  });
+
+  it("declara el mismo total para el titular y para la variación", () => {
+    // Semana 36 real: 21 ubicaciones suman 965 y el origen declara 981, porque
+    // 16 posiciones traen un edificio sin ubicación en el maestro. El informe
+    // publicó 981 junto a un +34,4% calculado sobre 965; ambos números tienen
+    // que salir del mismo total.
+    const section: AgaManagedSection = {
+      weeklyTotals: [],
+      byDepartment: [],
+      byProduct: [],
+      byLocation: [],
+      byDepartmentProduct: [],
+      locationTotals: [
+        { week: "2026-08-31", total: 718 },
+        { week: "2026-09-07", total: 981 },
+      ],
+    };
+
+    const previous = statedLocationTotal(section, "2026-08-31", 718);
+    const current = statedLocationTotal(section, "2026-09-07", 965);
+
+    expect(previous).toEqual({ total: 718, complete: true });
+    expect(current).toEqual({ total: 981, complete: true });
+    expect(
+      (current.total - previous.total) / previous.total
+    ).toBeCloseTo(0.3663, 4);
+  });
+
+  it("cae al total dibujado cuando el declarado se queda corto", () => {
+    const section: AgaManagedSection = {
+      weeklyTotals: [],
+      byDepartment: [],
+      byProduct: [],
+      byLocation: [],
+      byDepartmentProduct: [],
+      locationTotals: [{ week: "2026-09-07", total: 900 }],
+    };
+
+    expect(statedLocationTotal(section, "2026-09-07", 965)).toEqual({
+      total: 965,
+      complete: false,
+    });
+    expect(statedLocationTotal(section, "2026-08-31", 718)).toEqual({
+      total: 718,
       complete: false,
     });
   });

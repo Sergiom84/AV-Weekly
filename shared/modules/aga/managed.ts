@@ -128,6 +128,35 @@ export function managedWeeklyDelta(
 }
 
 /**
+ * The total slide 2.4 states for a week, given the sum of the bars it draws.
+ *
+ * The located rows do not always add up to the week: a position whose building
+ * the master does not map is counted in `[GESTIONADAS UBICACION TOTAL]` and in
+ * no bar. When the source declares that total the slide states it and the sum
+ * of the bars is a subtotal; when it does not, or when the bars already exceed
+ * it, the drawn sum is all there is.
+ *
+ * `drawn` is passed in rather than recomputed because the page applies manual
+ * corrections to the cells before adding them up, and a headline that ignored
+ * those corrections would disagree with its own chart.
+ */
+export function statedLocationTotal(
+  section: AgaManagedSection | undefined,
+  week: string,
+  drawn: number
+): { total: number; complete: boolean } {
+  const declared = (section?.locationTotals ?? []).find(
+    entry => entry.week === week
+  )?.total;
+  const complete =
+    typeof declared === "number" &&
+    Number.isFinite(declared) &&
+    declared >= drawn;
+
+  return { total: complete ? (declared as number) : drawn, complete };
+}
+
+/**
  * Share of the busiest location in the last reported week.
  *
  * A complete source supplies `locationTotals`, which is the denominator. The
@@ -154,14 +183,7 @@ export function locationShareAt(
   }));
 
   const drawnTotal = rows.reduce((sum, row) => sum + row.count, 0);
-  const declaredTotal = section?.locationTotals?.find(
-    entry => entry.week === week
-  )?.total;
-  const complete =
-    typeof declaredTotal === "number" &&
-    Number.isFinite(declaredTotal) &&
-    declaredTotal >= drawnTotal;
-  const total = complete ? declaredTotal : drawnTotal;
+  const { total, complete } = statedLocationTotal(section, week, drawnTotal);
   const top = rows.reduce(
     (best, row) => (best === null || row.count > best.count ? row : best),
     null as { label: string; count: number } | null
