@@ -114,26 +114,33 @@ export default function TwoWeekCompare({
   ];
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        <>
+          {editing && (
+            <WeekRangeSelector
+              selection={selection}
+              available={availableWeeks}
+              onChange={weekSelection => onChange({ weekSelection })}
+            />
+          )}
+
+          {editing && (
+            <RowFilterPanel
+              labels={labels}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          )}
+        </>
+      }
+    >
       <KpiRow items={items} />
-
-      {editing && (
-        <WeekRangeSelector
-          selection={selection}
-          available={availableWeeks}
-          onChange={weekSelection => onChange({ weekSelection })}
-        />
-      )}
-
-      {editing && (
-        <RowFilterPanel
-          labels={labels}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart

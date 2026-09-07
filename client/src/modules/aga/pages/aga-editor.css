@@ -1,0 +1,52 @@
+.aga-editor-controls {
+  font-size: 12px;
+}
+
+.aga-editor-controls > * {
+  min-width: 0;
+}
+
+.aga-editor-controls button,
+.aga-editor-controls label,
+.aga-editor-controls input {
+  font-size: 12px;
+}
+
+.aga-editor-controls button:not([role="checkbox"]) {
+  min-height: 32px;
+}
+
+.aga-editor-controls ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  align-items: start;
+  gap: 8px 16px;
+  max-height: 288px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.aga-editor-controls li {
+  min-width: 0;
+  align-items: start;
+}
+
+.aga-editor-controls li [role="checkbox"] {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.aga-editor-controls label {
+  white-space: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  line-height: 1.5;
+}
+
+@media print {
+  /* Editor actions and hidden slides may follow the last printable slide. */
+  main section[data-aga-last-visible="true"] {
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+}

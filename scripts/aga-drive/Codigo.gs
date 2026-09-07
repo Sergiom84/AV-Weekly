@@ -92,7 +92,8 @@ var OFFICE_FAMILIES = [
   'MICROSOFT OFFICE EXCEL',
   'MICROSOFT OFFICE 365',
   'MICROSOFT ACCESS',
-  'MICROSOFT WORD'
+  'MICROSOFT WORD',
+  'MICROSOFT OFFICE 2021 (MAC)'
 ];
 
 /**
@@ -616,6 +617,7 @@ function locationLabel(raw, mapping) {
 /** Canonical Office family. Mirrors `agaOfficeFamily` in the app. */
 function officeFamily(product) {
   var value = normalize(product);
+  if (/\bOFFICE\s+2021\s*\(MAC\)/.test(value)) return 'MICROSOFT OFFICE 2021 (MAC)';
 
   // An Apple licence counts as Standard, and the check runs first in case the
   // description also says Office.
@@ -774,13 +776,16 @@ function readManaged(entry, mappings) {
     var productAt = sheet.columns[normalize('Denominación Producto')];
     var dateAt = sheet.columns[normalize('Fecha Gestionado')];
     var buildingAt = sheet.columns[normalize('Denominación Edificio')];
+    var intercambiadas = columnaConFechasIntercambiadas(sheet, dateAt);
 
     for (var index = sheet.headerRow + 1; index < sheet.grid.length; index += 1) {
       var row = sheet.grid[index];
 
       if (text(row[requestAt]) === '') continue;
 
-      var week = managedWeekKey(row[dateAt]);
+      var parts = intercambiadas ? celdaDeFecha(row[dateAt]) : null;
+      var fecha = parts ? parts[0] + '-' + pad2(parts[2]) + '-' + pad2(parts[1]) : row[dateAt];
+      var week = managedWeekKey(fecha);
 
       if (!week) {
         skipped += 1;
@@ -866,7 +871,20 @@ function columnaConFechasIntercambiadas(sheet, at) {
     if (match && Number(match[1]) > 12) textos += 1;
   }
 
-  return textos > 0 && fechas > 0 && intercambiables === fechas;
+  if (!(textos > 0 && fechas > 0 && intercambiables === fechas)) return false;
+  var mesesTexto = {};
+  var native = [];
+  for (var j = sheet.headerRow + 1; j < sheet.grid.length; j += 1) {
+    var cell = (sheet.grid[j] || [])[at];
+    if (celdaDeFecha(cell)) native.push(cell);
+    var match = TEXT_DATE.exec(text(cell));
+    if (!match || Number(match[1]) <= 12) continue;
+    mesesTexto[match[3] + '-' + pad2(Number(match[2]))] = true;
+    var next = new Date(Date.UTC(Number(match[3]), Number(match[2]), 1));
+    mesesTexto[next.getUTCFullYear() + '-' + pad2(next.getUTCMonth() + 1)] = true;
+  }
+  if (native.every(function(cell) { return !!mesesTexto[toIsoMonth(cell)]; })) return false;
+  return native.every(function(cell) { return !!mesesTexto[mesIntercambiado(cell)]; });
 }
 
 /**
@@ -923,6 +941,25 @@ function readOffice(entry, extraction) {
     var productAt = sheet.columns[normalize('Denominación Producto')];
     var dateAt = sheet.columns[normalize('Fecha de inicio de la gestión')];
     var intercambiadas = columnaConFechasIntercambiadas(sheet, dateAt);
+    if (!intercambiadas && limite) {
+      var dates = sheet.grid.slice(sheet.headerRow + 1).filter(function(row) {
+        return text(row[requestAt]) !== '';
+      }).map(function(row) { return row[dateAt]; });
+      var inWindow = function(month) { return month === limite || month === anterior; };
+      if (dates.length > 0 && !dates.every(function(cell) { return inWindow(toIsoMonth(cell)); })) {
+        var allOutside = dates.every(function(cell) { return !inWindow(toIsoMonth(cell)); });
+        var allRepaired = dates.every(function(cell) {
+          var parts = celdaDeFecha(cell);
+          if (!parts || parts[2] > 12) return false;
+          var repaired = parts[0] + '-' + pad2(parts[2]) + '-' + pad2(parts[1]);
+          return inWindow(mesIntercambiado(cell)) && repaired <= extraction;
+        });
+        if (!allOutside || !allRepaired) {
+          throw new Error('Fechas Office ambiguas o fuera del periodo informado. Revisa día/mes y la fecha de extracción.');
+        }
+        intercambiadas = true;
+      }
+    }
 
     for (var index = sheet.headerRow + 1; index < sheet.grid.length; index += 1) {
       var row = sheet.grid[index];
@@ -938,8 +975,7 @@ function readOffice(entry, extraction) {
       var family = officeFamily(row[productAt]);
 
       if (!month) {
-        skipped += 1;
-        continue;
+        throw new Error('Office contiene una fecha vacía o inválida. Corrige el origen antes de generar el TXT.');
       }
 
       if (limite && (month > limite || month < anterior)) {
@@ -950,15 +986,15 @@ function readOffice(entry, extraction) {
 
       if (family === '') {
         var product = text(row[productAt]) || '(en blanco)';
-        unknownProducts[product] = (unknownProducts[product] || 0) + 1;
-        skipped += 1;
-        continue;
+        throw new Error('Producto Office sin familia: ' + product + '. Define su clasificación antes de generar el TXT.');
       }
 
       bump(counts, month, family);
       rows += 1;
     }
   }
+
+  if (fueraDeVentana > 0) throw new Error('Office contiene posiciones fuera del periodo informado. Revisa las fechas antes de generar el TXT.');
 
   return {
     rows: rows,
@@ -1106,6 +1142,11 @@ function readConfig() {
       'Falta la fecha de extracción en la pestaña "' + TAB.config + '". ' +
         'Es el lunes en el que se sacan los ficheros.'
     );
+  }
+
+  var cut = new Date(extraction + 'T00:00:00Z');
+  if (isNaN(cut.getTime()) || cut.toISOString().slice(0, 10) !== extraction || cut.getUTCDay() !== 1) {
+    throw new Error('La fecha de extracción debe ser un lunes válido en formato AAAA-MM-DD. Revisa día y mes.');
   }
 
   return {

@@ -78,16 +78,23 @@ export default function TotalSemanalPage({
   ];
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        <>
+          {editing && (
+            <WeekRangeSelector
+              selection={selection}
+              available={availableWeeks}
+              onChange={weekSelection => onChange({ weekSelection })}
+            />
+          )}
+        </>
+      }
+    >
       <KpiRow items={items} />
-
-      {editing && (
-        <WeekRangeSelector
-          selection={selection}
-          available={availableWeeks}
-          onChange={weekSelection => onChange({ weekSelection })}
-        />
-      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart categoryKey="semana" series={SERIES} data={data} />

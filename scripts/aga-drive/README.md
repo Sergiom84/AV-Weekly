@@ -39,6 +39,28 @@ una sección hay que tocar los tres sitios.
 
 ## Decisiones que conviene conocer
 
+### Fechas y control del corte
+
+La fecha de extracción debe ser un lunes válido. Para evitar una conversión
+regional, introdúcela como texto ISO (`2026-09-07`, precedido por apóstrofo si
+Sheets intenta convertirlo). Ese corte representa la semana AGA 36, del 31 de
+agosto al 6 de septiembre. El número opcional de semana no corrige una fecha
+de extracción equivocada.
+
+El script detecta fechas convertidas con día y mes intercambiados en Gestionado
+y Office. En Office, una columna compuesta enteramente por fechas se contrasta
+con el mes del corte y el anterior; una interpretación ambigua bloquea el proceso.
+Las fechas ya normalizadas no se invierten otra vez. Los productos Office sin
+familia también bloquean la generación: `MICROSOFT OFFICE 2021 (MAC)` tiene una
+serie propia y no se suma a Standard.
+
+Actualizar este archivo o `Codigo.gs` localmente no actualiza el script instalado
+en Google Sheets. En una hoja existente, sustituir y guardar el script; conservar
+las pestañas de mapas y no volver a inicializarlas. Antes de importar, verificar
+fecha, total en gestión, total gestionado y desglose Office en `Comprobación`.
+Un TXT corregido no elimina automáticamente claves erróneas importadas antes:
+esa reparación necesita revisar el histórico y su copia de respaldo.
+
 **Los ficheros se reconocen por su cabecera, no por el nombre.** El script abre
 cada fichero de la carpeta y mira qué columnas trae. Así sigue funcionando
 aunque cada semana lleguen con un nombre distinto. Si hay dos ficheros del mismo

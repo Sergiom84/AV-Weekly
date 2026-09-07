@@ -124,6 +124,7 @@ export default function WeekRangeSelector({
           type="button"
           size="sm"
           variant={followsAll ? "default" : "outline"}
+          aria-pressed={followsAll}
           className="h-7 px-2 font-mono text-xs"
           disabled={disabled}
           onClick={() => setWindow(ALL_REPORTED_WEEKS_WINDOW)}
@@ -134,6 +135,7 @@ export default function WeekRangeSelector({
           type="button"
           size="sm"
           variant={followsTrailing && !followsAll ? "default" : "outline"}
+          aria-pressed={followsTrailing && !followsAll}
           className="h-7 px-2 font-mono text-xs"
           disabled={disabled}
           onClick={() => setWindow(TRAILING_WEEK_WINDOW)}

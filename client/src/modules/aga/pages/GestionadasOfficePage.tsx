@@ -17,7 +17,7 @@ import PageShell, { type AgaPageProps } from "./PageShell";
 import SeriesLineChart, {
   type LineSeries,
 } from "@/components/deck/SeriesLineChart";
-import ValueGrid from "@/components/deck/ValueGrid";
+import ValueGrid from "./AgaValueGrid";
 
 interface GestionadasOfficePageProps extends AgaPageProps {
   dataset: AgaDataset;
@@ -87,41 +87,50 @@ export default function GestionadasOfficePage({
   });
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && (
-        <MonthRangeSelector
-          selection={monthSelection}
-          available={availableMonths}
-          format={monthLabel}
-          onChange={monthSelection => onChange({ monthSelection })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        <>
+          {editing && (
+            <MonthRangeSelector
+              selection={monthSelection}
+              available={availableMonths}
+              format={monthLabel}
+              onChange={monthSelection => onChange({ monthSelection })}
+            />
+          )}
 
-      {editing && (
-        <RowFilterPanel
-          labels={labels}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
+          {editing && (
+            <RowFilterPanel
+              labels={labels}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          )}
 
+          {editing && (
+            <ValueGrid
+              columns={months.map(monthLabel)}
+              rows={entries.map(entry => ({
+                label: entry.label,
+                color: entry.color,
+                cells: entry.cells,
+              }))}
+              onChange={(key, value) =>
+                onChange(withOverride(page, key, value))
+              }
+            />
+          )}
+        </>
+      }
+    >
       <div className="flex min-h-0 flex-1 flex-col">
         <SeriesLineChart categoryKey="mes" series={series} data={data} />
       </div>
-
-      {editing && (
-        <ValueGrid
-          columns={months.map(monthLabel)}
-          rows={entries.map(entry => ({
-            label: entry.label,
-            color: entry.color,
-            cells: entry.cells,
-          }))}
-          onChange={(key, value) => onChange(withOverride(page, key, value))}
-        />
-      )}
     </PageShell>
   );
 }

@@ -7,6 +7,7 @@ export const AGA_OFFICE_FAMILIES = [
   "MICROSOFT OFFICE 365",
   "MICROSOFT ACCESS",
   "MICROSOFT WORD",
+  "MICROSOFT OFFICE 2021 (MAC)",
 ] as const;
 
 type OfficeFamily = (typeof AGA_OFFICE_FAMILIES)[number];
@@ -94,6 +95,8 @@ function unknownValues(values: Map<string, number>): AgaOfficeUnknownValue[] {
 export function agaOfficeFamily(value: unknown): OfficeFamily | null {
   const product = normalize(value);
 
+  if (/\bOFFICE\s+2021\s*\(MAC\)/.test(product)) return "MICROSOFT OFFICE 2021 (MAC)";
+
   // Miguel's business rule: an Apple licence belongs to Standard. It must run
   // before every other product check in case its description also says Office.
   if (product.includes("APPLE")) {
@@ -174,7 +177,9 @@ const TEXT_DATE = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/;
  * Whether a date column was converted by a spreadsheet reading `dd/mm/yyyy` as
  * `mm/dd/yyyy`.
  *
- * The tell is a column that mixes text and dates. A day of 13 or higher cannot
+ * The tell is a column that mixes text and dates. Text months and the following
+ * month anchor a reporting window, so already-normalized dates are not swapped
+ * a second time. A day of 13 or higher cannot
  * be read as a month, so those cells stay text; the rest become real dates with
  * the day and the month exchanged. A column that is all text or all dates is
  * left alone, and so is one where some date cell has a day above 12, because
@@ -201,7 +206,19 @@ export function agaOfficeDatesAreSwapped(values: unknown[]): boolean {
     if (match && Number(match[1]) > 12) texts += 1;
   }
 
-  return texts > 0 && dates > 0 && swappable === dates;
+  if (!(texts > 0 && dates > 0 && swappable === dates)) return false;
+  const textMonths = new Set<string>();
+  for (const value of values) {
+    const match = TEXT_DATE.exec(String(value ?? "").trim());
+    if (!match || Number(match[1]) <= 12) continue;
+    const year = Number(match[3]), month = Number(match[2]);
+    textMonths.add(isoMonth(year, month)!);
+    const next = new Date(Date.UTC(year, month, 1));
+    textMonths.add(isoMonth(next.getUTCFullYear(), next.getUTCMonth() + 1)!);
+  }
+  const native = values.filter((value) => dateCellParts(value));
+  if (native.every((value) => textMonths.has(agaOfficeMonth(value)!))) return false;
+  return native.every((value) => textMonths.has(agaOfficeRepairedMonth(value)!));
 }
 
 /**
@@ -209,7 +226,7 @@ export function agaOfficeDatesAreSwapped(values: unknown[]): boolean {
  * serial the same cell becomes when the workbook is read without `cellDates`.
  * Textual dates are not included: those are the ones the conversion left alone.
  */
-function dateCellParts(value: unknown): { year: number; month: number; day: number } | null {
+export function dateCellParts(value: unknown): { year: number; month: number; day: number } | null {
   if (value instanceof Date) {
     return Number.isNaN(value.getTime())
       ? null
@@ -233,6 +250,24 @@ export function agaOfficeRepairedMonth(value: unknown): string | null {
   const parts = dateCellParts(value);
 
   return parts && parts.day <= 12 ? isoMonth(parts.year, parts.day) : null;
+}
+
+/** An explicit weekly cut disambiguates a wholly converted date column. */
+export function agaOfficeDatesNeedRepair(values: unknown[], extraction?: string): boolean {
+  if (agaOfficeDatesAreSwapped(values)) return true;
+  if (!extraction || values.length === 0) return false;
+  const writable = new Set(agaOfficeWritableMonths(extraction));
+  const originalValid = values.every((value) => writable.has(agaOfficeMonth(value) ?? ""));
+  if (originalValid) return false;
+  const allOutside = values.every((value) => !writable.has(agaOfficeMonth(value) ?? ""));
+  const swappedValid = values.every((value) => {
+    const parts = dateCellParts(value);
+    if (!parts || parts.day > 12) return false;
+    const repaired = `${parts.year}-${String(parts.day).padStart(2, "0")}-${String(parts.month).padStart(2, "0")}`;
+    return writable.has(agaOfficeRepairedMonth(value) ?? "") && repaired <= extraction;
+  });
+  if (allOutside && swappedValid) return true;
+  throw new Error("Fechas Office ambiguas o fuera del periodo informado. Revisa el formato día/mes y la fecha de extracción antes de importar.");
 }
 
 function headerIndexes(row: unknown[]): Map<string, number> {
@@ -274,7 +309,7 @@ function missingHeaders(rows: unknown[][]): string[] {
  * including rejected positions, which preserves the presented August total of
  * 44. Raw personal data never leaves this function.
  */
-export function parseAgaOfficeWorkbook(workbook: XLSX.WorkBook): AgaOfficeParseResult {
+export function parseAgaOfficeWorkbook(workbook: XLSX.WorkBook, extraction?: string): AgaOfficeParseResult {
   const counts = new Map<string, Map<OfficeFamily, number>>();
   const unknownProducts = new Map<string, number>();
   const unknownDates = new Map<string, number>();
@@ -317,7 +352,10 @@ export function parseAgaOfficeWorkbook(workbook: XLSX.WorkBook): AgaOfficeParseR
     let sheetImported = 0;
     let sheetSkipped = 0;
     const dataRows = rows.slice(header.row + 1);
-    const swapped = agaOfficeDatesAreSwapped(dataRows.map((row) => row[dateIndex]));
+    const swapped = agaOfficeDatesNeedRepair(
+      dataRows.filter((row) => String(row[requestIndex] ?? "").trim()).map((row) => row[dateIndex]),
+      extraction
+    );
 
     for (const row of dataRows) {
       if (!row.some((cell) => cell !== null && String(cell).trim() !== "")) {

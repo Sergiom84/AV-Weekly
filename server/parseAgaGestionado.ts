@@ -1,3 +1,4 @@
+import { agaOfficeDatesAreSwapped, dateCellParts } from "./parseAgaOffice.ts";
 import * as XLSX from "xlsx";
 import type { BuildingLocationMatcher } from "../shared/building-locations.ts";
 import type {
@@ -307,6 +308,7 @@ export function parseAgaGestionadoWorkbook(
     const productAt = columns.get(normalize("Denominación Producto"))!;
     const dateAt = columns.get(normalize("Fecha Gestionado"))!;
     const buildingAt = columns.get(normalize("Denominación Edificio"))!;
+    const swapped = agaOfficeDatesAreSwapped(grid.slice(1).map((row) => row[dateAt]));
     const sheetWeeks = new Set<string>();
     let rows = 0;
     let skipped = 0;
@@ -322,7 +324,9 @@ export function parseAgaGestionadoWorkbook(
         continue;
       }
 
-      const week = managedWeekKey(row[dateAt]);
+      const parts = swapped ? dateCellParts(row[dateAt]) : null;
+      const date = parts ? isoDate(parts.year, parts.day, parts.month) : row[dateAt];
+      const week = managedWeekKey(date);
 
       if (!week) {
         skipped += 1;

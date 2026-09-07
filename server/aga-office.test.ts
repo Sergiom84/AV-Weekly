@@ -63,7 +63,7 @@ describe("parser Office AGA", () => {
 
     expect(parsed.office.months).toEqual(["2026-08"]);
     expect(parsed.office.families.map((family) => family.label)).toEqual(AGA_OFFICE_FAMILIES);
-    expect(parsed.office.families.map((family) => family.values[0])).toEqual([9, 14, 16, 3, 13]);
+    expect(parsed.office.families.map((family) => family.values[0])).toEqual([9, 14, 16, 3, 13, 0]);
     expect(parsed.report).toMatchObject({ rows: 55, imported: 55, skipped: 0 });
   });
 

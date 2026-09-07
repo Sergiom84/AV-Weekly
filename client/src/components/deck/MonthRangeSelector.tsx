@@ -1,4 +1,4 @@
-import type { MonthSelection } from "@shared/deck/core";
+import { resolveMonthSelection, type MonthSelection } from "@shared/deck/core";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -33,6 +33,13 @@ export default function MonthRangeSelector({
 
   const first = available[0];
   const last = available[available.length - 1];
+  const resolved = resolveMonthSelection(selection, available);
+  const displayFrom = selection.mode === "window" ? (resolved[0] ?? first) : selection.from;
+  const displayTo = selection.mode === "window" ? (resolved.at(-1) ?? last) : selection.to;
+  const allSelected = selection.mode === "range" &&
+    selection.from <= first && selection.to >= last;
+  const last12Selected = selection.mode === "window" && (selection.size ?? 12) === 12;
+  const last18Selected = selection.mode === "window" && selection.size === 18;
   const setRange = (from: string, to: string) =>
     onChange({
       mode: "range",
@@ -45,8 +52,8 @@ export default function MonthRangeSelector({
     <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
       <div className="flex items-center gap-1">
         <Select
-          value={selection.from}
-          onValueChange={month => setRange(month, selection.to)}
+          value={displayFrom}
+          onValueChange={month => setRange(month, displayTo)}
         >
           <SelectTrigger
             size="sm"
@@ -71,8 +78,8 @@ export default function MonthRangeSelector({
           —
         </span>
         <Select
-          value={selection.to}
-          onValueChange={month => setRange(selection.from, month)}
+          value={displayTo}
+          onValueChange={month => setRange(displayFrom, month)}
         >
           <SelectTrigger
             size="sm"
@@ -94,11 +101,12 @@ export default function MonthRangeSelector({
           </SelectContent>
         </Select>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant={allSelected ? "default" : "outline"}
+          aria-pressed={allSelected}
           className="h-7 px-2 font-mono text-xs"
           onClick={() => setRange(first, last)}
         >
@@ -109,11 +117,8 @@ export default function MonthRangeSelector({
             <Button
               type="button"
               size="sm"
-              variant={
-                selection.mode === "window" && (selection.size ?? 12) === 12
-                  ? "default"
-                  : "outline"
-              }
+              variant={last12Selected ? "default" : "outline"}
+              aria-pressed={last12Selected}
               className="h-7 px-2 font-mono text-xs"
               onClick={() =>
                 onChange({
@@ -130,11 +135,8 @@ export default function MonthRangeSelector({
             <Button
               type="button"
               size="sm"
-              variant={
-                selection.mode === "window" && selection.size === 18
-                  ? "default"
-                  : "outline"
-              }
+              variant={last18Selected ? "default" : "outline"}
+              aria-pressed={last18Selected}
               className="h-7 px-2 font-mono text-xs"
               onClick={() =>
                 onChange({

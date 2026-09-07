@@ -43,6 +43,7 @@ import GestionadasTotalPage from "@/modules/aga/pages/GestionadasTotalPage";
 import GestionadasUbicacionPage from "@/modules/aga/pages/GestionadasUbicacionPage";
 import TotalSemanalPage from "@/modules/aga/pages/TotalSemanalPage";
 import type { AgaPageProps } from "@/modules/aga/pages/PageShell";
+import { AgaEditorFrame } from "@/modules/aga/pages/AgaEditorPanel";
 
 const MODULE = getDeckModule("aga");
 
@@ -140,11 +141,18 @@ export default function Aga() {
           onUpload: (files: File[]) => uploadTo(slot.id, files),
         };
       }),
-    [dataset.managed?.source, dataset.office?.source, dataset.texto, dataset.source, uploadTo]
+    [
+      dataset.managed?.source,
+      dataset.office?.source,
+      dataset.texto,
+      dataset.source,
+      uploadTo,
+    ]
   );
 
   const artwork = MODULE.deck?.artwork;
   const pages = deck?.pages ?? [];
+  const lastVisiblePageId = pages.filter(isPageVisible).at(-1)?.id;
   const hasSource = Boolean(dataset.source?.sourceFile);
   const latestWeek = dataset.weeks?.[dataset.weeks.length - 1];
   const derivedPeriod = latestWeek
@@ -272,14 +280,19 @@ export default function Aga() {
         }
 
         return (
-          <SlideFrame number={number} muted={muted}>
-            <DataPage
-              page={page}
-              editing={isEditing}
-              onChange={onChange}
-              dataset={dataset}
-            />
-          </SlideFrame>
+          <AgaEditorFrame
+            editing={isEditing}
+            title={page.text.title ?? page.id}
+          >
+            <SlideFrame number={number} muted={muted}>
+              <DataPage
+                page={page}
+                editing={isEditing}
+                onChange={onChange}
+                dataset={dataset}
+              />
+            </SlideFrame>
+          </AgaEditorFrame>
         );
       }
     }
@@ -366,6 +379,7 @@ export default function Aga() {
                 id={`slide-${page.id}`}
                 data-deck-slide
                 data-deck-visible={visible}
+                data-aga-last-visible={page.id === lastVisiblePageId || undefined}
                 className="scroll-mt-24"
               >
                 <div className="mb-2 flex items-center justify-between gap-2 print:hidden">

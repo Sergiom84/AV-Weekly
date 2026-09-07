@@ -14,7 +14,7 @@ import {
   withOverride,
 } from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
-import ValueGrid from "@/components/deck/ValueGrid";
+import ValueGrid from "./AgaValueGrid";
 
 interface GestionadasTotalPageProps extends AgaPageProps {
   dataset: AgaDataset;
@@ -98,38 +98,47 @@ export default function GestionadasTotalPage({
   ];
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      <KpiRow items={items} />
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        <>
+          {editing && (
+            <WeekRangeSelector
+              selection={selection}
+              available={availableWeeks}
+              onChange={weekSelection => onChange({ weekSelection })}
+            />
+          )}
 
-      {editing && (
-        <WeekRangeSelector
-          selection={selection}
-          available={availableWeeks}
-          onChange={weekSelection => onChange({ weekSelection })}
-        />
-      )}
+          {editing && (
+            <ValueGrid
+              columns={entries.map(entry => weekLabel(entry.week))}
+              rows={[
+                {
+                  label: "Gestionadas",
+                  color: agaColor(0),
+                  cells: entries.map(entry => ({
+                    key: entry.key,
+                    value: entry.value,
+                    overridden: entry.overridden,
+                  })),
+                },
+              ]}
+              onChange={(key, value) =>
+                onChange(withOverride(page, key, value))
+              }
+            />
+          )}
+        </>
+      }
+    >
+      <KpiRow items={items} />
 
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart categoryKey="semana" series={SERIES} data={data} />
       </div>
-
-      {editing && (
-        <ValueGrid
-          columns={entries.map(entry => weekLabel(entry.week))}
-          rows={[
-            {
-              label: "Gestionadas",
-              color: agaColor(0),
-              cells: entries.map(entry => ({
-                key: entry.key,
-                value: entry.value,
-                overridden: entry.overridden,
-              })),
-            },
-          ]}
-          onChange={(key, value) => onChange(withOverride(page, key, value))}
-        />
-      )}
     </PageShell>
   );
 }

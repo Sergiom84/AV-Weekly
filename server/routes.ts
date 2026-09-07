@@ -1285,7 +1285,15 @@ router.post("/api/aga/upload/office", upload.single("file"), async (req, res) =>
     }
 
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-    const parsed = parseAgaOfficeWorkbook(workbook);
+    const extraction = typeof req.body?.extraction === "string" ? req.body.extraction.trim() : undefined;
+    if (extraction) {
+      const cut = new Date(`${extraction}T00:00:00Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(extraction) || Number.isNaN(cut.getTime()) ||
+          cut.toISOString().slice(0, 10) !== extraction || cut.getUTCDay() !== 1) {
+        return res.status(400).json({ error: "La fecha de extracción debe ser un lunes válido (AAAA-MM-DD)." });
+      }
+    }
+    const parsed = parseAgaOfficeWorkbook(workbook, extraction);
 
     if (parsed.report.unknownProducts.length > 0 || parsed.report.unknownDates.length > 0) {
       const products = parsed.report.unknownProducts.map((entry) => entry.value).join(", ");

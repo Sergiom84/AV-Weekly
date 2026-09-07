@@ -20,7 +20,7 @@ import PageShell, { type AgaPageProps } from "./PageShell";
 import SeriesLineChart, {
   type LineSeries,
 } from "@/components/deck/SeriesLineChart";
-import ValueGrid from "@/components/deck/ValueGrid";
+import ValueGrid from "./AgaValueGrid";
 
 interface AnualEvolutionProps extends AgaPageProps {
   /** One entry per year, ascending, each with the twelve months. */
@@ -95,47 +95,56 @@ export default function AnualEvolution({
   }));
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && availableYears.length > 0 && (
-        <YearSelector
-          selection={{
-            available: availableYears,
-            selected: selectedYears,
-            onChange: selected =>
-              onChange({
-                years: Array.from(new Set(selected)).sort((a, b) => a - b),
-              }),
-          }}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        <>
+          {editing && availableYears.length > 0 && (
+            <YearSelector
+              selection={{
+                available: availableYears,
+                selected: selectedYears,
+                onChange: selected =>
+                  onChange({
+                    years: Array.from(new Set(selected)).sort((a, b) => a - b),
+                  }),
+              }}
+            />
+          )}
 
-      {editing && (
-        <MonthRangeSelector
-          selection={monthSelection}
-          available={CALENDAR_MONTH_KEYS}
-          format={calendarMonthLabel}
-          windows={false}
-          onChange={monthSelection => onChange({ monthSelection })}
-        />
-      )}
+          {editing && (
+            <MonthRangeSelector
+              selection={monthSelection}
+              available={CALENDAR_MONTH_KEYS}
+              format={calendarMonthLabel}
+              windows={false}
+              onChange={monthSelection => onChange({ monthSelection })}
+            />
+          )}
 
+          {editing && (
+            <ValueGrid
+              columns={monthIndexes.map(monthIndex => MONTH_LABELS[monthIndex])}
+              rows={entries.map(entry => ({
+                label: String(entry.year),
+                color: entry.color,
+                cells: entry.cells,
+              }))}
+              onChange={(key, value) =>
+                onChange(withOverride(page, key, value))
+              }
+            />
+          )}
+        </>
+      }
+    >
       <KpiRow items={items} />
 
       <div className="flex min-h-0 flex-1 flex-col">
         <SeriesLineChart categoryKey="mes" series={series} data={data} />
       </div>
-
-      {editing && (
-        <ValueGrid
-          columns={monthIndexes.map(monthIndex => MONTH_LABELS[monthIndex])}
-          rows={entries.map(entry => ({
-            label: String(entry.year),
-            color: entry.color,
-            cells: entry.cells,
-          }))}
-          onChange={(key, value) => onChange(withOverride(page, key, value))}
-        />
-      )}
     </PageShell>
   );
 }

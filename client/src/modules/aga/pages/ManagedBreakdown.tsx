@@ -25,7 +25,7 @@ import {
   withOverride,
 } from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
-import ValueGrid from "@/components/deck/ValueGrid";
+import ValueGrid from "./AgaValueGrid";
 
 interface ManagedBreakdownProps extends AgaPageProps {
   dataset: AgaDataset;
@@ -186,26 +186,46 @@ export default function ManagedBreakdown({
   }
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        <>
+          {editing && (
+            <WeekRangeSelector
+              selection={selection}
+              available={availableWeeks}
+              onChange={weekSelection => onChange({ weekSelection })}
+            />
+          )}
+
+          {editing && (
+            <RowFilterPanel
+              labels={labels}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          )}
+
+          {editing && (
+            <ValueGrid
+              columns={weeks.map(week => weekLabel(week))}
+              rows={entries.map(entry => ({
+                label: entry.label,
+                cells: entry.cells,
+              }))}
+              onChange={(key, value) =>
+                onChange(withOverride(page, key, value))
+              }
+            />
+          )}
+        </>
+      }
+    >
       <KpiRow items={items} />
-
-      {editing && (
-        <WeekRangeSelector
-          selection={selection}
-          available={availableWeeks}
-          onChange={weekSelection => onChange({ weekSelection })}
-        />
-      )}
-
-      {editing && (
-        <RowFilterPanel
-          labels={labels}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart
@@ -215,17 +235,6 @@ export default function ManagedBreakdown({
           angledCategories
         />
       </div>
-
-      {editing && (
-        <ValueGrid
-          columns={weeks.map(weekLabel)}
-          rows={entries.map(entry => ({
-            label: entry.label,
-            cells: entry.cells,
-          }))}
-          onChange={(key, value) => onChange(withOverride(page, key, value))}
-        />
-      )}
     </PageShell>
   );
 }

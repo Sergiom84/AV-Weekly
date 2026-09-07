@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import EditableText from "@/components/deck/EditableText";
 import SlideHeading from "@/components/deck/SlideHeading";
 import type { AgaDeckPage } from "@shared/modules/aga/types";
+import { AgaEditorPanel } from "./AgaEditorPanel";
 
 export interface AgaPageProps {
   page: AgaDeckPage;
@@ -11,6 +12,7 @@ export interface AgaPageProps {
 
 interface PageShellProps extends AgaPageProps {
   children: ReactNode;
+  editor?: ReactNode;
 }
 
 /** Heading, body and footnote every AGA data page shares. */
@@ -19,12 +21,14 @@ export default function PageShell({
   editing,
   onChange,
   children,
+  editor,
 }: PageShellProps) {
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
 
   return (
     <div className="@container flex h-full w-full flex-col text-foreground">
+      {editing && <AgaEditorPanel>{editor}</AgaEditorPanel>}
       <SlideHeading
         service={page.text.subtitle ?? ""}
         title={page.text.title ?? ""}

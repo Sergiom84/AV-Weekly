@@ -1,3 +1,4 @@
+import { agaOfficeWritableMonths } from "./parseAgaOffice.ts";
 import {
   AGA_TEXTO_HEADER,
   AGA_TEXTO_META,
@@ -83,6 +84,10 @@ function assertWeek(value: string | undefined, at: number): string {
     );
   }
 
+  const date = new Date(`${week}T00:00:00Z`);
+  if (date.toISOString().slice(0, 10) !== week || date.getUTCDay() !== 1) {
+    throw new Error(`Línea ${at}: la fecha de extracción debe ser un lunes válido (AAAA-MM-DD): ${week}. Revisa día y mes.`);
+  }
   return week;
 }
 
@@ -303,7 +308,7 @@ export function parseAgaTexto(input: string): AgaTextoParseResult {
       // Still in the preamble: `clave<TAB>valor`.
       const [key, value] = cells;
 
-      if (key === AGA_TEXTO_META.week) meta.week = value;
+      if (key === AGA_TEXTO_META.week) meta.week = assertWeek(value, at);
       else if (key === AGA_TEXTO_META.generated) meta.generated = value;
       else if (key === AGA_TEXTO_META.source) meta.source = value;
 
@@ -499,6 +504,9 @@ export function parseAgaTexto(input: string): AgaTextoParseResult {
   /* Office ---------------------------------------------------------------- */
 
   const months = Array.from(officeMonths).sort();
+  if (months.length > 0 && meta.week && !months.some((month) => agaOfficeWritableMonths(meta.week!).includes(month))) {
+    throw new Error("Office no contiene ningún mes del periodo informado. Revisa día/mes en las fechas y regenera el TXT; no se ha importado.");
+  }
   const office: AgaOfficeSection | null =
     officeFamilies.size > 0
       ? {
