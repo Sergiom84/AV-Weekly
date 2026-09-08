@@ -12,6 +12,7 @@ import {
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 import { formatChartMetric, metricAxisWidth } from "@shared/deck/core";
 import { groupedLabelPlacement } from "./CategoryBarLabelLayout";
+import { categoryStartMargin } from "./CategoryAxisLayout";
 
 export interface CategorySeries {
   /** Key inside each chart row. */
@@ -47,6 +48,8 @@ interface CategoryBarChartProps {
   allCategories?: boolean;
   /** Brings the Y-axis labels flush with the slide content above the chart. */
   alignYAxisStart?: boolean;
+  /** Sizes angled-label overhang from each label's actual category position. */
+  fitCategoryStart?: boolean;
 }
 
 /** Above this many categories the standard value labels use compact text. */
@@ -142,13 +145,16 @@ function AngledTick({ x, y, fontSize, payload }: AngledTickProps) {
  * The labels are rotated, so a long name eats both height (it descends below
  * the axis) and width (it reaches left past the first bar). Both are derived
  * from the longest label: the text shrinks only once the tilted text no longer
- * fits inside `CATEGORY_BAND` of the plot.
+ * fits inside `CATEGORY_BAND` of the plot. The optional start alignment measures
+ * each label in the rendered font and accounts for its category position.
  */
 function angledAxisMetrics(
   labels: string[],
   width: number,
   height: number,
-  yAxisWidth: number
+  yAxisWidth: number,
+  fitCategoryStart: boolean,
+  fontFamily: string
 ) {
   const longest = labels.reduce((max, label) => Math.max(max, label.length), 0);
   const band = height * CATEGORY_BAND;
@@ -168,7 +174,12 @@ function angledAxisMetrics(
   // slot already absorb part of that reach, the rest becomes left margin.
   const slot = Math.max(1, (width - yAxisWidth) / Math.max(1, labels.length));
   const overhang = textWidth * Math.cos(RADIANS) - yAxisWidth - slot / 2;
-  const marginLeft = Math.round(Math.min(Math.max(overhang, 0), width * 0.12));
+  const context = fitCategoryStart ? document.createElement("canvas").getContext("2d") : null;
+  if (context) context.font = `${fontSize}px ${fontFamily}`;
+  const marginLeft = fitCategoryStart
+    ? categoryStartMargin(labels, width, yAxisWidth, fontSize, CATEGORY_ANGLE,
+        label => context?.measureText(label).width ?? label.length * MONO_ADVANCE * fontSize)
+    : Math.round(Math.min(Math.max(overhang, 0), width * 0.12));
 
   return { fontSize, tickHeight, marginLeft };
 }
@@ -177,10 +188,16 @@ function angledAxisMetrics(
 function useChartBox() {
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
+  const [fontFamily, setFontFamily] = useState("monospace");
 
   useLayoutEffect(() => {
     const node = ref.current;
     if (!node) return;
+    const probe = document.createElement("span");
+    probe.className = "font-mono";
+    node.appendChild(probe);
+    setFontFamily(getComputedStyle(probe).fontFamily);
+    probe.remove();
 
     const measure = (width: number, height: number) =>
       setBox(current =>
@@ -201,10 +218,22 @@ function useChartBox() {
     });
 
     observer.observe(node);
-    return () => observer.disconnect();
+    // A web font can finish loading without resizing the chart container.
+    // Re-render so canvas measurements use the same glyphs as the SVG ticks.
+    let active = true;
+    const refreshFont = () => {
+      if (active) setBox(current => ({ ...current }));
+    };
+    document.fonts.addEventListener("loadingdone", refreshFont);
+    void document.fonts.ready.then(refreshFont);
+    return () => {
+      active = false;
+      observer.disconnect();
+      document.fonts.removeEventListener("loadingdone", refreshFont);
+    };
   }, []);
 
-  return { ref, box };
+  return { ref, box, fontFamily };
 }
 
 interface StackLabelProps {
@@ -352,9 +381,10 @@ export default function CategoryBarChart({
   angledCategories = false,
   allCategories = false,
   alignYAxisStart = false,
+  fitCategoryStart = false,
 }: CategoryBarChartProps) {
   const animate = usePresentationAnimation();
-  const { ref: chartRef, box } = useChartBox();
+  const { ref: chartRef, box, fontFamily } = useChartBox();
   const yAxisWidth = metricAxisWidth(
     data.flatMap(entry => series.map(item => entry[item.key]))
   );
@@ -364,7 +394,9 @@ export default function CategoryBarChart({
           data.map(entry => String(entry[categoryKey] ?? "")),
           box.width,
           box.height,
-          yAxisWidth
+          yAxisWidth,
+          fitCategoryStart,
+          fontFamily
         )
       : null;
   const stackTotals = stacked
