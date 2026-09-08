@@ -52,9 +52,13 @@ export default function MonthlyTrendPage({
   const availableYears = Array.from(
     new Set([...DEFAULT_YEARS, ...monthly.years].filter(year => year >= 2024))
   ).sort((a, b) => a - b);
-  const years = page.years
-    ? page.years.filter(year => availableYears.includes(year))
-    : availableYears;
+  // Sorted here and not only where the selector saves it: the chart draws one
+  // line per year in this order, and the report reads oldest to newest.
+  const years = (
+    page.years
+      ? page.years.filter(year => availableYears.includes(year))
+      : availableYears
+  ).toSorted((a, b) => a - b);
 
   const isOverridden = (year: number, monthIndex: number) =>
     Object.prototype.hasOwnProperty.call(

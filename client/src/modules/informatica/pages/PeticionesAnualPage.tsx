@@ -30,9 +30,13 @@ export default function PeticionesAnualPage({
   );
 
   const availableYears = years.filter(year => year >= 2024);
-  const selectedYears = page.years
-    ? page.years.filter(year => availableYears.includes(year))
-    : availableYears;
+  // Sorted here and not only where the selector saves it: the chart draws one
+  // bar per year in this order, and the report reads oldest to newest.
+  const selectedYears = (
+    page.years
+      ? page.years.filter(year => availableYears.includes(year))
+      : availableYears
+  ).toSorted((a, b) => a - b);
   const series: CategorySeries[] = selectedYears.map(year => ({
     key: `y${year}`,
     label: String(year),

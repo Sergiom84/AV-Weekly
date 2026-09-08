@@ -88,11 +88,13 @@ export default function CategorySharePage({
     0
   );
 
+  // The compared period is the older one, so it opens the group: every chart of
+  // the report reads left to right from the oldest reading to the current one.
   const series: CategorySeries[] = [
-    { key: "valor", label: seriesLabel, color: oficinasColor(0) },
     ...(comparison
       ? [{ key: "comparacion", label: comparison.label, color: oficinasColor(2) }]
       : []),
+    { key: "valor", label: seriesLabel, color: oficinasColor(0) },
   ];
 
   const data = charted.map(cell => {
