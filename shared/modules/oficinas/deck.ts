@@ -192,6 +192,12 @@ export const OFICINAS_PAGE_SPECS: PageSpec[] = [
     title: "1.2 Incidencias resueltas por elemento",
     sections: ["resueltas"],
   },
+  {
+    id: "oficinas-resueltas-elemento-semana",
+    kind: "ofiResueltasElementoSemana",
+    title: "1.2 Incidencias resueltas por elemento, última semana",
+    sections: ["resueltas"],
+  },
   { id: "oficinas-seccion-peticiones", kind: "section", title: "1.3 Peticiones resueltas" },
   {
     id: "oficinas-peticiones-dt",

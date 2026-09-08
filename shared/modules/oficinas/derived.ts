@@ -387,6 +387,32 @@ export function componentsOf(rows: OficinasElementRow[] | undefined): string[] {
   return Array.from(new Set((rows ?? []).map(row => row.componente)));
 }
 
+/**
+ * Weeks of an element matrix a slide may publish as a week of its own.
+ *
+ * Sheets 5 and 10 are refreshed one week behind the territorial ones, so the
+ * element column of the report week is a partial count while every other slide
+ * already reports that week in full. On the S36 deck it held 52 resolved
+ * incidents against the 117 the section reports, which a weekly slide would
+ * have published as a 55% collapse.
+ *
+ * The two pivots never reconcile week by week — the element matrix counts
+ * validators as one more element and lands either side of the section total —
+ * so the partial column cannot be detected by comparing the two. The lag is
+ * what the cut is made on: everything strictly before the report week is
+ * refreshed, the report week itself is not.
+ */
+export function closedElementWeeks(
+  rows: { values: OficinasWeekValue[] }[],
+  year: number,
+  reportWeek: number | null
+): number[] {
+  return seriesWeeks(
+    rows.flatMap(row => row.values),
+    year
+  ).filter(week => reportWeek === null || week < reportWeek);
+}
+
 /** Rows sorted by their year total, descending. Ties fall back to the label. */
 export function rankedRows<T extends OficinasRow>(
   rows: T[],

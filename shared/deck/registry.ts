@@ -102,6 +102,7 @@ export const DECK_MODULES: DeckModule[] = [
         ofiAsignadasTotalSemanal: "Asignadas, total semanal",
         ofiResueltasDT: "Resueltas por DT",
         ofiResueltasElemento: "Resueltas por elemento",
+        ofiResueltasElementoSemana: "Resueltas por elemento, última semana",
         ofiResueltasSemanal: "Resueltas, comparativa semanal",
         ofiResueltasTotalSemanal: "Resueltas, total semanal",
         ofiPeticionesDT: "Peticiones por DT",

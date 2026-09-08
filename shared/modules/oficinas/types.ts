@@ -555,6 +555,7 @@ export type OficinasPageKind =
   | "ofiAsignadasTotalSemanal"
   | "ofiResueltasDT"
   | "ofiResueltasElemento"
+  | "ofiResueltasElementoSemana"
   | "ofiResueltasSemanal"
   | "ofiResueltasTotalSemanal"
   | "ofiPeticionesDT"

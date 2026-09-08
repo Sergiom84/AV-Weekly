@@ -50,6 +50,7 @@ import RecicladoresElementoPage from "@/modules/oficinas/pages/RecicladoresEleme
 import RecicladoresElementoSemanalPage from "@/modules/oficinas/pages/RecicladoresElementoSemanalPage";
 import ResueltasDTPage from "@/modules/oficinas/pages/ResueltasDTPage";
 import ResueltasElementoPage from "@/modules/oficinas/pages/ResueltasElementoPage";
+import ResueltasElementoSemanaPage from "@/modules/oficinas/pages/ResueltasElementoSemanaPage";
 import ResueltasSemanalPage from "@/modules/oficinas/pages/ResueltasSemanalPage";
 import {
   AsignadasTotalSemanalPage,
@@ -82,6 +83,7 @@ const DATA_PAGES: Record<
   "oficinas-resueltas-dt": ResueltasDTPage,
   "oficinas-resueltas-semanal": ResueltasSemanalPage,
   "oficinas-resueltas-elemento": ResueltasElementoPage,
+  "oficinas-resueltas-elemento-semana": ResueltasElementoSemanaPage,
   "oficinas-resueltas-total-semanal": ResueltasTotalSemanalPage,
   "oficinas-peticiones-dt-semanal": PeticionesDTSemanalPage,
   "oficinas-peticiones-dt": PeticionesDTPage,
