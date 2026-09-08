@@ -97,7 +97,31 @@ export default function ImacsChartPage({
   );
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            <MonthRangeSelector
+              selection={monthSelection}
+              available={availableMonths}
+              format={monthLabel}
+              onChange={monthSelection => onChange({ monthSelection })}
+            />
+
+            <RowFilterPanel
+              labels={allData.map(row => row.edificio)}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          </>
+        )
+      }
+    >
       <KpiRow
         items={[
           { label: month ? monthLabel(month) : "Periodo", value: "IMACs" },
@@ -111,23 +135,6 @@ export default function ImacsChartPage({
           },
         ]}
       />
-      {editing && (
-        <MonthRangeSelector
-          selection={monthSelection}
-          available={availableMonths}
-          format={monthLabel}
-          onChange={monthSelection => onChange({ monthSelection })}
-        />
-      )}
-      {editing && (
-        <RowFilterPanel
-          labels={allData.map(row => row.edificio)}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart
           categoryKey="edificio"

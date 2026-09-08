@@ -1,5 +1,5 @@
 import KpiRow from "@/components/deck/KpiRow";
-import ValueGrid from "@/components/deck/ValueGrid";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import WeeklyBarChart, {
   type WeeklySeries,
@@ -138,15 +138,32 @@ export default function ImacPage({
         ];
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && (
-        <WeekRangeSelector
-          selection={weekSelection}
-          available={weeks}
-          onChange={next => onChange({ weekSelection: next })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            <WeekRangeSelector
+              selection={weekSelection}
+              available={weeks}
+              onChange={next => onChange({ weekSelection: next })}
+            />
 
+            <ValueGrid
+              columns={weeks.map(weekLabel)}
+              rows={seriesRows.map(entry => ({
+                label: entry.label,
+                color: COLORS[entry.key],
+                cells: entry.cells,
+              }))}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
+        )
+      }
+    >
       <KpiRow items={items} compact />
 
       <div className="flex min-h-0 flex-[2.5] flex-col sm:flex-[3]">
@@ -175,17 +192,6 @@ export default function ImacPage({
         />
       </div>
 
-      {editing && (
-        <ValueGrid
-          columns={weeks.map(weekLabel)}
-          rows={seriesRows.map(entry => ({
-            label: entry.label,
-            color: COLORS[entry.key],
-            cells: entry.cells,
-          }))}
-          onChange={(key, value) => onChange(withOverride(page, key, value))}
-        />
-      )}
     </PageShell>
   );
 }

@@ -2,7 +2,7 @@ import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
 import KpiRow, { type KpiItem } from "@/components/deck/KpiRow";
-import ValueGrid from "@/components/deck/ValueGrid";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
 import { oficinasColor, percent } from "../aggregate";
 import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
@@ -112,7 +112,25 @@ export default function CategorySharePage({
   });
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <ValueGrid
+            columns={[column]}
+            rows={cells.map(cell => ({
+              label: cell.label,
+              cells: [
+                { key: cell.key, value: cell.value, overridden: cell.overridden },
+              ],
+            }))}
+            onChange={(key, value) => onChange(withOverride(page, key, value))}
+          />
+        )
+      }
+    >
       <KpiRow items={kpis} compact={compactPresentation} />
 
       {/* On a phone the table needs the room more than the bars do: the fit
@@ -159,18 +177,6 @@ export default function CategorySharePage({
         />
       </div>
 
-      {editing && (
-        <ValueGrid
-          columns={[column]}
-          rows={cells.map(cell => ({
-            label: cell.label,
-            cells: [
-              { key: cell.key, value: cell.value, overridden: cell.overridden },
-            ],
-          }))}
-          onChange={(key, value) => onChange(withOverride(page, key, value))}
-        />
-      )}
     </PageShell>
   );
 }

@@ -24,7 +24,7 @@ beforeAll(async () => {
         export { default as ImacPage } from "./client/src/modules/oficinas/pages/ImacPage";
         export { default as WeeklyBarChart } from "./client/src/components/deck/WeeklyBarChart";
         export { default as SemanalTable } from "./client/src/modules/oficinas/pages/SemanalTable";
-        export { default as ValueGrid } from "./client/src/components/deck/ValueGrid";
+        export { default as ValueGrid } from "./client/src/components/deck/EditorValueGrid";
       `,
       resolveDir: path.resolve(import.meta.dirname, ".."),
     },
@@ -49,9 +49,15 @@ function propsOf<T>(tree: ReactNode, component: unknown): T {
   function visit(node: ReactNode) {
     if (Array.isArray(node)) {
       node.forEach(visit);
-    } else if (isValidElement<{ children?: ReactNode }>(node)) {
+    } else if (
+      isValidElement<{ children?: ReactNode; editor?: ReactNode }>(node)
+    ) {
       if (node.type === component) matches.push(node.props as T);
       visit(node.props.children);
+      // Selectors and correction grids hang off the `editor` prop of the page
+      // shell, outside the printable slide, so a walk over children alone would
+      // never reach the grid this test is about.
+      visit(node.props.editor);
     }
   }
   visit(tree);

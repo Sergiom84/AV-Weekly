@@ -88,24 +88,32 @@ export default function HicCategoriasPage({
   const suffix = month ? ` ${monthLabel(month)}` : "";
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange} hideFootnote>
-      {editing && (
-        <MonthRangeSelector
-          selection={monthSelection}
-          available={availableMonths}
-          format={monthLabel}
-          onChange={monthSelection => onChange({ monthSelection })}
-        />
-      )}
-      {editing && (
-        <RowFilterPanel
-          labels={[...HIC_METRICS]}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      hideFootnote
+      editor={
+        editing && (
+          <>
+            <MonthRangeSelector
+              selection={monthSelection}
+              available={availableMonths}
+              format={monthLabel}
+              onChange={monthSelection => onChange({ monthSelection })}
+            />
+
+            <RowFilterPanel
+              labels={[...HIC_METRICS]}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          </>
+        )
+      }
+    >
       <section className="flex min-h-0 flex-1 flex-col" aria-label="Volumen operativo mensual">
         <h3 className="shrink-0 pb-[0.7cqi] font-mono text-[1.35cqi] font-medium text-muted-foreground">
           Volumen Operativo Mensual: Abiertas, Reasignaciones y Resueltas{suffix ? ` · hasta${suffix}` : ""}

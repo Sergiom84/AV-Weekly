@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import WeeklyBarChart, {
   type WeeklySeries,
 } from "@/components/deck/WeeklyBarChart";
-import ValueGrid from "@/components/deck/ValueGrid";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import KpiRow from "@/components/deck/KpiRow";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
@@ -420,19 +420,36 @@ export default function DTPage({
         ];
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && controls}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            {controls}
 
-      {editing && yearSelector && <YearSelector selection={yearSelector} />}
+            {yearSelector && <YearSelector selection={yearSelector} />}
 
-      {editing && (
-        <WeekRangeSelector
-          selection={weekSelection}
-          available={chartWeeks}
-          onChange={next => onChange({ weekSelection: next })}
-        />
-      )}
+            <WeekRangeSelector
+              selection={weekSelection}
+              available={chartWeeks}
+              onChange={next => onChange({ weekSelection: next })}
+            />
 
+            <ValueGrid
+              columns={chartWeeks.map(weekLabel)}
+              rows={seriesRows.map(entry => ({
+                label: entry.label,
+                color: entry.color,
+                cells: entry.cells,
+              }))}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
+        )
+      }
+    >
       <KpiRow items={items} compact={isIncidenciasTerritoriales} />
 
       <div
@@ -518,17 +535,6 @@ export default function DTPage({
         )}
       </div>
 
-      {editing && (
-        <ValueGrid
-          columns={chartWeeks.map(weekLabel)}
-          rows={seriesRows.map(entry => ({
-            label: entry.label,
-            color: entry.color,
-            cells: entry.cells,
-          }))}
-          onChange={(key, value) => onChange(withOverride(page, key, value))}
-        />
-      )}
     </PageShell>
   );
 }

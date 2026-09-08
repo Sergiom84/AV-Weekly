@@ -18,7 +18,7 @@ import {
   withOverride,
 } from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
-import ValueGrid from "./AgaValueGrid";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 
 interface GestionadasTotalPageProps extends AgaPageProps {
   dataset: AgaDataset;

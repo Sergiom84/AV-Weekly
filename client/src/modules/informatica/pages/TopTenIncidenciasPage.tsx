@@ -272,16 +272,22 @@ export default function TopTenIncidenciasPage({
     : [];
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && (
-        <RowFilterPanel
-          labels={componentLabels}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <RowFilterPanel
+            labels={componentLabels}
+            hiddenRows={hiddenRows}
+            scope={page.id}
+            defaultHidden={[]}
+            onChange={hiddenRows => onChange({ hiddenRows })}
+          />
+        )
+      }
+    >
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.22fr)_minmax(0,0.78fr)] gap-[1.4cqi]">
         <div className="flex min-h-0 flex-col">
           {visibleRows.length > 0 && (

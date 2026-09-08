@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import EditableText from "@/components/deck/EditableText";
 import SlideHeading from "@/components/deck/SlideHeading";
+import { SlideEditorPanel } from "@/components/deck/SlideEditorFrame";
 import type {
   OficinasDataset,
   OficinasDeckPage,
@@ -20,6 +21,8 @@ export interface OficinasDataPageProps extends OficinasPageProps {
 interface PageShellProps extends OficinasPageProps {
   children: ReactNode;
   dense?: boolean;
+  /** Selectors and correction grids, drawn under the slide instead of inside it. */
+  editor?: ReactNode;
 }
 
 /** Heading, body and footnote every Oficinas data page shares. */
@@ -29,12 +32,14 @@ export default function PageShell({
   onChange,
   children,
   dense = false,
+  editor,
 }: PageShellProps) {
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
 
   return (
     <div className="@container flex h-full w-full flex-col text-foreground">
+      {editing && <SlideEditorPanel>{editor}</SlideEditorPanel>}
       <SlideHeading
         service={page.text.subtitle ?? ""}
         title={page.text.title ?? ""}

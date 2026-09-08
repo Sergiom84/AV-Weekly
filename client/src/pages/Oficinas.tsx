@@ -27,6 +27,7 @@ import NotesPage from "@/components/deck/NotesPage";
 import PageOrderControls from "@/components/deck/PageOrderControls";
 import PresentationOverlay from "@/components/deck/PresentationOverlay";
 import SectionPage from "@/components/deck/SectionPage";
+import { SlideEditorFrame } from "@/components/deck/SlideEditorFrame";
 import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOficinasDeck } from "@/modules/oficinas/useOficinasDeck";
@@ -165,6 +166,7 @@ export default function Oficinas() {
 
   const artwork = MODULE.deck?.artwork;
   const pages = deck?.pages ?? [];
+  const lastVisiblePageId = pages.filter(isPageVisible).at(-1)?.id;
   const hasSource = Boolean(dataset.source?.sourceFile);
   const reportYear = dataset.year ?? new Date().getFullYear();
   const closedWeek = reportWeek(dataset, reportYear);
@@ -297,14 +299,19 @@ export default function Oficinas() {
         }
 
         return (
-          <SlideFrame number={number} muted={muted}>
-            <DataPage
-              page={page}
-              editing={isEditing}
-              onChange={onChange}
-              dataset={dataset}
-            />
-          </SlideFrame>
+          <SlideEditorFrame
+            editing={isEditing}
+            title={page.text.title ?? page.id}
+          >
+            <SlideFrame number={number} muted={muted}>
+              <DataPage
+                page={page}
+                editing={isEditing}
+                onChange={onChange}
+                dataset={dataset}
+              />
+            </SlideFrame>
+          </SlideEditorFrame>
         );
       }
     }
@@ -392,6 +399,7 @@ export default function Oficinas() {
                 id={`slide-${page.id}`}
                 data-deck-slide
                 data-deck-visible={visible}
+                data-deck-last-visible={page.id === lastVisiblePageId || undefined}
                 className="scroll-mt-24"
               >
                 <div className="mb-2 flex items-center justify-between gap-2 print:hidden">

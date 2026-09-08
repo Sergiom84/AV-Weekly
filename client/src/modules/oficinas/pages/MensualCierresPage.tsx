@@ -49,15 +49,21 @@ export default function MensualCierresPage({
   });
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && (
-        <MonthRangeSelector
-          selection={monthSelection}
-          available={available}
-          format={monthLabel}
-          onChange={next => onChange({ monthSelection: next })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <MonthRangeSelector
+            selection={monthSelection}
+            available={available}
+            format={monthLabel}
+            onChange={next => onChange({ monthSelection: next })}
+          />
+        )
+      }
+    >
       <KpiRow
         compact
         items={

@@ -49,16 +49,22 @@ export default function RenoveAcumuladoPage({
   );
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && (
-        <RowFilterPanel
-          labels={[...RENOVE_AMBITOS]}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <RowFilterPanel
+            labels={[...RENOVE_AMBITOS]}
+            hiddenRows={hiddenRows}
+            scope={page.id}
+            defaultHidden={[]}
+            onChange={hiddenRows => onChange({ hiddenRows })}
+          />
+        )
+      }
+    >
       <KpiRow
         items={[
           { label: "Renovado Acumulado", value: String(totals.total) },

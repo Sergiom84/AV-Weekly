@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import EditableText from "@/components/deck/EditableText";
 import SlideHeading from "@/components/deck/SlideHeading";
+import { SlideEditorPanel } from "@/components/deck/SlideEditorFrame";
 import type { InformaticaDeckPage } from "@shared/modules/informatica/types";
 
 export interface InformaticaPageProps {
@@ -12,6 +13,8 @@ export interface InformaticaPageProps {
 interface PageShellProps extends InformaticaPageProps {
   children: ReactNode;
   hideFootnote?: boolean;
+  /** Selectors and correction grids, drawn under the slide instead of inside it. */
+  editor?: ReactNode;
 }
 
 /** Heading, body and footnote every Informatica data page shares. */
@@ -21,12 +24,14 @@ export default function PageShell({
   onChange,
   children,
   hideFootnote = false,
+  editor,
 }: PageShellProps) {
   const setSlot = (key: string) => (value: string) =>
     onChange({ text: { ...page.text, [key]: value } });
 
   return (
     <div className="@container flex h-full w-full flex-col text-foreground">
+      {editing && <SlideEditorPanel>{editor}</SlideEditorPanel>}
       <SlideHeading
         service={page.text.subtitle ?? ""}
         title={page.text.title ?? ""}

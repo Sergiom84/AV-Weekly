@@ -58,15 +58,21 @@ export default function EncuestasPage({
   const gauge = average === null ? 0 : Math.max(0, Math.min(100, average * 20));
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && (
-        <MonthRangeSelector
-          selection={monthSelection}
-          available={availableMonths}
-          format={monthLabel}
-          onChange={monthSelection => onChange({ monthSelection })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <MonthRangeSelector
+            selection={monthSelection}
+            available={availableMonths}
+            format={monthLabel}
+            onChange={monthSelection => onChange({ monthSelection })}
+          />
+        )
+      }
+    >
       <div className="flex min-h-0 flex-1 flex-col gap-[1.1cqi]">
         <div className="flex shrink-0 items-start gap-[1.1cqi]">
           <section

@@ -1,5 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Slide editor panel, shared by every deck module. Loaded here rather than from
+   the component so no .tsx file imports a stylesheet: the page tests bundle
+   those components with esbuild, which has no loader for CSS. */
+@import "./components/deck/slide-editor.css";
 
 @custom-variant dark (&:is(.dark *));
 

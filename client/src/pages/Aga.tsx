@@ -43,7 +43,7 @@ import GestionadasTotalPage from "@/modules/aga/pages/GestionadasTotalPage";
 import GestionadasUbicacionPage from "@/modules/aga/pages/GestionadasUbicacionPage";
 import TotalSemanalPage from "@/modules/aga/pages/TotalSemanalPage";
 import type { AgaPageProps } from "@/modules/aga/pages/PageShell";
-import { AgaEditorFrame } from "@/modules/aga/pages/AgaEditorPanel";
+import { SlideEditorFrame } from "@/components/deck/SlideEditorFrame";
 
 const MODULE = getDeckModule("aga");
 
@@ -280,7 +280,7 @@ export default function Aga() {
         }
 
         return (
-          <AgaEditorFrame
+          <SlideEditorFrame
             editing={isEditing}
             title={page.text.title ?? page.id}
           >
@@ -292,7 +292,7 @@ export default function Aga() {
                 dataset={dataset}
               />
             </SlideFrame>
-          </AgaEditorFrame>
+          </SlideEditorFrame>
         );
       }
     }
@@ -380,7 +380,7 @@ export default function Aga() {
                 id={`slide-${page.id}`}
                 data-deck-slide
                 data-deck-visible={visible}
-                data-aga-last-visible={page.id === lastVisiblePageId || undefined}
+                data-deck-last-visible={page.id === lastVisiblePageId || undefined}
                 className="scroll-mt-24"
               >
                 <div className="mb-2 flex items-center justify-between gap-2 print:hidden">

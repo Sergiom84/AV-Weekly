@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import EditableText from "@/components/deck/EditableText";
 import SlideHeading from "@/components/deck/SlideHeading";
 import type { AgaDeckPage } from "@shared/modules/aga/types";
-import { AgaEditorPanel } from "./AgaEditorPanel";
+import { SlideEditorPanel } from "@/components/deck/SlideEditorFrame";
 
 export interface AgaPageProps {
   page: AgaDeckPage;
@@ -28,7 +28,7 @@ export default function PageShell({
 
   return (
     <div className="@container flex h-full w-full flex-col text-foreground">
-      {editing && <AgaEditorPanel>{editor}</AgaEditorPanel>}
+      {editing && <SlideEditorPanel>{editor}</SlideEditorPanel>}
       <SlideHeading
         service={page.text.subtitle ?? ""}
         title={page.text.title ?? ""}

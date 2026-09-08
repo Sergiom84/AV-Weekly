@@ -125,24 +125,31 @@ export default function HicWorkOrdersPage({
   const donutTotal = distribution.reduce((sum, entry) => sum + entry.value, 0);
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && (
-        <MonthRangeSelector
-          selection={monthSelection}
-          available={availableMonths}
-          format={monthLabel}
-          onChange={monthSelection => onChange({ monthSelection })}
-        />
-      )}
-      {editing && (
-        <RowFilterPanel
-          labels={allSeries.map(entry => entry.label)}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            <MonthRangeSelector
+              selection={monthSelection}
+              available={availableMonths}
+              format={monthLabel}
+              onChange={monthSelection => onChange({ monthSelection })}
+            />
+
+            <RowFilterPanel
+              labels={allSeries.map(entry => entry.label)}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          </>
+        )
+      }
+    >
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.55fr)_minmax(0,0.45fr)] gap-[1.2cqi]">
         <section className="flex min-h-0 flex-col" aria-label="Work Orders e incidencias por mes">
           <h3 className="shrink-0 pb-[0.4cqi] font-mono text-[1.3cqi] font-medium text-muted-foreground">

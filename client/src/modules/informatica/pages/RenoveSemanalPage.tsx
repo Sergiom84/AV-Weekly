@@ -65,24 +65,33 @@ export default function RenoveSemanalPage({
   const series = SERIES.filter(entry => !hiddenRows.includes(entry.label));
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && weekSlots.length > 0 && (
-        <WeekRangeSelector
-          selection={weekSelection}
-          available={weekSlots}
-          format={week => String(allData[week - 1]?.semana ?? `S${week}`)}
-          onChange={weekSelection => onChange({ weekSelection })}
-        />
-      )}
-      {editing && (
-        <RowFilterPanel
-          labels={[...RENOVE_AMBITOS]}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            {weekSlots.length > 0 && (
+              <WeekRangeSelector
+                selection={weekSelection}
+                available={weekSlots}
+                format={week => String(allData[week - 1]?.semana ?? `S${week}`)}
+                onChange={weekSelection => onChange({ weekSelection })}
+              />
+            )}
+
+            <RowFilterPanel
+              labels={[...RENOVE_AMBITOS]}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          </>
+        )
+      }
+    >
       <KpiRow
         items={[
           {

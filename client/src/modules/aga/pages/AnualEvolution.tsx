@@ -21,7 +21,7 @@ import PageShell, { type AgaPageProps } from "./PageShell";
 import SeriesLineChart, {
   type LineSeries,
 } from "@/components/deck/SeriesLineChart";
-import ValueGrid from "./AgaValueGrid";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 
 interface AnualEvolutionProps extends AgaPageProps {
   /** One entry per year, ascending, each with the twelve months. */

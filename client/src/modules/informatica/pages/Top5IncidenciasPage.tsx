@@ -82,24 +82,31 @@ export default function Top5IncidenciasPage({
   }));
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && (
-        <MonthRangeSelector
-          selection={monthSelection}
-          available={availableMonths}
-          format={monthLabel}
-          onChange={monthSelection => onChange({ monthSelection })}
-        />
-      )}
-      {editing && (
-        <RowFilterPanel
-          labels={allTop.map(entry => entry.label)}
-          hiddenRows={hiddenRows}
-          scope={page.id}
-          defaultHidden={[]}
-          onChange={hiddenRows => onChange({ hiddenRows })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            <MonthRangeSelector
+              selection={monthSelection}
+              available={availableMonths}
+              format={monthLabel}
+              onChange={monthSelection => onChange({ monthSelection })}
+            />
+
+            <RowFilterPanel
+              labels={allTop.map(entry => entry.label)}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          </>
+        )
+      }
+    >
 
       <section
         className="flex min-h-0 flex-1 flex-col"

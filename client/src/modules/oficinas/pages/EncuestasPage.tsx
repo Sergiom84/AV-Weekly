@@ -1,6 +1,6 @@
 import KpiRow from "@/components/deck/KpiRow";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
-import ValueGrid from "@/components/deck/ValueGrid";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import {
   defaultMonthWindow,
   resolveMonthSelection,
@@ -106,16 +106,49 @@ export default function EncuestasPage({
     globalTotal === 0 ? 0 : (distribucion?.global?.[4] ?? 0) / globalTotal;
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && (
-        <MonthRangeSelector
-          selection={monthSelection}
-          available={availableMonths}
-          format={monthLabel}
-          onChange={next => onChange({ monthSelection: next })}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            <MonthRangeSelector
+              selection={monthSelection}
+              available={availableMonths}
+              format={monthLabel}
+              onChange={next => onChange({ monthSelection: next })}
+            />
 
+            <ValueGrid
+              columns={responses.map(entry => monthLabel(entry.month))}
+              rows={[
+                {
+                  label: "Encuestas",
+                  color: oficinasColor(0),
+                  cells: responses.map(entry => ({
+                    key: entry.key,
+                    value: entry.value,
+                    overridden: entry.overridden,
+                  })),
+                },
+              ]}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+
+            <ValueGrid
+              columns={["1", "2", "3", "4", "5"]}
+              rows={SCORES.map((score, index) => ({
+                label: score.label,
+                color: oficinasColor(index),
+                cells: distributionCells[index],
+              }))}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
+        )
+      }
+    >
       <KpiRow
         compact
         items={[
@@ -140,35 +173,6 @@ export default function EncuestasPage({
         </div>
       </div>
 
-      {editing && (
-        <>
-          <ValueGrid
-            columns={responses.map(entry => monthLabel(entry.month))}
-            rows={[
-              {
-                label: "Encuestas",
-                color: oficinasColor(0),
-                cells: responses.map(entry => ({
-                  key: entry.key,
-                  value: entry.value,
-                  overridden: entry.overridden,
-                })),
-              },
-            ]}
-            onChange={(key, value) => onChange(withOverride(page, key, value))}
-          />
-
-          <ValueGrid
-            columns={["1", "2", "3", "4", "5"]}
-            rows={SCORES.map((score, index) => ({
-              label: score.label,
-              color: oficinasColor(index),
-              cells: distributionCells[index],
-            }))}
-            onChange={(key, value) => onChange(withOverride(page, key, value))}
-          />
-        </>
-      )}
     </PageShell>
   );
 }

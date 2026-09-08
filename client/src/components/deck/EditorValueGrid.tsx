@@ -1,8 +1,14 @@
 import EditableNumber from "@/components/deck/EditableNumber";
 import type { ValueGridRow } from "@/components/deck/ValueGrid";
 
-/** Readable correction cells with horizontal scrolling confined to the editor. */
-export default function AgaValueGrid({
+/**
+ * Readable correction cells with horizontal scrolling confined to the editor.
+ *
+ * The counterpart of `ValueGrid` for a page that renders its editor through
+ * `SlideEditorFrame`: the grid no longer has to shrink into the slide canvas,
+ * so the cells are sized to be typed into instead of to fit.
+ */
+export default function EditorValueGrid({
   columns,
   rows,
   onChange,

@@ -1,4 +1,4 @@
-import ValueGrid from "@/components/deck/ValueGrid";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import KpiRow from "@/components/deck/KpiRow";
 import WeeklyBarChart, {
   type WeeklySeries,
@@ -196,19 +196,36 @@ export default function SemanalPage({
   const mediaWeeks = semanalMediaWeeks(rows, year, throughWeek);
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && yearSelector && yearSelector.available.length > 0 && (
-        <YearSelector selection={yearSelector} />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            {yearSelector && yearSelector.available.length > 0 && (
+              <YearSelector selection={yearSelector} />
+            )}
 
-      {editing && (
-        <WeekRangeSelector
-          selection={weekSelection}
-          available={ALL_ISO_WEEKS}
-          onChange={next => onChange({ weekSelection: next })}
-        />
-      )}
+            <WeekRangeSelector
+              selection={weekSelection}
+              available={ALL_ISO_WEEKS}
+              onChange={next => onChange({ weekSelection: next })}
+            />
 
+            <ValueGrid
+              columns={ALL_ISO_WEEKS.map(weekLabel)}
+              rows={seriesRows.map(entry => ({
+                label: entry.label,
+                color: entry.color,
+                cells: entry.cells,
+              }))}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
+        )
+      }
+    >
       <KpiRow items={headlineItems} compact />
 
       <div className="flex min-h-0 flex-[3] flex-col">
@@ -239,17 +256,6 @@ export default function SemanalPage({
         />
       </div>
 
-      {editing && (
-        <ValueGrid
-          columns={ALL_ISO_WEEKS.map(weekLabel)}
-          rows={seriesRows.map(entry => ({
-            label: entry.label,
-            color: entry.color,
-            cells: entry.cells,
-          }))}
-          onChange={(key, value) => onChange(withOverride(page, key, value))}
-        />
-      )}
     </PageShell>
   );
 }

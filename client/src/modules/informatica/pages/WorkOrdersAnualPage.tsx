@@ -44,19 +44,26 @@ export default function WorkOrdersAnualPage({
   }));
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
-      {editing && availableYears.length > 0 && (
-        <YearSelector
-          selection={{
-            available: availableYears,
-            selected: selectedYears,
-            onChange: years =>
-              onChange({
-                years: Array.from(new Set(years)).sort((a, b) => a - b),
-              }),
-          }}
-        />
-      )}
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing &&
+        availableYears.length > 0 && (
+          <YearSelector
+            selection={{
+              available: availableYears,
+              selected: selectedYears,
+              onChange: years =>
+                onChange({
+                  years: Array.from(new Set(years)).sort((a, b) => a - b),
+                }),
+            }}
+          />
+        )
+      }
+    >
       <KpiRow
         items={selectedYears.map(year => ({
           label: String(year),

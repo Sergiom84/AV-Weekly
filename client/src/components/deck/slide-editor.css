@@ -1,0 +1,59 @@
+/* A page with nothing to filter or correct still mounts the frame, since the
+   panel is filled by a portal after the slide renders. Without this it would
+   offer an empty "Filtros y datos" that opens onto nothing. */
+.slide-editor:not(:has(.slide-editor-controls > *)) {
+  display: none;
+}
+
+.slide-editor-controls {
+  font-size: 12px;
+}
+
+.slide-editor-controls > * {
+  min-width: 0;
+}
+
+.slide-editor-controls button,
+.slide-editor-controls label,
+.slide-editor-controls input {
+  font-size: 12px;
+}
+
+.slide-editor-controls button:not([role="checkbox"]) {
+  min-height: 32px;
+}
+
+.slide-editor-controls ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  align-items: start;
+  gap: 8px 16px;
+  max-height: 288px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.slide-editor-controls li {
+  min-width: 0;
+  align-items: start;
+}
+
+.slide-editor-controls li [role="checkbox"] {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.slide-editor-controls label {
+  white-space: normal;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  line-height: 1.5;
+}
+
+@media print {
+  /* Editor actions and hidden slides may follow the last printable slide. */
+  main section[data-deck-last-visible="true"] {
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+}
