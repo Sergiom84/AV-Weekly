@@ -6,6 +6,7 @@ import {
   valueAt,
 } from "@shared/modules/oficinas/derived";
 import type {
+  OficinasElementWeek,
   OficinasRow,
   OficinasValidadoras,
   OficinasWeekValue,
@@ -108,6 +109,34 @@ export function variantLabel(variant: OficinasValidadoras): string {
     VALIDADORAS_VARIANTS.find(entry => entry.value === variant)?.label ??
     variant
   );
+}
+
+/**
+ * Week anchor of the single-week element slide, offered in the editor.
+ *
+ * `anterior` is the default because it is the only one that is safe without
+ * looking at the export: the element columns of the report week are complete in
+ * some weeks and half-filled in others, and a deck sent unchecked would publish
+ * the half-filled ones as a collapse. Turning it to `informe` is a statement
+ * that this week's export was checked.
+ */
+export const ELEMENT_WEEK_OPTIONS: {
+  value: OficinasElementWeek;
+  label: string;
+}[] = [
+  { value: "informe", label: "Semana actual" },
+  { value: "anterior", label: "Semana anterior" },
+];
+
+export const DEFAULT_ELEMENT_WEEK: OficinasElementWeek = "anterior";
+
+/** The anchor a page has stored, or the default when it has none or an unknown one. */
+export function readElementWeek(
+  stored: string | null | undefined
+): OficinasElementWeek {
+  const match = ELEMENT_WEEK_OPTIONS.find(entry => entry.value === stored);
+
+  return match?.value ?? DEFAULT_ELEMENT_WEEK;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
@@ -40,6 +41,8 @@ interface CategorySharePageProps extends OficinasPageProps {
   total?: number;
   /** Compact cards and centre the short three-column pivot. */
   compactPresentation?: boolean;
+  /** Selectors drawn above the correction grid, like the ones `SemanalPage` holds. */
+  editorControls?: ReactNode;
 }
 
 /**
@@ -64,6 +67,7 @@ export default function CategorySharePage({
   topN,
   total: totalOverride,
   compactPresentation = false,
+  editorControls,
 }: CategorySharePageProps) {
   const cells = entries.map(entry => {
     const key = cellKey(entry.label, column);
@@ -120,16 +124,20 @@ export default function CategorySharePage({
       onChange={onChange}
       editor={
         editing && (
-          <ValueGrid
-            columns={[column]}
-            rows={cells.map(cell => ({
-              label: cell.label,
-              cells: [
-                { key: cell.key, value: cell.value, overridden: cell.overridden },
-              ],
-            }))}
-            onChange={(key, value) => onChange(withOverride(page, key, value))}
-          />
+          <>
+            {editorControls}
+
+            <ValueGrid
+              columns={[column]}
+              rows={cells.map(cell => ({
+                label: cell.label,
+                cells: [
+                  { key: cell.key, value: cell.value, overridden: cell.overridden },
+                ],
+              }))}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
         )
       }
     >

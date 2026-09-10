@@ -1,19 +1,24 @@
 import {
   closedElementWeeks,
+  elementWeeks,
   latestYear,
+  reportedElementWeeks,
   reportWeek,
   totalOffices,
   valueAt,
 } from "@shared/modules/oficinas/derived";
+import type { OficinasElementWeek } from "@shared/modules/oficinas/types";
 import {
   decimal,
   disambiguate,
   percent,
+  readElementWeek,
   variationLabel,
   weekHeadline,
   weekLabel,
 } from "../aggregate";
 import CategorySharePage from "./CategorySharePage";
+import ElementWeekSelector from "./ElementWeekSelector";
 import type { OficinasDataPageProps } from "./PageShell";
 
 /**
@@ -24,11 +29,15 @@ import type { OficinasDataPageProps } from "./PageShell";
  * date. It answers what the accumulated slide cannot: which elements moved this
  * week, not which ones weigh most since January.
  *
- * The week is not the report week but the last one `closedElementWeeks` allows,
- * which is one behind it: the element pivot of the report week is still partial
- * when the deck is sent. The slide therefore reads a week behind the rest of the
- * report, and that is why every figure on it carries its own week label instead
- * of "la semana".
+ * Which week it publishes is a choice made in the editor and stored on the page,
+ * not a rule: sheets 5 and 10 refresh their last column after the export, so the
+ * report week is complete in some templates and half-filled in others, and the
+ * data does not say which. "Semana anterior" is the default and is always safe;
+ * "Semana actual" lines the slide up with the rest of the deck and is for a week
+ * whose export the team has checked.
+ *
+ * Either way every figure on the slide carries its own week label instead of "la
+ * semana", because the two readings are a week apart.
  */
 
 /** Elements charted and listed, the same twelve the accumulated slide holds. */
@@ -46,9 +55,18 @@ export default function ResueltasElementoSemanaPage({
     latestYear(rows.flatMap(row => row.values)) ??
     new Date().getFullYear();
 
-  const weeks = closedElementWeeks(rows, year, reportWeek(dataset, year));
+  const reported = reportWeek(dataset, year);
+  const anchor = readElementWeek(page.elementWeek);
+  const weeks = elementWeeks(rows, year, reported, anchor);
   const week = weeks[weeks.length - 1] ?? null;
   const previousWeek = weeks[weeks.length - 2] ?? null;
+  // Both anchors resolved, so each button names the week it would publish and
+  // the one that has no week to show is offered disabled instead of silently
+  // falling back to the other.
+  const anchorWeeks: Record<OficinasElementWeek, number | null> = {
+    informe: reportedElementWeeks(rows, year, reported).at(-1) ?? null,
+    anterior: closedElementWeeks(rows, year, reported).at(-1) ?? null,
+  };
 
   const weekTotal = (target: number) =>
     rows.reduce((sum, row) => sum + valueAt(row.values, year, target), 0);
@@ -91,6 +109,13 @@ export default function ResueltasElementoSemanaPage({
       topN={CHART_ROWS}
       total={total}
       compactPresentation
+      editorControls={
+        <ElementWeekSelector
+          value={anchor}
+          weeks={anchorWeeks}
+          onChange={elementWeek => onChange({ elementWeek })}
+        />
+      }
       kpis={[
         {
           label: week === null ? "Total semana" : `Total ${weekHeadline(week)}`,

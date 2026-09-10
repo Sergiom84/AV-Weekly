@@ -2,6 +2,7 @@ import { weekCoverLabel } from "../../deck/core.ts";
 import type {
   OficinasDataset,
   OficinasElementRow,
+  OficinasElementWeek,
   OficinasIncidencias,
   OficinasMasters,
   OficinasPeticiones,
@@ -411,6 +412,36 @@ export function closedElementWeeks(
     rows.flatMap(row => row.values),
     year
   ).filter(week => reportWeek === null || week < reportWeek);
+}
+
+/**
+ * The same weeks including the report week itself.
+ *
+ * The other half of the editor's week anchor: the team turns this on when they
+ * know the element columns of the export are closed, and the slide then reports
+ * the week the rest of the deck reports.
+ */
+export function reportedElementWeeks(
+  rows: { values: OficinasWeekValue[] }[],
+  year: number,
+  reportWeek: number | null
+): number[] {
+  return seriesWeeks(
+    rows.flatMap(row => row.values),
+    year
+  ).filter(week => reportWeek === null || week <= reportWeek);
+}
+
+/** Element weeks a slide may publish, by the anchor the editor stored. */
+export function elementWeeks(
+  rows: { values: OficinasWeekValue[] }[],
+  year: number,
+  reportWeek: number | null,
+  anchor: OficinasElementWeek
+): number[] {
+  return anchor === "informe"
+    ? reportedElementWeeks(rows, year, reportWeek)
+    : closedElementWeeks(rows, year, reportWeek);
 }
 
 /** Rows sorted by their year total, descending. Ties fall back to the label. */

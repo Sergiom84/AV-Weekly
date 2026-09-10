@@ -577,7 +577,25 @@ export type OficinasPageKind =
 /** Series a page reports on. Oficinas pages are not typed by series. */
 export type OficinasSeries = string;
 
-export type OficinasDeckPage = DeckPage<OficinasPageKind, OficinasSeries>;
+/**
+ * Which week a single-week element slide publishes.
+ *
+ * Sheets 5 and 10 pivot the incident listing by element, and their last column
+ * is still filling in when the template is exported: in the export of
+ * 07/09/2026 the week 36 column of sheet 10 held 52 resolutions against the 117
+ * its own weekly sheet reported for that week, while week 35 tied within five.
+ * Whether that gap is a partial export or a real reading is a business call the
+ * data cannot settle, so it is a choice and not a heuristic.
+ *
+ * - `informe`: the report week, the same one the rest of the deck publishes.
+ * - `anterior`: the last week before it, which is complete in every export.
+ */
+export type OficinasElementWeek = "informe" | "anterior";
+
+export type OficinasDeckPage = DeckPage<OficinasPageKind, OficinasSeries> & {
+  /** Week anchor of the element pivot. Absent means `anterior`. */
+  elementWeek?: OficinasElementWeek | null;
+};
 export type OficinasDeckState = DeckState<OficinasPageKind, OficinasSeries>;
 
 export interface OficinasPayload {
