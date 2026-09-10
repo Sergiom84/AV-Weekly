@@ -108,7 +108,7 @@ export default function ResueltasElementoSemanaPage({
           value: decimal(offices === 0 ? null : total / offices, 2),
         },
         {
-          label: `Peso top ${CHART_ROWS}`,
+          label: `Top ${CHART_ROWS}`,
           value: total === 0 ? "—" : percent(charted / total),
         },
       ]}
