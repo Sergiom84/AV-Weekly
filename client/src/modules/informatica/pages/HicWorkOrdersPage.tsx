@@ -15,14 +15,15 @@ import {
   PieChart,
   ResponsiveContainer,
 } from "recharts";
+import KpiRow from "@/components/deck/KpiRow";
 import {
   historicoByMonth,
   latestOf,
   monthLabel,
   publishedTotal,
-  seriesColor,
   uniqueSorted,
 } from "../aggregate";
+import { hicWorkOrderColor } from "../palette";
 import {
   HIC_RESOLVED,
   isReportedWorkOrder,
@@ -108,8 +109,16 @@ export default function HicWorkOrdersPage({
     workOrders: workOrdersOf(month),
   }));
   const allSeries: CategorySeries[] = [
-    { key: "workOrders", label: "Work Orders", color: seriesColor(0) },
-    { key: "incidencias", label: "Incidencias", color: seriesColor(1) },
+    {
+      key: "workOrders",
+      label: "Work Orders",
+      color: hicWorkOrderColor("workOrders"),
+    },
+    {
+      key: "incidencias",
+      label: "Incidencias",
+      color: hicWorkOrderColor("incidencias"),
+    },
   ];
   const hiddenRows = page.hiddenRows ?? [];
   const series = allSeries.filter(entry => !hiddenRows.includes(entry.label));
@@ -150,6 +159,22 @@ export default function HicWorkOrdersPage({
         )
       }
     >
+      <KpiRow
+        compact
+        items={[
+          {
+            label: "Work Orders",
+            value: currentWorkOrders.toLocaleString("es-ES"),
+            accent: hicWorkOrderColor("workOrders"),
+          },
+          {
+            label: "Incidencias",
+            value: currentIncidencias.toLocaleString("es-ES"),
+            accent: hicWorkOrderColor("incidencias"),
+          },
+        ]}
+      />
+
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.55fr)_minmax(0,0.45fr)] gap-[1.2cqi]">
         <section className="flex min-h-0 flex-col" aria-label="Work Orders e incidencias por mes">
           <h3 className="shrink-0 pb-[0.4cqi] font-mono text-[1.3cqi] font-medium text-muted-foreground">

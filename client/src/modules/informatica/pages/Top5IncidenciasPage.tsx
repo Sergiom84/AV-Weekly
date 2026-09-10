@@ -8,7 +8,9 @@ import {
   defaultMonthWindow,
   resolveMonthSelection,
 } from "@shared/deck/core";
-import { monthLabel, seriesColor, sumBy, topEntries, uniqueSorted } from "../aggregate";
+import KpiRow from "@/components/deck/KpiRow";
+import { monthLabel, sumBy, topEntries, uniqueSorted } from "../aggregate";
+import { top5CategoryColor } from "../palette";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface Top5IncidenciasPageProps extends InformaticaPageProps {
@@ -78,8 +80,11 @@ export default function Top5IncidenciasPage({
   const series: CategorySeries[] = top.map((entry, index) => ({
     key: entry.label,
     label: entry.label,
-    color: seriesColor(index),
+    color: top5CategoryColor(entry.label, index),
   }));
+  const latest = data[data.length - 1] as
+    | Record<string, string | number>
+    | undefined;
 
   return (
     <PageShell
@@ -107,6 +112,14 @@ export default function Top5IncidenciasPage({
         )
       }
     >
+      <KpiRow
+        compact
+        items={series.map(entry => ({
+          label: entry.label,
+          value: Number(latest?.[entry.key] ?? 0).toLocaleString("es-ES"),
+          accent: entry.color,
+        }))}
+      />
 
       <section
         className="flex min-h-0 flex-1 flex-col"

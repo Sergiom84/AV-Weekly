@@ -74,6 +74,7 @@ export default function CitasAnualPage({
         items={selectedYears.map(year => ({
           label: String(year),
           value: (totals.get(year) ?? 0).toLocaleString("es-ES"),
+          accent: yearSeriesColor(year),
         }))}
       />
 

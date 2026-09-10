@@ -4,7 +4,7 @@ import CategoryBarChart, {
 import KpiRow from "@/components/deck/KpiRow";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import { seriesColor } from "../aggregate";
+import { renoveAmbitoColor } from "../palette";
 import {
   RENOVE_AMBITOS,
   renoveMonthSeries,
@@ -17,10 +17,10 @@ interface RenoveAcumuladoPageProps extends InformaticaPageProps {
   dataset: InformaticaDataset;
 }
 
-const SERIES: CategorySeries[] = RENOVE_AMBITOS.map((ambito, index) => ({
+const SERIES: CategorySeries[] = RENOVE_AMBITOS.map(ambito => ({
   key: ambito,
   label: ambito,
-  color: seriesColor(index),
+  color: renoveAmbitoColor(ambito),
 }));
 
 /**
@@ -69,8 +69,16 @@ export default function RenoveAcumuladoPage({
         items={[
           { label: "Renovado Acumulado", value: String(totals.total) },
           { label: "Desestimados", value: String(totals.desestimados) },
-          { label: "España", value: String(totals.porAmbito["España"]) },
-          { label: "Holding", value: String(totals.porAmbito.Holding) },
+          {
+            label: "Holding",
+            value: String(totals.porAmbito.Holding),
+            accent: renoveAmbitoColor("Holding"),
+          },
+          {
+            label: "España",
+            value: String(totals.porAmbito["España"]),
+            accent: renoveAmbitoColor("España"),
+          },
           ...(charted < totals.total
             ? [{ label: "Sin fecha", value: String(totals.total - charted) }]
             : []),

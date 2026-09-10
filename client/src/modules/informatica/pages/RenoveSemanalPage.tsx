@@ -9,7 +9,8 @@ import {
   defaultWeekSelection,
   resolveWeekSelection,
 } from "@shared/deck/core";
-import { coverageEnd, monthLabel, seriesColor } from "../aggregate";
+import { coverageEnd, monthLabel } from "../aggregate";
+import { renoveAmbitoColor } from "../palette";
 import {
   RENOVE_AMBITOS,
   renoveInMonth,
@@ -18,6 +19,7 @@ import {
   renoveReportedRows,
   renoveTotals,
   renoveWeekLabel,
+  renoveWeekNumber,
   renoveWeekSeries,
   renoveWindow,
 } from "../renove";
@@ -27,10 +29,10 @@ interface RenoveSemanalPageProps extends InformaticaPageProps {
   dataset: InformaticaDataset;
 }
 
-const SERIES: CategorySeries[] = RENOVE_AMBITOS.map((ambito, index) => ({
+const SERIES: CategorySeries[] = RENOVE_AMBITOS.map(ambito => ({
   key: ambito,
   label: ambito,
-  color: seriesColor(index),
+  color: renoveAmbitoColor(ambito),
 }));
 
 /**
@@ -51,6 +53,7 @@ export default function RenoveSemanalPage({
   const rows = renoveReportedRows(dataset.renove ?? []);
   const window = renoveWindow(rows, coverageEnd(dataset));
   const week = window === null ? null : renoveWeekLabel(window.start);
+  const weekNumber = window === null ? null : renoveWeekNumber(window.start);
   const month = window === null ? null : window.start.slice(0, 7).replace("-", "/");
 
   const weekTotals = renoveTotals(renoveInWeek(rows, window));
@@ -95,20 +98,25 @@ export default function RenoveSemanalPage({
       <KpiRow
         items={[
           {
-            label: `Renovados ${week ?? ""}`.trim(),
+            label:
+              weekNumber === null
+                ? "Renovados"
+                : `Renovados semana ${weekNumber}`,
             value: String(weekTotals.total),
           },
           {
-            label: "España / Holding",
-            value: `${weekTotals.porAmbito["España"]} / ${weekTotals.porAmbito.Holding}`,
+            label: "Holding",
+            value: String(weekTotals.porAmbito.Holding),
+            accent: renoveAmbitoColor("Holding"),
+          },
+          {
+            label: "España",
+            value: String(weekTotals.porAmbito["España"]),
+            accent: renoveAmbitoColor("España"),
           },
           {
             label: `Renovados ${month === null ? "" : monthLabel(month)}`.trim(),
             value: String(monthTotals.total),
-          },
-          {
-            label: `España / Holding ${month === null ? "" : monthLabel(month)}`.trim(),
-            value: `${monthTotals.porAmbito["España"]} / ${monthTotals.porAmbito.Holding}`,
           },
           {
             label: "Pdte Usuario",

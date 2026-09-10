@@ -161,6 +161,11 @@ function isoWeek(day: string): number {
   return Math.floor(days / 7) + 1;
 }
 
+/** ISO week number of a day, for KPI copy that spells `semana 35`. */
+export function renoveWeekNumber(day: string): number {
+  return isoWeek(day);
+}
+
 /** `S07`, the axis label of the weekly chart. */
 export function renoveWeekLabel(day: string): string {
   return `S${String(isoWeek(day)).padStart(2, "0")}`;

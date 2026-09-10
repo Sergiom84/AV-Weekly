@@ -9,7 +9,9 @@ import {
   defaultMonthWindow,
   resolveMonthSelection,
 } from "@shared/deck/core";
-import { monthLabel, seriesColor, uniqueSorted } from "../aggregate";
+import KpiRow from "@/components/deck/KpiRow";
+import { monthLabel, uniqueSorted } from "../aggregate";
+import { hicMetricColor } from "../palette";
 import { HIC_ASSIGNED, HIC_RESOLVED } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -66,10 +68,10 @@ export default function HicCategoriasPage({
   const month = months[months.length - 1] ?? null;
   const hiddenRows = page.hiddenRows ?? [];
 
-  const monthlySeries: CategorySeries[] = HIC_METRICS.map((metric, index) => ({
+  const monthlySeries: CategorySeries[] = HIC_METRICS.map(metric => ({
     key: metric,
     label: metric,
-    color: seriesColor(index),
+    color: hicMetricColor(metric),
   })).filter(entry => !hiddenRows.includes(entry.label));
 
   const monthlyData = months.map(target => {
@@ -86,6 +88,12 @@ export default function HicCategoriasPage({
   const note = page.text.footnote || MIGRATION_NOTE;
 
   const suffix = month ? ` ${monthLabel(month)}` : "";
+  const latest = monthlyData[monthlyData.length - 1];
+  const kpiItems = monthlySeries.map(entry => ({
+    label: entry.label,
+    value: Number(latest?.[entry.key] ?? 0).toLocaleString("es-ES"),
+    accent: entry.color,
+  }));
 
   return (
     <PageShell
@@ -114,6 +122,8 @@ export default function HicCategoriasPage({
         )
       }
     >
+      <KpiRow compact items={kpiItems} />
+
       <section className="flex min-h-0 flex-1 flex-col" aria-label="Volumen operativo mensual">
         <h3 className="shrink-0 pb-[0.7cqi] font-mono text-[1.35cqi] font-medium text-muted-foreground">
           Volumen Operativo Mensual: Abiertas, Reasignaciones y Resueltas{suffix ? ` · hasta${suffix}` : ""}

@@ -13,8 +13,8 @@ import {
   coverageEnd,
   lastClosedMonth,
   monthLabel,
-  seriesColor,
 } from "../aggregate";
+import { imacMetricColor } from "../palette";
 import { siteLabels } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -23,8 +23,16 @@ interface ImacsChartPageProps extends InformaticaPageProps {
 }
 
 const SERIES: CategorySeries[] = [
-  { key: "solicitudes", label: "Solicitudes", color: seriesColor(0) },
-  { key: "intervenciones", label: "Intervenciones", color: seriesColor(1) },
+  {
+    key: "solicitudes",
+    label: "Solicitudes",
+    color: imacMetricColor("solicitudes"),
+  },
+  {
+    key: "intervenciones",
+    label: "Intervenciones",
+    color: imacMetricColor("intervenciones"),
+  },
 ];
 
 /** Requests and interventions by building for the latest closed month. */
@@ -128,10 +136,12 @@ export default function ImacsChartPage({
           {
             label: "Solicitudes",
             value: totalRequests.toLocaleString("es-ES"),
+            accent: imacMetricColor("solicitudes"),
           },
           {
             label: "Intervenciones",
             value: totalInterventions.toLocaleString("es-ES"),
+            accent: imacMetricColor("intervenciones"),
           },
         ]}
       />

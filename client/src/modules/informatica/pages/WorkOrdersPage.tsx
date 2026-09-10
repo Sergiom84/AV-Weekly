@@ -1,6 +1,7 @@
 import MatrixTable from "@/components/deck/MatrixTable";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { monthLabel, pivot, reportMonth } from "../aggregate";
+import { workOrderTypeLabel } from "../palette";
 import { siteLabels, workOrdersWithFallbackSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -71,10 +72,11 @@ export default function WorkOrdersPage({
       <div className="-ml-[1.5%] min-h-0 w-[103%] flex-1 overflow-hidden">
         <MatrixTable
           rowHeader="Edificio"
-          columns={matrix.columns}
+          columns={matrix.columns.map(workOrderTypeLabel)}
           rows={matrix.rows}
           totalsLabel="Total"
           variant="report"
+          nowrapHeaders
         />
       </div>
     </PageShell>

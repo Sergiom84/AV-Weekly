@@ -27,6 +27,11 @@ interface MatrixTableProps {
   fill?: boolean;
   /** Draws a stronger vertical rule after every N value columns. */
   groupEvery?: number;
+  /**
+   * Column headers stay on one line. Used when a long Spanish type name would
+   * hyphenate mid-word (`Reinstalación`) or wrap a heading that has to fit.
+   */
+  nowrapHeaders?: boolean;
 }
 
 const defaultFormat = (value: number) => (value === 0 ? "" : String(value));
@@ -67,6 +72,7 @@ export default function MatrixTable({
   variant = "plain",
   fill = true,
   groupEvery,
+  nowrapHeaders = false,
 }: MatrixTableProps) {
   const totalOfRow = (row: MatrixRow) =>
     row.values.reduce((sum, value) => sum + value, 0);
@@ -100,6 +106,19 @@ export default function MatrixTable({
   const cellPad = dense
     ? "px-[0.06cqi] py-[calc(var(--fit-scale,1)*0.18cqi)]"
     : "px-[0.12cqi] py-[calc(var(--fit-scale,1)*0.22cqi)]";
+  const headerWidthShare = Number.parseFloat(headerWidth);
+  const numericShare = 100 - headerWidthShare;
+  const headerWeights = nowrapHeaders
+    ? [
+        ...columns.map(column => Math.max(column.length, 3)),
+        ...(rowTotals ? [Math.max(totalsLabel.length, 6)] : []),
+      ]
+    : null;
+  const headerWeightTotal = headerWeights?.reduce((sum, weight) => sum + weight, 0) ?? 0;
+  const numericColWidth = (index: number) =>
+    headerWeights && headerWeightTotal > 0
+      ? `${(headerWeights[index] / headerWeightTotal) * numericShare}%`
+      : undefined;
 
   return (
     <div
@@ -117,10 +136,10 @@ export default function MatrixTable({
       >
         <colgroup>
           <col style={{ width: headerWidth }} />
-          {columns.map(column => (
-            <col key={column} />
+          {columns.map((column, index) => (
+            <col key={column} style={{ width: numericColWidth(index) }} />
           ))}
-          {rowTotals && <col />}
+          {rowTotals && <col style={{ width: numericColWidth(columns.length) }} />}
         </colgroup>
         <thead>
           <tr
@@ -141,9 +160,19 @@ export default function MatrixTable({
                 key={column}
                 scope="col"
                 title={column}
-                className={`${headerPad} ${LABEL_WRAP} text-center align-middle ${groupRule(index)} ${
+                className={`${headerPad} ${
+                  nowrapHeaders
+                    ? "overflow-hidden whitespace-nowrap [hyphens:none]"
+                    : LABEL_WRAP
+                } text-center align-middle ${groupRule(index)} ${
                   variant === "report"
-                    ? `font-semibold ${dense ? "text-[length:calc(var(--fit-scale,1)*0.78cqi)]" : ""}`
+                    ? `font-semibold ${
+                        dense
+                          ? nowrapHeaders
+                            ? "text-[length:calc(var(--fit-scale,1)*0.62cqi)]"
+                            : "text-[length:calc(var(--fit-scale,1)*0.78cqi)]"
+                          : ""
+                      }`
                     : "font-normal"
                 }`}
               >

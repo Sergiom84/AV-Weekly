@@ -14,7 +14,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { seriesColor, topTenComparison } from "../aggregate";
+import KpiRow from "@/components/deck/KpiRow";
+import { topTenComparison } from "../aggregate";
+import { topTenMonthColor } from "../palette";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface TopTenIncidenciasPageProps extends InformaticaPageProps {
@@ -236,7 +238,7 @@ function ComponentsChart({
               key={column}
               dataKey={column}
               name={column}
-              fill={seriesColor(index)}
+              fill={topTenMonthColor(column, index, columns.length)}
               radius={[0, 2, 2, 0]}
               isAnimationActive={animate}
               animationDuration={700}
@@ -270,6 +272,9 @@ export default function TopTenIncidenciasPage({
   const visibleRows = components
     ? components.rows.filter(row => !hiddenRows.includes(row.label))
     : [];
+  const monthTotals = columns.map((column, index) =>
+    visibleRows.reduce((sum, row) => sum + (row.values[index] ?? 0), 0)
+  );
 
   return (
     <PageShell
@@ -288,6 +293,15 @@ export default function TopTenIncidenciasPage({
         )
       }
     >
+      <KpiRow
+        compact
+        items={columns.map((column, index) => ({
+          label: column,
+          value: monthTotals[index].toLocaleString("es-ES"),
+          accent: topTenMonthColor(column, index, columns.length),
+        }))}
+      />
+
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.22fr)_minmax(0,0.78fr)] gap-[1.4cqi]">
         <div className="flex min-h-0 flex-col">
           {visibleRows.length > 0 && (
