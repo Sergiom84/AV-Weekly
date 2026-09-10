@@ -11,7 +11,7 @@ import {
 } from "@shared/deck/core";
 import KpiRow from "@/components/deck/KpiRow";
 import { monthLabel, uniqueSorted } from "../aggregate";
-import { hicMetricColor } from "../palette";
+import { componentSeriesColor } from "../palette";
 import { HIC_ASSIGNED, HIC_RESOLVED } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -68,11 +68,13 @@ export default function HicCategoriasPage({
   const month = months[months.length - 1] ?? null;
   const hiddenRows = page.hiddenRows ?? [];
 
-  const monthlySeries: CategorySeries[] = HIC_METRICS.map(metric => ({
+  const monthlySeries: CategorySeries[] = HIC_METRICS.filter(
+    metric => !hiddenRows.includes(metric)
+  ).map((metric, index, list) => ({
     key: metric,
     label: metric,
-    color: hicMetricColor(metric),
-  })).filter(entry => !hiddenRows.includes(entry.label));
+    color: componentSeriesColor(index, list.length),
+  }));
 
   const monthlyData = months.map(target => {
     const entry: Record<string, number | string> = { mes: monthLabel(target) };

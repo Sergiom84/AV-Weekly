@@ -163,7 +163,7 @@ describe("IMAC component manual corrections", () => {
       {
         key: "intervenciones",
         label: "Intervenciones",
-        color: "var(--informe-serie-4)",
+        color: "var(--informe-serie-1)",
       },
     ]);
   });

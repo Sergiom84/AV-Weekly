@@ -5,20 +5,24 @@ import CategoryBarChart, {
 import KpiRow, { type KpiItem } from "@/components/deck/KpiRow";
 import ValueGrid from "@/components/deck/EditorValueGrid";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
-import { oficinasColor, percent, yearColor } from "../aggregate";
+import { componentSeriesColor } from "@/lib/yearSeries";
+import { percent, yearColor } from "../aggregate";
+import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
+import PageShell, { type OficinasPageProps } from "./PageShell";
 
-/** Year labels keep the deck's year palette; other series stay positional. */
-function seriesColorForLabel(label: string, fallbackIndex: number): string {
+function seriesColorForLabel(
+  label: string,
+  index: number,
+  count: number
+): string {
   const year = Number(label);
 
   if (Number.isInteger(year) && year >= 2000 && year < 2100) {
     return yearColor(year, year);
   }
 
-  return oficinasColor(fallbackIndex);
+  return componentSeriesColor(index, count);
 }
-import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
-import PageShell, { type OficinasPageProps } from "./PageShell";
 
 export interface ShareEntry {
   /** Row label, and the override row key. Unique within the page. */
@@ -105,22 +109,17 @@ export default function CategorySharePage({
 
   // The compared period is the older one, so it opens the group: every chart of
   // the report reads left to right from the oldest reading to the current one.
-  const series: CategorySeries[] = [
-    ...(comparison
+  const series: CategorySeries[] = (
+    comparison
       ? [
-          {
-            key: "comparacion",
-            label: comparison.label,
-            color: seriesColorForLabel(comparison.label, 2),
-          },
+          { key: "comparacion", label: comparison.label },
+          { key: "valor", label: seriesLabel },
         ]
-      : []),
-    {
-      key: "valor",
-      label: seriesLabel,
-      color: seriesColorForLabel(seriesLabel, 0),
-    },
-  ];
+      : [{ key: "valor", label: seriesLabel }]
+  ).map((entry, index, list) => ({
+    ...entry,
+    color: seriesColorForLabel(entry.label, index, list.length),
+  }));
 
   const data = charted.map(cell => {
     const row: Record<string, number | string> = {

@@ -16,7 +16,7 @@ import {
   reportedWeek,
   uniqueSorted,
 } from "../aggregate";
-import { citaTypeColor } from "../palette";
+import { componentSeriesColor } from "../palette";
 import { reportedSmartTechRows, siteLabels, smartTechSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -92,10 +92,10 @@ export default function CitasSemanalPage({
   // the reference plots and what the weekly table sits next to.
   const latestMonth = latestOf(rows, row => row.mes);
   const months = latestMonth === null ? [] : monthsEndingAt(latestMonth, WINDOW);
-  const trendSeries: CategorySeries[] = columns.map(type => ({
+  const trendSeries: CategorySeries[] = columns.map((type, index) => ({
     key: type,
     label: type,
-    color: citaTypeColor(type),
+    color: componentSeriesColor(index, columns.length),
   }));
   const trend = months.map(month => {
     const entry: Record<string, string | number> = {
@@ -115,10 +115,10 @@ export default function CitasSemanalPage({
     <PageShell page={page} editing={editing} onChange={onChange}>
       <KpiRow
         items={[
-          ...columns.map(type => ({
+          ...columns.map((type, index) => ({
             label: type,
             value: String(totalOf(type)),
-            accent: citaTypeColor(type),
+            accent: componentSeriesColor(index, columns.length),
           })),
           {
             label: week === null ? "Total" : `Semana ${week}`,

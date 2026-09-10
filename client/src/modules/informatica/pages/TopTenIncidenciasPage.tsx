@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import KpiRow from "@/components/deck/KpiRow";
 import { topTenComparison } from "../aggregate";
-import { topTenMonthColor } from "../palette";
+import { componentSeriesColor } from "../palette";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface TopTenIncidenciasPageProps extends InformaticaPageProps {
@@ -238,7 +238,7 @@ function ComponentsChart({
               key={column}
               dataKey={column}
               name={column}
-              fill={topTenMonthColor(column, index, columns.length)}
+              fill={componentSeriesColor(index, columns.length)}
               radius={[0, 2, 2, 0]}
               isAnimationActive={animate}
               animationDuration={700}
@@ -298,7 +298,7 @@ export default function TopTenIncidenciasPage({
         items={columns.map((column, index) => ({
           label: column,
           value: monthTotals[index].toLocaleString("es-ES"),
-          accent: topTenMonthColor(column, index, columns.length),
+          accent: componentSeriesColor(index, columns.length),
         }))}
       />
 

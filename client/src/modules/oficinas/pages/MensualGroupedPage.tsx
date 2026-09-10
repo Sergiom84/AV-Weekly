@@ -93,6 +93,7 @@ export default function MensualGroupedPage({
             ? series.map(entry => ({
                 label: `${entry.label} ${monthLabel(last.month)}`,
                 value: metric(last, entry.key).toLocaleString("es-ES"),
+                accent: entry.color,
               }))
             : []
         }

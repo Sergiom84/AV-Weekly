@@ -7,7 +7,7 @@ import {
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { AgaDataset } from "@shared/modules/aga/types";
-import { agaColor } from "../aggregate";
+import { componentSeriesColor } from "@/lib/yearSeries";
 import {
   cellKey,
   isOverridden,
@@ -61,7 +61,7 @@ export default function GestionadasOfficePage({
   const entries = visibleFamilies.map((family, index) => ({
     label: family.label,
     key: `f${index}`,
-    color: agaColor(index),
+    color: componentSeriesColor(index, visibleFamilies.length),
     cells: months.map(month => {
       const position = availableMonths.indexOf(month);
       const key = cellKey(family.label, month);

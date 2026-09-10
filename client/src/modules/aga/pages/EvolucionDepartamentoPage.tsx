@@ -10,13 +10,13 @@ import {
 } from "@shared/deck/core";
 import type { AgaDataset } from "@shared/modules/aga/types";
 import {
-  agaColor,
   countsByLabel,
   orderedLabels,
   weekLabel,
   weekNumber,
   withoutSupport,
 } from "../aggregate";
+import { componentSeriesColor } from "@/lib/yearSeries";
 import PageShell, { type AgaPageProps } from "./PageShell";
 
 interface EvolucionDepartamentoPageProps extends AgaPageProps {
@@ -63,7 +63,7 @@ export default function EvolucionDepartamentoPage({
   const series: CategorySeries[] = visibleLabels.map((label, index) => ({
     key: `d${index}`,
     label,
-    color: agaColor(index),
+    color: componentSeriesColor(index, visibleLabels.length),
   }));
 
   const data = selectedEntries.map((week, position) => {

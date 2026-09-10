@@ -1,4 +1,4 @@
-import { oficinasColor } from "../aggregate";
+import { componentSeriesColor } from "@/lib/yearSeries";
 import MensualGroupedPage from "./MensualGroupedPage";
 import type { OficinasDataPageProps } from "./PageShell";
 
@@ -9,8 +9,8 @@ export default function MensualRecicladoresPage(props: OficinasDataPageProps) {
       {...props}
       rows={props.dataset.mensual?.recicladores ?? []}
       series={[
-        { key: "abiertas", label: "Abiertas", color: oficinasColor(0) },
-        { key: "resueltas", label: "Resueltas", color: oficinasColor(1) },
+        { key: "abiertas", label: "Abiertas", color: componentSeriesColor(0, 2) },
+        { key: "resueltas", label: "Resueltas", color: componentSeriesColor(1, 2) },
       ]}
     />
   );

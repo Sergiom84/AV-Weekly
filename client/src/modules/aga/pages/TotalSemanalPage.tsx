@@ -10,12 +10,12 @@ import {
 } from "@shared/deck/core";
 import type { AgaDataset } from "@shared/modules/aga/types";
 import {
-  agaColor,
   comparedWeeks,
   variationLabel,
   weekLabel,
   weekNumber,
 } from "../aggregate";
+import { componentSeriesColor } from "@/lib/yearSeries";
 import PageShell, { type AgaPageProps } from "./PageShell";
 
 interface TotalSemanalPageProps extends AgaPageProps {
@@ -23,7 +23,7 @@ interface TotalSemanalPageProps extends AgaPageProps {
 }
 
 const SERIES: CategorySeries[] = [
-  { key: "total", label: "Posiciones", color: agaColor(0) },
+  { key: "total", label: "Posiciones", color: componentSeriesColor(0, 1) },
 ];
 
 /**

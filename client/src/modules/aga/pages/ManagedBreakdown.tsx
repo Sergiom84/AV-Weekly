@@ -1,7 +1,7 @@
 import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
-import KpiRow from "@/components/deck/KpiRow";
+import KpiRow, { type KpiItem } from "@/components/deck/KpiRow";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import {
@@ -18,12 +18,11 @@ import {
 import type { AgaBreakdownRow, AgaDataset } from "@shared/modules/aga/types";
 import {
   COMPARED_WEEK_FOLLOWS,
-  COMPARE_COLORS,
-  agaColor,
   variationLabel,
   weekLabel,
   weekNumber,
 } from "../aggregate";
+import { componentSeriesColor } from "@/lib/yearSeries";
 import {
   cellKey,
   isOverridden,
@@ -119,8 +118,8 @@ export default function ManagedBreakdown({
 
   const colorAt = (index: number) =>
     weeks.length > 1
-      ? COMPARE_COLORS[index % COMPARE_COLORS.length]
-      : agaColor(0);
+      ? componentSeriesColor(index, weeks.length)
+      : componentSeriesColor(0, 1);
 
   const series: CategorySeries[] = weeks.map((week, index) => ({
     key: `w${index}`,
@@ -155,15 +154,17 @@ export default function ManagedBreakdown({
       : { total: totalAt(index), complete: true };
   const totalFor = (index: number) => statedAt(index).total;
 
-  const items = weeks.map((week, index) => ({
+  const weekCards: KpiItem[] = weeks.map((week, index) => ({
     label: statedAt(index).complete
       ? weekLabel(week)
       : `Subtotal ${weekLabel(week)}`,
     value: totalFor(index).toLocaleString("es-ES"),
+    accent: colorAt(index),
   }));
+  const extraCards: KpiItem[] = [];
 
   if (weeks.length > 1) {
-    items.push({
+    extraCards.push({
       label: "Variación",
       value: variationLabel(
         totalFor(weeks.length - 2),
@@ -184,7 +185,7 @@ export default function ManagedBreakdown({
     );
 
     if (top && total > 0) {
-      items.push(
+      extraCards.push(
         { label: top.label, value: top.count.toLocaleString("es-ES") },
         {
           label: statedAt(last).complete
@@ -237,7 +238,7 @@ export default function ManagedBreakdown({
         </>
       }
     >
-      <KpiRow items={items} />
+      <KpiRow items={[...weekCards, ...extraCards]} />
 
       <div className="flex min-h-0 flex-1 flex-col">
         <CategoryBarChart

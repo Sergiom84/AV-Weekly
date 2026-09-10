@@ -4,7 +4,7 @@ import CategoryBarChart, {
 import KpiRow from "@/components/deck/KpiRow";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
-import { renoveAmbitoColor } from "../palette";
+import { componentSeriesColor } from "../palette";
 import {
   RENOVE_AMBITOS,
   renoveMonthSeries,
@@ -17,10 +17,10 @@ interface RenoveAcumuladoPageProps extends InformaticaPageProps {
   dataset: InformaticaDataset;
 }
 
-const SERIES: CategorySeries[] = RENOVE_AMBITOS.map(ambito => ({
+const SERIES: CategorySeries[] = RENOVE_AMBITOS.map((ambito, index) => ({
   key: ambito,
   label: ambito,
-  color: renoveAmbitoColor(ambito),
+  color: componentSeriesColor(index, RENOVE_AMBITOS.length),
 }));
 
 /**
@@ -42,7 +42,14 @@ export default function RenoveAcumuladoPage({
   const totals = renoveTotals(rows);
   const data = renoveMonthSeries(rows);
   const hiddenRows = page.hiddenRows ?? [];
-  const series = SERIES.filter(entry => !hiddenRows.includes(entry.label));
+  const series = SERIES.filter(entry => !hiddenRows.includes(entry.label)).map(
+    (entry, index, list) => ({
+      ...entry,
+      color: componentSeriesColor(index, list.length),
+    })
+  );
+  const colorOf = (ambito: string) =>
+    series.find(entry => entry.label === ambito)?.color;
   const charted = data.reduce(
     (sum, point) => sum + point.Holding + point["España"],
     0
@@ -72,12 +79,12 @@ export default function RenoveAcumuladoPage({
           {
             label: "Holding",
             value: String(totals.porAmbito.Holding),
-            accent: renoveAmbitoColor("Holding"),
+            accent: colorOf("Holding"),
           },
           {
             label: "España",
             value: String(totals.porAmbito["España"]),
-            accent: renoveAmbitoColor("España"),
+            accent: colorOf("España"),
           },
           ...(charted < totals.total
             ? [{ label: "Sin fecha", value: String(totals.total - charted) }]

@@ -112,7 +112,7 @@ export default function WeeklySupportPage({
     {
       key: CURRENT_SERIES_KEY,
       label: currentYear ? String(currentYear) : "Total",
-      color: currentYear ? yearSeriesColor(currentYear) : "var(--informe-serie-4)",
+      color: currentYear ? yearSeriesColor(currentYear) : yearSeriesColor(2026),
     },
   ];
 

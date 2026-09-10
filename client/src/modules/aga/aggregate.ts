@@ -149,8 +149,3 @@ export function agaColor(index: number): string {
   return AGA_SERIES_COLORS[index % AGA_SERIES_COLORS.length];
 }
 
-/** Colours of the two-week comparison pages: previous muted, current dominant. */
-export const COMPARE_COLORS = [
-  "var(--informe-serie-2)",
-  "var(--informe-serie-4)",
-];

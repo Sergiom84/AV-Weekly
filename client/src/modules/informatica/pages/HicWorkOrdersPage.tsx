@@ -23,7 +23,7 @@ import {
   publishedTotal,
   uniqueSorted,
 } from "../aggregate";
-import { hicWorkOrderColor } from "../palette";
+import { componentSeriesColor } from "../palette";
 import {
   HIC_RESOLVED,
   isReportedWorkOrder,
@@ -108,29 +108,24 @@ export default function HicWorkOrdersPage({
     incidencias: incidenciasOf(month),
     workOrders: workOrdersOf(month),
   }));
-  const allSeries: CategorySeries[] = [
-    {
-      key: "workOrders",
-      label: "Work Orders",
-      color: hicWorkOrderColor("workOrders"),
-    },
-    {
-      key: "incidencias",
-      label: "Incidencias",
-      color: hicWorkOrderColor("incidencias"),
-    },
+  const allSeries = [
+    { key: "workOrders" as const, label: "Work Orders" },
+    { key: "incidencias" as const, label: "Incidencias" },
   ];
   const hiddenRows = page.hiddenRows ?? [];
-  const series = allSeries.filter(entry => !hiddenRows.includes(entry.label));
+  const series: CategorySeries[] = allSeries
+    .filter(entry => !hiddenRows.includes(entry.label))
+    .map((entry, index, list) => ({
+      ...entry,
+      color: componentSeriesColor(index, list.length),
+    }));
   const currentIncidencias = currentMonth ? incidenciasOf(currentMonth) : 0;
   const currentWorkOrders = currentMonth ? workOrdersOf(currentMonth) : 0;
-  const distribution = allSeries
-    .map(entry => ({
-      name: entry.label,
-      value: entry.key === "workOrders" ? currentWorkOrders : currentIncidencias,
-      color: entry.color,
-    }))
-    .filter(entry => !hiddenRows.includes(entry.name));
+  const distribution = series.map(entry => ({
+    name: entry.label,
+    value: entry.key === "workOrders" ? currentWorkOrders : currentIncidencias,
+    color: entry.color,
+  }));
   const donutTotal = distribution.reduce((sum, entry) => sum + entry.value, 0);
 
   return (
@@ -162,16 +157,14 @@ export default function HicWorkOrdersPage({
       <KpiRow
         compact
         items={[
-          {
-            label: "Work Orders",
-            value: currentWorkOrders.toLocaleString("es-ES"),
-            accent: hicWorkOrderColor("workOrders"),
-          },
-          {
-            label: "Incidencias",
-            value: currentIncidencias.toLocaleString("es-ES"),
-            accent: hicWorkOrderColor("incidencias"),
-          },
+          ...series.map(entry => ({
+            label: entry.label,
+            value: (entry.key === "workOrders"
+              ? currentWorkOrders
+              : currentIncidencias
+            ).toLocaleString("es-ES"),
+            accent: entry.color,
+          })),
         ]}
       />
 

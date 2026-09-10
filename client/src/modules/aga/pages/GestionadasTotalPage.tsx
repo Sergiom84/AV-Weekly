@@ -9,7 +9,8 @@ import {
   resolveWeekSelection,
 } from "@shared/deck/core";
 import type { AgaDataset } from "@shared/modules/aga/types";
-import { agaColor, variationLabel, weekLabel, weekNumber } from "../aggregate";
+import { variationLabel, weekLabel, weekNumber } from "../aggregate";
+import { componentSeriesColor } from "@/lib/yearSeries";
 import {
   TOTAL_ROW,
   cellKey,
@@ -25,7 +26,7 @@ interface GestionadasTotalPageProps extends AgaPageProps {
 }
 
 const SERIES: CategorySeries[] = [
-  { key: "total", label: "Posiciones gestionadas", color: agaColor(0) },
+  { key: "total", label: "Posiciones gestionadas", color: componentSeriesColor(0, 1) },
 ];
 
 /**
@@ -125,7 +126,7 @@ export default function GestionadasTotalPage({
               rows={[
                 {
                   label: "Gestionadas",
-                  color: agaColor(0),
+                  color: componentSeriesColor(0, 1),
                   cells: entries.map(entry => ({
                     key: entry.key,
                     value: entry.value,

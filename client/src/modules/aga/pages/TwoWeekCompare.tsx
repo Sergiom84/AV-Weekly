@@ -15,12 +15,12 @@ import type { AgaCount, AgaDataset } from "@shared/modules/aga/types";
 import {
   COMPARED_WEEK_FOLLOWS,
   countsByLabel,
-  agaColor,
   orderedLabels,
   variationLabel,
   weekLabel,
   weekNumber,
 } from "../aggregate";
+import { componentSeriesColor } from "@/lib/yearSeries";
 import PageShell, { type AgaPageProps } from "./PageShell";
 
 interface TwoWeekCompareProps extends AgaPageProps {
@@ -81,7 +81,7 @@ export default function TwoWeekCompare({
   const series: CategorySeries[] = selectedEntries.map((entry, index) => ({
     key: `w${index}`,
     label: weekLabel(entry.week, entry.reportWeek),
-    color: agaColor(index),
+    color: componentSeriesColor(index, selectedEntries.length),
   }));
 
   const data = visibleLabels.map(label => {
@@ -112,6 +112,7 @@ export default function TwoWeekCompare({
           {
             label: weekLabel(previous.week, previous.reportWeek),
             value: (previousTotal ?? 0).toLocaleString("es-ES"),
+            accent: componentSeriesColor(0, 2),
           },
         ]
       : []),
@@ -120,6 +121,7 @@ export default function TwoWeekCompare({
           {
             label: weekLabel(current.week, current.reportWeek),
             value: (currentTotal ?? 0).toLocaleString("es-ES"),
+            accent: componentSeriesColor(1, 2),
           },
         ]
       : []),

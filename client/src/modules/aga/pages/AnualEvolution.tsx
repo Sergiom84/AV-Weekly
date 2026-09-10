@@ -107,6 +107,7 @@ export default function AnualEvolution({
     value: entry.cells
       .reduce((sum, cell) => sum + (cell.value ?? 0), 0)
       .toLocaleString("es-ES"),
+    accent: yearSeriesColor(entry.year),
   }));
 
   return (

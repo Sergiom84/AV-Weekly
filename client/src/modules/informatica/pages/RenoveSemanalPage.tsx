@@ -10,7 +10,7 @@ import {
   resolveWeekSelection,
 } from "@shared/deck/core";
 import { coverageEnd, monthLabel } from "../aggregate";
-import { renoveAmbitoColor } from "../palette";
+import { componentSeriesColor } from "../palette";
 import {
   RENOVE_AMBITOS,
   renoveInMonth,
@@ -29,10 +29,10 @@ interface RenoveSemanalPageProps extends InformaticaPageProps {
   dataset: InformaticaDataset;
 }
 
-const SERIES: CategorySeries[] = RENOVE_AMBITOS.map(ambito => ({
+const SERIES: CategorySeries[] = RENOVE_AMBITOS.map((ambito, index) => ({
   key: ambito,
   label: ambito,
-  color: renoveAmbitoColor(ambito),
+  color: componentSeriesColor(index, RENOVE_AMBITOS.length),
 }));
 
 /**
@@ -65,7 +65,14 @@ export default function RenoveSemanalPage({
   const visibleSlots = new Set(resolveWeekSelection(weekSelection, weekSlots));
   const data = allData.filter((_, index) => visibleSlots.has(index + 1));
   const hiddenRows = page.hiddenRows ?? [];
-  const series = SERIES.filter(entry => !hiddenRows.includes(entry.label));
+  const series = SERIES.filter(entry => !hiddenRows.includes(entry.label)).map(
+    (entry, index, list) => ({
+      ...entry,
+      color: componentSeriesColor(index, list.length),
+    })
+  );
+  const colorOf = (ambito: string) =>
+    series.find(entry => entry.label === ambito)?.color;
 
   return (
     <PageShell
@@ -107,12 +114,12 @@ export default function RenoveSemanalPage({
           {
             label: "Holding",
             value: String(weekTotals.porAmbito.Holding),
-            accent: renoveAmbitoColor("Holding"),
+            accent: colorOf("Holding"),
           },
           {
             label: "España",
             value: String(weekTotals.porAmbito["España"]),
-            accent: renoveAmbitoColor("España"),
+            accent: colorOf("España"),
           },
           {
             label: `Renovados ${month === null ? "" : monthLabel(month)}`.trim(),

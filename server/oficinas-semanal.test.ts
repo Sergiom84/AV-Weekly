@@ -94,7 +94,7 @@ describe("SemanalPage aggregation", () => {
       {
         label: "Asignadas Semana 33 - 2026",
         value: "110",
-        accent: "var(--informe-serie-4)",
+        accent: "var(--informe-serie-1)",
       },
       { label: "Variación", value: "+10,0%" },
     ]);

@@ -14,7 +14,7 @@ import {
   lastClosedMonth,
   monthLabel,
 } from "../aggregate";
-import { imacMetricColor } from "../palette";
+import { componentSeriesColor } from "../palette";
 import { siteLabels } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -26,12 +26,12 @@ const SERIES: CategorySeries[] = [
   {
     key: "solicitudes",
     label: "Solicitudes",
-    color: imacMetricColor("solicitudes"),
+    color: componentSeriesColor(0, 2),
   },
   {
     key: "intervenciones",
     label: "Intervenciones",
-    color: imacMetricColor("intervenciones"),
+    color: componentSeriesColor(1, 2),
   },
 ];
 
@@ -136,12 +136,12 @@ export default function ImacsChartPage({
           {
             label: "Solicitudes",
             value: totalRequests.toLocaleString("es-ES"),
-            accent: imacMetricColor("solicitudes"),
+            accent: componentSeriesColor(0, 2),
           },
           {
             label: "Intervenciones",
             value: totalInterventions.toLocaleString("es-ES"),
-            accent: imacMetricColor("intervenciones"),
+            accent: componentSeriesColor(1, 2),
           },
         ]}
       />

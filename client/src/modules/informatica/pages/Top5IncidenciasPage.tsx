@@ -10,7 +10,7 @@ import {
 } from "@shared/deck/core";
 import KpiRow from "@/components/deck/KpiRow";
 import { monthLabel, sumBy, topEntries, uniqueSorted } from "../aggregate";
-import { top5CategoryColor } from "../palette";
+import { componentSeriesColor } from "../palette";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface Top5IncidenciasPageProps extends InformaticaPageProps {
@@ -80,7 +80,7 @@ export default function Top5IncidenciasPage({
   const series: CategorySeries[] = top.map((entry, index) => ({
     key: entry.label,
     label: entry.label,
-    color: top5CategoryColor(entry.label, index),
+    color: componentSeriesColor(index, top.length),
   }));
   const latest = data[data.length - 1] as
     | Record<string, string | number>

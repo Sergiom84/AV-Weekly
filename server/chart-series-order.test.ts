@@ -127,7 +127,7 @@ describe("Share chart series order", () => {
       })
     ).toEqual([
       { key: "comparacion", label: "2025", color: "var(--informe-serie-3)" },
-      { key: "valor", label: "2026", color: "var(--informe-serie-4)" },
+      { key: "valor", label: "2026", color: "var(--informe-serie-1)" },
     ]);
   });
 });
