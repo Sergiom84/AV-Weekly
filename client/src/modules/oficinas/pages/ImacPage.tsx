@@ -72,8 +72,8 @@ export default function ImacPage({
   const selectedWeeks = resolveWeekSelection(weekSelection, weeks);
 
   const COLORS: Record<string, string> = {
-    [REQUESTS_ROW]: CURRENT_YEAR_COLOR,
-    [UNITS_ROW]: PREVIOUS_YEAR_COLOR,
+    [REQUESTS_ROW]: PREVIOUS_YEAR_COLOR,
+    [UNITS_ROW]: CURRENT_YEAR_COLOR,
   };
   const seriesRows = imacSeries(page, year, weeks, [
     { key: REQUESTS_ROW, label: "Peticiones", values: requests },
@@ -125,10 +125,12 @@ export default function ImacPage({
           {
             label: `Peticiones ${weekHeadline(lastWeek)}`,
             value: (closedRequests ?? 0).toLocaleString("es-ES"),
+            accent: COLORS[REQUESTS_ROW],
           },
           {
             label: `Intervenciones ${weekHeadline(lastWeek)}`,
             value: (closedUnits ?? 0).toLocaleString("es-ES"),
+            accent: COLORS[UNITS_ROW],
           },
           {
             label: "Unidades por petición",

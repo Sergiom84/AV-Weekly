@@ -148,4 +148,23 @@ describe("IMAC component manual corrections", () => {
       expect(input.dataset).toEqual(before);
     }
   );
+
+  it("colours requests as the 2025 blue and interventions as the 2026 orange", () => {
+    const chart = propsOf<{
+      series: { key: string; label: string; color: string }[];
+    }>(components.ImacPage(fixture(10, 40)), components.WeeklyBarChart);
+
+    expect(chart.series).toEqual([
+      {
+        key: "peticiones",
+        label: "Peticiones",
+        color: "var(--informe-serie-3)",
+      },
+      {
+        key: "intervenciones",
+        label: "Intervenciones",
+        color: "var(--informe-serie-4)",
+      },
+    ]);
+  });
 });

@@ -76,7 +76,7 @@ const PAGE = {
   overrides: {},
 } as unknown as OficinasDeckPage;
 
-function seriesLabels(comparison?: { label: string; entries: unknown[] }) {
+function seriesOf(comparison?: { label: string; entries: unknown[] }) {
   const tree = components.CategorySharePage({
     page: PAGE,
     editing: false,
@@ -89,12 +89,14 @@ function seriesLabels(comparison?: { label: string; entries: unknown[] }) {
     seriesLabel: "2026",
     comparison,
   });
-  const chart = propsOf<{ series: { label: string }[] }>(
+  return propsOf<{ series: { key: string; label: string; color: string }[] }>(
     tree,
     components.CategoryBarChart
-  );
+  ).series;
+}
 
-  return chart.series.map(entry => entry.label);
+function seriesLabels(comparison?: { label: string; entries: unknown[] }) {
+  return seriesOf(comparison).map(entry => entry.label);
 }
 
 describe("Share chart series order", () => {
@@ -112,5 +114,20 @@ describe("Share chart series order", () => {
 
   it("draws the single series alone when there is nothing to compare against", () => {
     expect(seriesLabels()).toEqual(["2026"]);
+  });
+
+  it("colours each year with the deck palette, not the positional series tokens", () => {
+    expect(
+      seriesOf({
+        label: "2025",
+        entries: [
+          { label: "AMPLIACION", imported: 31 },
+          { label: "SINIESTRO", imported: 9 },
+        ],
+      })
+    ).toEqual([
+      { key: "comparacion", label: "2025", color: "var(--informe-serie-3)" },
+      { key: "valor", label: "2026", color: "var(--informe-serie-4)" },
+    ]);
   });
 });

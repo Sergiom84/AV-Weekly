@@ -331,6 +331,7 @@ export function semanalHeadlineItems(input: {
   const current = {
     label: headlineFor(input.year),
     value: input.current.toLocaleString("es-ES"),
+    accent: yearColor(input.year, input.year),
   };
 
   if (input.compareYear === null || input.previous === null) {
@@ -341,6 +342,7 @@ export function semanalHeadlineItems(input: {
     {
       label: headlineFor(input.compareYear),
       value: input.previous.toLocaleString("es-ES"),
+      accent: yearColor(input.compareYear, input.year),
     },
     current,
     {

@@ -86,8 +86,16 @@ describe("SemanalPage aggregation", () => {
         previous: 100,
       })
     ).toEqual([
-      { label: "Asignadas Semana 33 - 2025", value: "100" },
-      { label: "Asignadas Semana 33 - 2026", value: "110" },
+      {
+        label: "Asignadas Semana 33 - 2025",
+        value: "100",
+        accent: "var(--informe-serie-3)",
+      },
+      {
+        label: "Asignadas Semana 33 - 2026",
+        value: "110",
+        accent: "var(--informe-serie-4)",
+      },
       { label: "Variación", value: "+10,0%" },
     ]);
   });

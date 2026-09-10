@@ -5,7 +5,18 @@ import CategoryBarChart, {
 import KpiRow, { type KpiItem } from "@/components/deck/KpiRow";
 import ValueGrid from "@/components/deck/EditorValueGrid";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
-import { oficinasColor, percent } from "../aggregate";
+import { oficinasColor, percent, yearColor } from "../aggregate";
+
+/** Year labels keep the deck's year palette; other series stay positional. */
+function seriesColorForLabel(label: string, fallbackIndex: number): string {
+  const year = Number(label);
+
+  if (Number.isInteger(year) && year >= 2000 && year < 2100) {
+    return yearColor(year, year);
+  }
+
+  return oficinasColor(fallbackIndex);
+}
 import { cellKey, isOverridden, overriddenValue, withOverride } from "../overrides";
 import PageShell, { type OficinasPageProps } from "./PageShell";
 
@@ -96,9 +107,19 @@ export default function CategorySharePage({
   // the report reads left to right from the oldest reading to the current one.
   const series: CategorySeries[] = [
     ...(comparison
-      ? [{ key: "comparacion", label: comparison.label, color: oficinasColor(2) }]
+      ? [
+          {
+            key: "comparacion",
+            label: comparison.label,
+            color: seriesColorForLabel(comparison.label, 2),
+          },
+        ]
       : []),
-    { key: "valor", label: seriesLabel, color: oficinasColor(0) },
+    {
+      key: "valor",
+      label: seriesLabel,
+      color: seriesColorForLabel(seriesLabel, 0),
+    },
   ];
 
   const data = charted.map(cell => {

@@ -409,6 +409,7 @@ export default function DTPage({
     const current = {
       label: headlineFor(year),
       value: headline.current.toLocaleString("es-ES"),
+      accent: yearColor(year, year),
     };
 
     if (headline.previous === null || compareYear === null) {
@@ -419,6 +420,7 @@ export default function DTPage({
       {
         label: headlineFor(compareYear),
         value: headline.previous.toLocaleString("es-ES"),
+        accent: yearColor(compareYear, year),
       },
       current,
       {

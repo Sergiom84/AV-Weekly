@@ -7,7 +7,7 @@ import {
 } from "@shared/modules/oficinas/derived";
 import CategorySharePage from "./CategorySharePage";
 import type { OficinasDataPageProps } from "./PageShell";
-import { variationLabel, weekLabel } from "../aggregate";
+import { variationLabel, weekLabel, yearColor } from "../aggregate";
 
 /**
  * `1.5 Recicladores por elemento`.
@@ -69,10 +69,12 @@ export default function RecicladoresElementoPage({
               ? String(previousYear)
               : `Semana ${week} - ${previousYear}`,
           value: previous === null ? "—" : previous.toLocaleString("es-ES"),
+          accent: yearColor(previousYear, year),
         },
         {
           label: week === null ? String(year) : `Semana ${week} - ${year}`,
           value: total.toLocaleString("es-ES"),
+          accent: yearColor(year, year),
         },
         { label: "Variación", value: variationLabel(previous, total) },
       ]}

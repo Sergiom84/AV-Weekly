@@ -4,6 +4,8 @@ import EditableText from "@/components/deck/EditableText";
 export interface KpiItem {
   label: string;
   value: string;
+  /** Year or series colour, drawn as the left rule of the card. */
+  accent?: string;
 }
 
 /** Lift used by Oficinas KPI cards and reused on Informática summaries. */
@@ -77,12 +79,19 @@ export default function KpiRow({ items, compact = false }: KpiRowProps) {
         return (
           <li
             key={item.label}
-            className={`flex flex-1 flex-col justify-center rounded-md border border-border ${KPI_CARD_HOVER} ${
+            className={`relative flex flex-1 flex-col justify-center rounded-md border border-border ${KPI_CARD_HOVER} ${
               compact
                 ? "px-[0.9cqi] py-[0.55cqi] text-center"
                 : "px-[1.4cqi] py-[1cqi] text-center"
             }`}
           >
+            {item.accent ? (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 left-0 w-[0.32cqi] rounded-l-md"
+                style={{ backgroundColor: item.accent }}
+              />
+            ) : null}
             {renaming?.editing ? (
               <EditableText
                 value={renaming.labels[key] ?? ""}

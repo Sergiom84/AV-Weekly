@@ -105,4 +105,28 @@ describe("KPI card titles", () => {
     expect(html).toContain("Total S35");
     expect(html).not.toContain("<input");
   });
+
+  it("paints the year accent as a left rule on the card", () => {
+    const html = renderToStaticMarkup(
+      createElement(components.KpiRow, {
+        items: [
+          {
+            label: "Semana 35 - 2025",
+            value: "100",
+            accent: "var(--informe-serie-3)",
+          },
+          {
+            label: "Semana 35 - 2026",
+            value: "110",
+            accent: "var(--informe-serie-4)",
+          },
+          { label: "Variación", value: "+10,0%" },
+        ],
+      }) as never
+    );
+
+    expect(html).toContain("background-color:var(--informe-serie-3)");
+    expect(html).toContain("background-color:var(--informe-serie-4)");
+    expect(html.match(/background-color:var\(--informe-serie-/g)).toHaveLength(2);
+  });
 });
