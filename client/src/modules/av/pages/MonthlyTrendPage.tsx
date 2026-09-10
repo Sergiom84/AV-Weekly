@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -35,6 +36,36 @@ const AXIS_TICK = {
 const cellKey = (year: number, monthIndex: number) => `${year}:${monthIndex}`;
 
 /**
+ * Share of the width taken by the year badge, the table's first column.
+ *
+ * The chart gives the same share to its Y axis so that the twelve months of the
+ * plot span exactly the twelve columns underneath. See `useContentWidth`.
+ */
+const YEAR_COLUMN_SHARE = 0.09;
+
+/** Width of an element, tracked as the slide is resized or zoomed. */
+function useContentWidth() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const node = ref.current;
+
+    if (!node) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      setWidth(entry.contentRect.width);
+    });
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, width };
+}
+
+/**
  * Yearly trend slide: one line per year over the twelve months, with the same
  * values repeated in an editable table underneath.
  */
@@ -45,6 +76,14 @@ export default function MonthlyTrendPage({
   onChange,
 }: MonthlyTrendPageProps) {
   const animate = usePresentationAnimation();
+  const { ref: chartRef, width: chartWidth } = useContentWidth();
+
+  // The plot is laid out on the table's grid: the Y axis takes the width of the
+  // year badge and each month gets one of the twelve columns left. Half a column
+  // of padding at both ends moves the points from the edges of the plot to the
+  // middle of their column, which is where the month is written.
+  const axisWidth = Math.round(chartWidth * YEAR_COLUMN_SHARE);
+  const monthColumn = chartWidth === 0 ? 0 : (chartWidth - axisWidth) / 12;
 
   const imported = page.supportType
     ? monthly.byType[page.supportType]
@@ -130,11 +169,11 @@ export default function MonthlyTrendPage({
 
       {/* Fixed share of the 16:9 frame: a flex-1 chart collapses to 0 because the
           table below keeps its natural height. */}
-      <div className="mt-[0.6cqi] h-[46%] shrink-0">
+      <div className="mt-[0.6cqi] h-[46%] shrink-0" ref={chartRef}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={chartData}
-            margin={{ top: 8, right: 8, bottom: 0, left: 0 }}
+            margin={{ top: 8, right: 0, bottom: 0, left: 0 }}
           >
             <CartesianGrid vertical={false} stroke="var(--border)" />
             <XAxis
@@ -143,12 +182,14 @@ export default function MonthlyTrendPage({
               tickLine={false}
               tick={AXIS_TICK}
               tickMargin={6}
+              interval={0}
+              padding={{ left: monthColumn / 2, right: monthColumn / 2 }}
             />
             <YAxis
               axisLine={false}
               tickLine={false}
               tick={AXIS_TICK}
-              width={40}
+              width={axisWidth}
               domain={[0, "auto"]}
               allowDecimals={false}
             />
