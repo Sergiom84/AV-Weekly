@@ -10,13 +10,13 @@ import {
 } from "@shared/deck/core";
 import type { AgaDataset } from "@shared/modules/aga/types";
 import {
+  agaColor,
   countsByLabel,
   orderedLabels,
   weekLabel,
   weekNumber,
   withoutSupport,
 } from "../aggregate";
-import { componentSeriesColor } from "@/lib/yearSeries";
 import PageShell, { type AgaPageProps } from "./PageShell";
 
 interface EvolucionDepartamentoPageProps extends AgaPageProps {
@@ -30,6 +30,10 @@ interface EvolucionDepartamentoPageProps extends AgaPageProps {
  *
  * Stacked rather than grouped: with ten departments over ten weeks the grouped
  * variant puts a hundred hairline bars on the axis and nothing is readable.
+ *
+ * The segments are painted with the categorical ramp, not with the year tokens:
+ * a department is a category, and the four year colours left ten of the
+ * fourteen stacked in the same steel blue.
  */
 export default function EvolucionDepartamentoPage({
   page,
@@ -63,7 +67,7 @@ export default function EvolucionDepartamentoPage({
   const series: CategorySeries[] = visibleLabels.map((label, index) => ({
     key: `d${index}`,
     label,
-    color: componentSeriesColor(index, visibleLabels.length),
+    color: agaColor(index),
   }));
 
   const data = selectedEntries.map((week, position) => {

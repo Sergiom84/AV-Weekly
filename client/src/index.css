@@ -66,6 +66,30 @@
   --informe-serie-3: #35c1f1; /* Azul celeste */
   --informe-serie-4: #ef8b4c; /* Naranja */
 
+  /*
+   * Paleta categórica del informe: una serie por categoría, no por año.
+   *
+   * Las cuatro series del informe alcanzan para una comparativa de años, pero
+   * la evolución por departamento apila catorce categorías en una sola columna
+   * y con cuatro tonos las lee todas como el mismo azul. Las cinco primeras
+   * reutilizan los tokens corporativos para que el gráfico siga reconociéndose;
+   * el resto alterna tono y luminosidad para separar segmentos contiguos.
+   */
+  --informe-cat-1: var(--informe-serie-1);
+  --informe-cat-2: var(--informe-serie-4);
+  --informe-cat-3: var(--informe-serie-3);
+  --informe-cat-4: var(--informe-serie-2);
+  --informe-cat-5: #6b7280; /* Gris */
+  --informe-cat-6: #2f9e6f; /* Verde */
+  --informe-cat-7: #b0413e; /* Rojo teja */
+  --informe-cat-8: #8a6bbf; /* Morado */
+  --informe-cat-9: #d9a441; /* Ámbar */
+  --informe-cat-10: #2a7f8f; /* Turquesa */
+  --informe-cat-11: #a8577f; /* Ciruela */
+  --informe-cat-12: #4f7a28; /* Oliva */
+  --informe-cat-13: #7b8794; /* Gris azulado */
+  --informe-cat-14: #c2622d; /* Terracota */
+
   --radius: 0.65rem;
   --background: #ffffff; /* Blanco puro */
   --foreground: #1f2937; /* Gris oscuro */
@@ -125,6 +149,18 @@
   --informe-serie-2: #5b93cf;
   --informe-serie-3: #35c1f1;
   --informe-serie-4: #ef8b4c;
+
+  /* Misma paleta categórica, aclarada para leerse sobre fondo oscuro */
+  --informe-cat-5: #9ca3af;
+  --informe-cat-6: #4cc492;
+  --informe-cat-7: #e07470;
+  --informe-cat-8: #b49ce0;
+  --informe-cat-9: #ecc06a;
+  --informe-cat-10: #4fb3c4;
+  --informe-cat-11: #d086ab;
+  --informe-cat-12: #86b45a;
+  --informe-cat-13: #a6b2bf;
+  --informe-cat-14: #e0894f;
 
   --sidebar: #1e293b;
   --sidebar-foreground: #e5e7eb;

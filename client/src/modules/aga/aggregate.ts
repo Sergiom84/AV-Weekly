@@ -136,24 +136,18 @@ export function orderedLabels(breakdowns: AgaCount[][]): string[] {
 }
 
 /**
- * Palette of the AGA charts.
+ * Palette of the AGA category charts.
  *
- * The department pages carry up to ten series, more than the four the AV deck
- * needs, so the two token families already defined in `index.css` are chained
- * and ordered to alternate hue and lightness — adjacent stack segments have to
- * be told apart at a glance.
+ * A department is a category, not a year, so it cannot be painted with the four
+ * year tokens: the weekly evolution stacks fourteen of them in one column and
+ * four tones read as a single blue block. `--informe-cat-*` is the categorical
+ * ramp defined in `index.css`, ordered to alternate hue and lightness because
+ * adjacent stack segments have to be told apart at a glance.
  */
-export const AGA_SERIES_COLORS = [
-  "var(--informe-serie-1)",
-  "var(--informe-serie-4)",
-  "var(--informe-serie-3)",
-  "var(--chart-5)",
-  "var(--informe-serie-2)",
-  "var(--chart-3)",
-  "var(--chart-2)",
-  "var(--chart-4)",
-  "var(--chart-1)",
-];
+export const AGA_SERIES_COLORS = Array.from(
+  { length: 14 },
+  (_, index) => `var(--informe-cat-${index + 1})`
+);
 
 export function agaColor(index: number): string {
   return AGA_SERIES_COLORS[index % AGA_SERIES_COLORS.length];
