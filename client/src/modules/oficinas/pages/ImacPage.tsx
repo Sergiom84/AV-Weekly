@@ -20,6 +20,7 @@ import {
   PREVIOUS_YEAR_COLOR,
   decimal,
   semanalMediaWeeks,
+  weekHeadline,
   weekLabel,
 } from "../aggregate";
 import { imacSeries } from "../imacSeries";
@@ -122,11 +123,11 @@ export default function ImacPage({
       ? []
       : [
           {
-            label: `Peticiones ${weekLabel(lastWeek)}`,
+            label: `Peticiones ${weekHeadline(lastWeek)}`,
             value: (closedRequests ?? 0).toLocaleString("es-ES"),
           },
           {
-            label: `Intervenciones ${weekLabel(lastWeek)}`,
+            label: `Intervenciones ${weekHeadline(lastWeek)}`,
             value: (closedUnits ?? 0).toLocaleString("es-ES"),
           },
           {

@@ -10,6 +10,7 @@ import {
   disambiguate,
   percent,
   variationLabel,
+  weekHeadline,
   weekLabel,
 } from "../aggregate";
 import CategorySharePage from "./CategorySharePage";
@@ -92,14 +93,14 @@ export default function ResueltasElementoSemanaPage({
       compactPresentation
       kpis={[
         {
-          label: week === null ? "Total semana" : `Total ${weekLabel(week)}`,
+          label: week === null ? "Total semana" : `Total ${weekHeadline(week)}`,
           value: total.toLocaleString("es-ES"),
         },
         {
           label:
             previousWeek === null
               ? "Variación semanal"
-              : `Variación vs ${weekLabel(previousWeek)}`,
+              : `Variación vs ${weekHeadline(previousWeek)}`,
           value: variationLabel(previousTotal, week === null ? null : total),
         },
         {

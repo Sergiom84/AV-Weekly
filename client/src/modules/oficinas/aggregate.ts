@@ -24,6 +24,17 @@ export function weekLabel(week: number): string {
   return `S${week}`;
 }
 
+/**
+ * Headline form of a week: `Semana 33`.
+ *
+ * A KPI card is read on its own, away from the axis it summarises, so it spells
+ * the week out. `weekLabel` stays the short form for chart axes and table
+ * columns, where the row of headers is what gives `S33` its meaning.
+ */
+export function weekHeadline(week: number): string {
+  return `Semana ${week}`;
+}
+
 /** `2026-08` renders as `Ago 26`, the monthly form the AGA Office page uses. */
 export function monthLabel(month: string): string {
   const index = Number(month.slice(5, 7));
@@ -280,12 +291,14 @@ export function semanalHeadlineItems(input: {
   compareYear: number | null;
   previous: number | null;
 }): { label: string; value: string }[] {
-  if (input.headlineLabel === undefined || input.lastWeek === null) {
+  const { headlineLabel, lastWeek } = input;
+
+  if (headlineLabel === undefined || lastWeek === null) {
     return [];
   }
 
   const headlineFor = (labelYear: number) =>
-    `${input.headlineLabel} S${input.lastWeek} - ${labelYear}`;
+    `${headlineLabel} ${weekHeadline(lastWeek)} - ${labelYear}`;
   const current = {
     label: headlineFor(input.year),
     value: input.current.toLocaleString("es-ES"),

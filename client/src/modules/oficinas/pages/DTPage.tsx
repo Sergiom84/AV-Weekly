@@ -29,6 +29,7 @@ import {
   PREVIOUS_YEAR_COLOR,
   decimal,
   variationLabel,
+  weekHeadline,
   weekLabel,
   yearColor,
 } from "../aggregate";
@@ -404,7 +405,7 @@ export default function DTPage({
     const headlineFor = (labelYear: number) =>
       weekYearHeadline
         ? `Semana ${headline.week} - ${labelYear}`
-        : `${metricLabel} S${headline.week} - ${labelYear}`;
+        : `${metricLabel} ${weekHeadline(headline.week)} - ${labelYear}`;
     const current = {
       label: headlineFor(year),
       value: headline.current.toLocaleString("es-ES"),

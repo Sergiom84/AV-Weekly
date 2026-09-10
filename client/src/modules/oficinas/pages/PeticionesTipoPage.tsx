@@ -5,7 +5,7 @@ import {
 } from "@shared/modules/oficinas/derived";
 import CategorySharePage from "./CategorySharePage";
 import type { OficinasDataPageProps } from "./PageShell";
-import { variationLabel, weekLabel } from "../aggregate";
+import { variationLabel, weekHeadline, weekLabel } from "../aggregate";
 import { previousTypeEntries } from "../peticionesTipoComparison";
 
 /**
@@ -74,12 +74,12 @@ export default function PeticionesTipoPage({
               // Compared year first, then the current one, matching the rest of
               // the 1.3 block.
               {
-                label: `Peticiones ${weekLabel(week)} - ${previousYear}`,
+                label: `Peticiones ${weekHeadline(week)} - ${previousYear}`,
                 value:
                   previousTotal === null ? "—" : previousTotal.toLocaleString("es-ES"),
               },
               {
-                label: `Peticiones ${weekLabel(week)} - ${year}`,
+                label: `Peticiones ${weekHeadline(week)} - ${year}`,
                 value: total.toLocaleString("es-ES"),
               },
               { label: "Variación", value: variationLabel(previousTotal, total) },
