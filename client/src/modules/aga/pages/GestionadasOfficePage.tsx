@@ -33,6 +33,22 @@ function monthLabel(month: string): string {
 }
 
 /**
+ * Axis form of a month: `Ago`, and `Ene 26` where the year turns.
+ *
+ * Repeating the year on all twelve ticks doubles the width of every label and
+ * the axis answers by dropping ticks — it was dropping the month being
+ * reported. The year is stated once, on January, which is where it changes; the
+ * first month on show also carries it, or a window that opens in February would
+ * never say which year it charts.
+ */
+function axisMonthLabel(month: string, first: boolean): string {
+  const index = Number(month.slice(5, 7));
+  const name = MONTH_LABELS[index - 1] ?? month;
+
+  return index === 1 || first ? `${name} ${month.slice(2, 4)}` : name;
+}
+
+/**
  * `2.8 Office`: one line per licence family over the reported months.
  *
  * A month with no value for a family is drawn as a gap — see `SeriesLineChart`.
@@ -82,7 +98,7 @@ export default function GestionadasOfficePage({
 
   const data = months.map((month, position) => {
     const row: Record<string, number | string | null> = {
-      mes: monthLabel(month),
+      mes: axisMonthLabel(month, position === 0),
     };
 
     for (const entry of entries) {

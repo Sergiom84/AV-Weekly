@@ -28,6 +28,42 @@ interface SeriesLineChartProps {
 // leaves the axis unreadable in dark mode. Set the token explicitly.
 const AXIS_TICK = { fill: "var(--muted-foreground)", className: "text-[1.1cqi]" };
 
+interface CategoryTickProps {
+  x?: number;
+  y?: number;
+  payload?: { value?: unknown };
+}
+
+/**
+ * Axis tick that stacks a two-word category, `Ene 26`, on two lines.
+ *
+ * Every tick is printed rather than thinned out, so the widest label sets the
+ * spacing the axis needs. A month that carries its year is twice as wide as its
+ * neighbours and collides with them; stacked, it costs the same width as `Ene`
+ * and still says which year the series turns on.
+ */
+function CategoryTick({ x, y, payload }: CategoryTickProps) {
+  const [name, qualifier] = String(payload?.value ?? "").split(" ");
+
+  return (
+    <text
+      x={x}
+      y={y}
+      dy={10}
+      textAnchor="middle"
+      fill={AXIS_TICK.fill}
+      className={AXIS_TICK.className}
+    >
+      <tspan x={x}>{name}</tspan>
+      {qualifier === undefined ? null : (
+        <tspan x={x} dy="1.1em">
+          {qualifier}
+        </tspan>
+      )}
+    </text>
+  );
+}
+
 /**
  * Multi-series line chart of the AGA deck: the Office families over the months
  * and the annual series over the twelve months of each year.
@@ -73,10 +109,15 @@ export default function SeriesLineChart({
               it is the one that must not be cut. */}
           <LineChart data={data} margin={{ top: 12, right: 18, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--border)" />
+            {/* Every category is printed. Left to fit them itself, Recharts
+                drops whichever ticks it decides do not fit, and the month it
+                dropped on the Office slide was the one being reported. */}
             <XAxis
               dataKey={categoryKey}
+              height={34}
+              interval={0}
               stroke="var(--border)"
-              tick={AXIS_TICK}
+              tick={<CategoryTick />}
               tickLine={false}
               tickMargin={6}
             />
