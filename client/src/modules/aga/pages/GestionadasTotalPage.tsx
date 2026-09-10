@@ -87,12 +87,16 @@ export default function GestionadasTotalPage({
   const previous = entries[entries.length - 2] ?? null;
   const current = entries[entries.length - 1] ?? null;
 
+  // The two weeks are told apart by colour, the compared one in the 2025 cyan
+  // and the current one in the 2026 navy, which is the pairing every compared
+  // slide of the deck already uses.
   const items = [
     ...(previous
       ? [
           {
             label: weekHeadline(previous.week),
             value: (previous.value ?? 0).toLocaleString("es-ES"),
+            accent: componentSeriesColor(0, 2),
           },
         ]
       : []),
@@ -101,6 +105,7 @@ export default function GestionadasTotalPage({
           {
             label: weekHeadline(current.week),
             value: (current.value ?? 0).toLocaleString("es-ES"),
+            accent: componentSeriesColor(1, 2),
           },
         ]
       : []),

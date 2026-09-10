@@ -62,12 +62,15 @@ export default function TotalSemanalPage({
       total: week.total,
     }));
 
+  // Compared week in the 2025 cyan, current one in the 2026 navy, the pairing
+  // the compared slides of the deck already use.
   const items = [
     ...(previous
       ? [
           {
             label: weekHeadline(previous.week, previous.reportWeek),
             value: previous.total.toLocaleString("es-ES"),
+            accent: componentSeriesColor(0, 2),
           },
         ]
       : []),
@@ -76,6 +79,7 @@ export default function TotalSemanalPage({
           {
             label: weekHeadline(current.week, current.reportWeek),
             value: current.total.toLocaleString("es-ES"),
+            accent: componentSeriesColor(1, 2),
           },
         ]
       : []),
