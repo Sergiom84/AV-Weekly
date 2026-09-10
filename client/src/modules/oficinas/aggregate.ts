@@ -62,6 +62,24 @@ export function percent(share: number): string {
   return `${Math.round(share * 100)}%`;
 }
 
+/**
+ * Share with decimals, e.g. `0,8 %`, as the Informática survey table prints it.
+ *
+ * Separate from `percent` because rounding to whole units there is deliberate:
+ * a distribution that puts one answer out of a hundred and twenty on a score
+ * would read as `0%` and look like an empty row.
+ */
+export function sharePercent(share: number, digits = 1): string {
+  if (!Number.isFinite(share)) {
+    return "";
+  }
+
+  return `${(share * 100).toLocaleString("es-ES", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })} %`;
+}
+
 /** Signed variation between two figures, e.g. `+5,0%`. */
 export function variationLabel(
   previous: number | null,
