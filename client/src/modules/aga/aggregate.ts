@@ -3,7 +3,7 @@ import type {
   AgaDataset,
   AgaWeekAggregate,
 } from "@shared/modules/aga/types";
-import { agaWeekLabel } from "@shared/modules/aga/calendar";
+import { agaWeekHeadline, agaWeekLabel } from "@shared/modules/aga/calendar";
 import { agaReportingPeriod } from "@shared/modules/aga/calendar";
 import { COMPARED_WEEK_WINDOW } from "@shared/deck/core";
 
@@ -36,6 +36,16 @@ export const EXCLUDED_DEPARTMENT = "Soporte Técnico";
  */
 export function weekLabel(date: string, reportWeek?: number | null): string {
   return agaWeekLabel(date, reportWeek);
+}
+
+/**
+ * Long form of the same week, `Semana 33`, for the KPI cards.
+ *
+ * A card is read away from the axis that gives `S33` its meaning, so it spells
+ * the week out. See `agaWeekHeadline`.
+ */
+export function weekHeadline(date: string, reportWeek?: number | null): string {
+  return agaWeekHeadline(date, reportWeek);
 }
 
 /** Numeric AGA reporting week used by the common week-range selector. */

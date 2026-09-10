@@ -9,7 +9,12 @@ import {
   resolveWeekSelection,
 } from "@shared/deck/core";
 import type { AgaDataset } from "@shared/modules/aga/types";
-import { variationLabel, weekLabel, weekNumber } from "../aggregate";
+import {
+  variationLabel,
+  weekHeadline,
+  weekLabel,
+  weekNumber,
+} from "../aggregate";
 import { componentSeriesColor } from "@/lib/yearSeries";
 import {
   TOTAL_ROW,
@@ -86,7 +91,7 @@ export default function GestionadasTotalPage({
     ...(previous
       ? [
           {
-            label: weekLabel(previous.week),
+            label: weekHeadline(previous.week),
             value: (previous.value ?? 0).toLocaleString("es-ES"),
           },
         ]
@@ -94,7 +99,7 @@ export default function GestionadasTotalPage({
     ...(current
       ? [
           {
-            label: weekLabel(current.week),
+            label: weekHeadline(current.week),
             value: (current.value ?? 0).toLocaleString("es-ES"),
           },
         ]

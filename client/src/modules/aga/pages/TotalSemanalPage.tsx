@@ -12,6 +12,7 @@ import type { AgaDataset } from "@shared/modules/aga/types";
 import {
   comparedWeeks,
   variationLabel,
+  weekHeadline,
   weekLabel,
   weekNumber,
 } from "../aggregate";
@@ -65,7 +66,7 @@ export default function TotalSemanalPage({
     ...(previous
       ? [
           {
-            label: weekLabel(previous.week, previous.reportWeek),
+            label: weekHeadline(previous.week, previous.reportWeek),
             value: previous.total.toLocaleString("es-ES"),
           },
         ]
@@ -73,7 +74,7 @@ export default function TotalSemanalPage({
     ...(current
       ? [
           {
-            label: weekLabel(current.week, current.reportWeek),
+            label: weekHeadline(current.week, current.reportWeek),
             value: current.total.toLocaleString("es-ES"),
           },
         ]

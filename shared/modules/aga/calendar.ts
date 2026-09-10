@@ -71,11 +71,28 @@ export function agaReportingPeriod(
   return { week, year: calendar.year, start: isoDate(start), end: isoDate(end) };
 }
 
-/** Short chart/KPI label, with a fallback for legacy or malformed data. */
+/** Short chart axis label, with a fallback for legacy or malformed data. */
 export function agaWeekLabel(extractionDate: string, explicitWeek?: number | null): string {
   const period = agaReportingPeriod(extractionDate, explicitWeek);
 
   return period ? `S${period.week}` : extractionDate;
+}
+
+/**
+ * Headline form of a week: `Semana 33`.
+ *
+ * A KPI card is read on its own, away from the axis it summarises, so it spells
+ * the week out. `agaWeekLabel` stays the short form for chart axes, legends and
+ * table columns, where the row of headers is what gives `S33` its meaning. The
+ * Oficinas module draws the same distinction — see its `weekHeadline`.
+ */
+export function agaWeekHeadline(
+  extractionDate: string,
+  explicitWeek?: number | null
+): string {
+  const period = agaReportingPeriod(extractionDate, explicitWeek);
+
+  return period ? `Semana ${period.week}` : extractionDate;
 }
 
 /**

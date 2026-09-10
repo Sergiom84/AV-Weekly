@@ -19,6 +19,7 @@ import type { AgaBreakdownRow, AgaDataset } from "@shared/modules/aga/types";
 import {
   COMPARED_WEEK_FOLLOWS,
   variationLabel,
+  weekHeadline,
   weekLabel,
   weekNumber,
 } from "../aggregate";
@@ -156,8 +157,8 @@ export default function ManagedBreakdown({
 
   const weekCards: KpiItem[] = weeks.map((week, index) => ({
     label: statedAt(index).complete
-      ? weekLabel(week)
-      : `Subtotal ${weekLabel(week)}`,
+      ? weekHeadline(week)
+      : `Subtotal ${weekHeadline(week)}`,
     value: totalFor(index).toLocaleString("es-ES"),
     accent: colorAt(index),
   }));

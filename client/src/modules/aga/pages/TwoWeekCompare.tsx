@@ -17,6 +17,7 @@ import {
   countsByLabel,
   orderedLabels,
   variationLabel,
+  weekHeadline,
   weekLabel,
   weekNumber,
 } from "../aggregate";
@@ -110,7 +111,7 @@ export default function TwoWeekCompare({
     ...(previous
       ? [
           {
-            label: weekLabel(previous.week, previous.reportWeek),
+            label: weekHeadline(previous.week, previous.reportWeek),
             value: (previousTotal ?? 0).toLocaleString("es-ES"),
             accent: componentSeriesColor(0, 2),
           },
@@ -119,7 +120,7 @@ export default function TwoWeekCompare({
     ...(current
       ? [
           {
-            label: weekLabel(current.week, current.reportWeek),
+            label: weekHeadline(current.week, current.reportWeek),
             value: (currentTotal ?? 0).toLocaleString("es-ES"),
             accent: componentSeriesColor(1, 2),
           },
