@@ -267,9 +267,15 @@ export function semanalCurrentAt(
     : rows.reduce((sum, row) => sum + valueAt(row.values, year, week), 0);
 }
 
+/**
+ * Weekly headline cards: the compared year first, the current one after it, and
+ * the variation last. Both cards name their year, so the pair reads on its own
+ * instead of leaving the second card as a bare number.
+ */
 export function semanalHeadlineItems(input: {
   headlineLabel: string | undefined;
   lastWeek: number | null;
+  year: number;
   current: number;
   compareYear: number | null;
   previous: number | null;
@@ -278,29 +284,28 @@ export function semanalHeadlineItems(input: {
     return [];
   }
 
-  const items = [
-    {
-      label: `${input.headlineLabel} S${input.lastWeek}`,
-      value: input.current.toLocaleString("es-ES"),
-    },
-  ];
+  const headlineFor = (labelYear: number) =>
+    `${input.headlineLabel} S${input.lastWeek} - ${labelYear}`;
+  const current = {
+    label: headlineFor(input.year),
+    value: input.current.toLocaleString("es-ES"),
+  };
 
   if (input.compareYear === null || input.previous === null) {
-    return items;
+    return [current];
   }
 
-  items.push(
+  return [
     {
-      label: String(input.compareYear),
+      label: headlineFor(input.compareYear),
       value: input.previous.toLocaleString("es-ES"),
     },
+    current,
     {
       label: "Variación",
       value: variationLabel(input.previous, input.current),
-    }
-  );
-
-  return items;
+    },
+  ];
 }
 
 export interface SemanalTableEntry {

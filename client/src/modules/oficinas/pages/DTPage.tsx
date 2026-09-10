@@ -393,31 +393,39 @@ export default function DTPage({
           )
         : yearOnYear(rows, previousRows, year, lastWeek);
 
-  const items =
-    headline === null
-      ? []
-      : [
-          {
-            label: weekYearHeadline
-              ? `Semana ${headline.week} - ${year}`
-              : `${metricLabel} S${headline.week}`,
-            value: headline.current.toLocaleString("es-ES"),
-          },
-          ...(headline.previous === null || compareYear === null
-            ? []
-            : [
-                {
-                  label: weekYearHeadline
-                    ? `Semana ${headline.week} - ${compareYear}`
-                    : `${compareYear}`,
-                  value: headline.previous.toLocaleString("es-ES"),
-                },
-                {
-                  label: "Variación",
-                  value: variationLabel(headline.previous, headline.current),
-                },
-              ]),
-        ];
+  // The pair reads left to right as the compared year first and the current one
+  // after it, the same order as the chart, and both cards name their year so
+  // neither depends on the other to be read.
+  const items = (() => {
+    if (headline === null) {
+      return [];
+    }
+
+    const headlineFor = (labelYear: number) =>
+      weekYearHeadline
+        ? `Semana ${headline.week} - ${labelYear}`
+        : `${metricLabel} S${headline.week} - ${labelYear}`;
+    const current = {
+      label: headlineFor(year),
+      value: headline.current.toLocaleString("es-ES"),
+    };
+
+    if (headline.previous === null || compareYear === null) {
+      return [current];
+    }
+
+    return [
+      {
+        label: headlineFor(compareYear),
+        value: headline.previous.toLocaleString("es-ES"),
+      },
+      current,
+      {
+        label: "Variación",
+        value: variationLabel(headline.previous, headline.current),
+      },
+    ];
+  })();
 
   return (
     <PageShell

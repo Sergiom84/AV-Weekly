@@ -189,6 +189,7 @@ export default function SemanalPage({
   const headlineItems = semanalHeadlineItems({
     headlineLabel,
     lastWeek,
+    year,
     current: lastWeek === null ? 0 : currentAt(lastWeek),
     compareYear,
     previous,

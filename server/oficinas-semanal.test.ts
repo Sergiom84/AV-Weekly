@@ -80,13 +80,14 @@ describe("SemanalPage aggregation", () => {
       semanalHeadlineItems({
         headlineLabel: "Asignadas",
         lastWeek: 33,
+        year: 2026,
         current: 110,
         compareYear: 2025,
         previous: 100,
       })
     ).toEqual([
-      { label: "Asignadas S33", value: "110" },
-      { label: "2025", value: "100" },
+      { label: "Asignadas S33 - 2025", value: "100" },
+      { label: "Asignadas S33 - 2026", value: "110" },
       { label: "Variación", value: "+10,0%" },
     ]);
   });

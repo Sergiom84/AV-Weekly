@@ -71,11 +71,16 @@ export default function PeticionesTipoPage({
         week === null
           ? []
           : [
-              { label: `${year} ${weekLabel(week)}`, value: total.toLocaleString("es-ES") },
+              // Compared year first, then the current one, matching the rest of
+              // the 1.3 block.
               {
-                label: `${previousYear} ${weekLabel(week)}`,
+                label: `Peticiones ${weekLabel(week)} - ${previousYear}`,
                 value:
                   previousTotal === null ? "—" : previousTotal.toLocaleString("es-ES"),
+              },
+              {
+                label: `Peticiones ${weekLabel(week)} - ${year}`,
+                value: total.toLocaleString("es-ES"),
               },
               { label: "Variación", value: variationLabel(previousTotal, total) },
             ]
