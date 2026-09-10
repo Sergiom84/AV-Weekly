@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -45,23 +46,68 @@ interface CategoryTickProps {
 function CategoryTick({ x, y, payload }: CategoryTickProps) {
   const [name, qualifier] = String(payload?.value ?? "").split(" ");
 
+  // Offsets in `em`, never in pixels: the tick font is sized in `cqi` and grows
+  // with the slide, so a fixed pixel step pushed the second line off the plot
+  // and the year came out clipped at presentation size.
   return (
     <text
       x={x}
       y={y}
-      dy={10}
+      dy="0.8em"
       textAnchor="middle"
       fill={AXIS_TICK.fill}
       className={AXIS_TICK.className}
     >
       <tspan x={x}>{name}</tspan>
       {qualifier === undefined ? null : (
-        <tspan x={x} dy="1.1em">
+        <tspan x={x} dy="1.15em">
           {qualifier}
         </tspan>
       )}
     </text>
   );
+}
+
+/** Axis height before the tick font has been measured. */
+const FALLBACK_AXIS_HEIGHT = 34;
+
+/**
+ * Pixels Recharts leaves between the axis line and the top of a tick: its tick
+ * size plus `tickMargin`, both in absolute units and both unaffected by the
+ * font.
+ */
+const TICK_GAP = 14;
+
+/**
+ * Height the two-line ticks need, from the font actually rendered.
+ *
+ * The ticks are sized in `cqi`, so their font grows with the slide while a
+ * hardcoded axis height does not: at presentation size the year sat outside the
+ * chart surface and was cut off. Measuring a probe styled like the ticks keeps
+ * the axis as tall as its own text at any size.
+ */
+function useTickFontSize() {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [fontSize, setFontSize] = useState(0);
+
+  useEffect(() => {
+    const node = ref.current;
+
+    if (!node) return;
+
+    const measure = () =>
+      setFontSize(Number.parseFloat(getComputedStyle(node).fontSize) || 0);
+
+    measure();
+
+    const observer = new ResizeObserver(measure);
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, fontSize };
 }
 
 /**
@@ -80,12 +126,30 @@ export default function SeriesLineChart({
   data,
 }: SeriesLineChartProps) {
   const animate = usePresentationAnimation();
+  const { ref: tickProbe, fontSize: tickFontSize } = useTickFontSize();
   const yAxisWidth = metricAxisWidth(
     data.flatMap(entry => series.map(item => entry[item.key]))
   );
+  // Two lines of text and the descender of the second, under the fixed gap
+  // Recharts leaves between the axis line and its ticks. The factor is over the
+  // 2.3 the two lines strictly need: the measurement lands a frame after a
+  // resize, so the axis is sized while the probe may still hold the previous
+  // font, and slack is cheaper than a year clipped for that frame.
+  const xAxisHeight =
+    tickFontSize === 0
+      ? FALLBACK_AXIS_HEIGHT
+      : Math.ceil(tickFontSize * 2.8) + TICK_GAP;
 
   return (
     <>
+      <span
+        aria-hidden="true"
+        ref={tickProbe}
+        className={`pointer-events-none absolute opacity-0 ${AXIS_TICK.className}`}
+      >
+        0
+      </span>
+
       <ul className="flex shrink-0 flex-wrap items-center justify-center gap-x-[2cqi] gap-y-[0.4cqi] pb-[0.5cqi] font-mono text-[1.2cqi] text-muted-foreground">
         {series.map((entry) => (
           <li key={entry.key} className="flex items-center gap-[0.6cqi]">
@@ -114,7 +178,7 @@ export default function SeriesLineChart({
                 dropped on the Office slide was the one being reported. */}
             <XAxis
               dataKey={categoryKey}
-              height={34}
+              height={xAxisHeight}
               interval={0}
               stroke="var(--border)"
               tick={<CategoryTick />}
