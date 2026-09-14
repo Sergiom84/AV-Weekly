@@ -81,6 +81,7 @@ import {
 import {
   mergeAgaManagedSection,
   parseAgaGestionadoWorkbook,
+  restrictAgaManagedToWeek,
 } from "./parseAgaGestionado.js";
 import { AGA_BUILDING_LOCATIONS } from "./agaLocationMap.js";
 import {
@@ -1487,19 +1488,26 @@ router.post("/api/aga/upload/texto", upload.single("file"), async (req, res) => 
       ? restrictAgaOfficeToWindow(parsed.office, parsed.report.meta.week ?? "")
       : null;
 
+    // `Fecha Gestionado` closes in the past: a week later than the reported one
+    // is a mangled date, and the six compared slides of section 2 follow the
+    // newest week they can see. Restricting the merge and not just the upload
+    // also takes out the ghosts an earlier import already stored.
+    const managed = parsed.managed
+      ? restrictAgaManagedToWeek(
+          mergeAgaManagedSection(existing.managed, {
+            ...parsed.managed,
+            source: stamp,
+          }),
+          parsed.report.meta.week ?? ""
+        )
+      : null;
+
     const stored: AgaDataset = {
       ...existing,
       ...(parsed.weeks.length > 0
         ? { weeks: mergeAgaWeeks(existing.weeks ?? [], parsed.weeks) }
         : {}),
-      ...(parsed.managed
-        ? {
-            managed: mergeAgaManagedSection(existing.managed, {
-              ...parsed.managed,
-              source: stamp,
-            }),
-          }
-        : {}),
+      ...(managed ? { managed: managed.managed } : {}),
       ...(office && office.office.months.length > 0
         ? { office: mergeAgaOfficeSection(existing.office, { ...office.office, source: stamp }) }
         : {}),
@@ -1529,6 +1537,7 @@ router.post("/api/aga/upload/texto", upload.single("file"), async (req, res) => 
         ...parsed.report,
         file: stamp.sourceFile,
         officeIgnoredMonths: office?.ignoredMonths ?? [],
+        managedIgnoredWeeks: managed?.ignoredWeeks ?? [],
       },
     });
   } catch (err) {

@@ -475,6 +475,73 @@ function mergeTotals<T extends { week: string }>(
   return Array.from(totals.values()).sort((a, b) => a.week.localeCompare(b.week));
 }
 
+/**
+ * Drops the weeks the report cannot be reporting on yet.
+ *
+ * `Fecha Gestionado` is a closing date, so a week later than the one the export
+ * is named after does not exist: it is a date that came back wrong, which is
+ * what the `dd/mm` swap fixed in commit fa37544 produced for months. A ghost
+ * week is not a cosmetic defect on the charts — slides 2.2 to 2.7 compare the
+ * last two weeks they can see, so two ghosts three weeks ahead of the report
+ * silently retitle all six slides and their variations.
+ *
+ * Applied to the merged section and not only to the incoming one, so a ghost
+ * already stored leaves on the next import instead of needing the removal
+ * script. An empty week (a text with no `[GESTIONADAS]` block) restricts
+ * nothing, on the same principle as `restrictAgaOfficeToWindow`.
+ */
+export function restrictAgaManagedToWeek(
+  managed: AgaManagedSection,
+  week: string
+): { managed: AgaManagedSection; ignoredWeeks: string[] } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) {
+    return { managed, ignoredWeeks: [] };
+  }
+
+  const keeps = (entry: { week: string }) => entry.week <= week;
+  const ignoredWeeks = Array.from(
+    new Set([
+      ...managed.weeklyTotals.map((entry) => entry.week),
+      ...(managed.locationTotals ?? []).map((entry) => entry.week),
+      ...[
+        ...managed.byDepartment,
+        ...managed.byProduct,
+        ...managed.byLocation,
+        ...managed.byDepartmentProduct.flatMap((entry) => entry.rows),
+      ].flatMap((row) => row.counts.map((count) => count.week)),
+    ])
+  )
+    .filter((entry) => entry > week)
+    .sort();
+
+  if (ignoredWeeks.length === 0) {
+    return { managed, ignoredWeeks: [] };
+  }
+
+  const restrictRows = (rows: AgaBreakdownRow[]): AgaBreakdownRow[] =>
+    rows
+      .map((row) => ({ ...row, counts: row.counts.filter(keeps) }))
+      .filter((row) => row.counts.length > 0);
+
+  return {
+    managed: {
+      ...managed,
+      weeklyTotals: managed.weeklyTotals.filter(keeps),
+      byDepartment: restrictRows(managed.byDepartment),
+      byProduct: restrictRows(managed.byProduct),
+      byLocation: restrictRows(managed.byLocation),
+      ...(managed.locationTotals
+        ? { locationTotals: managed.locationTotals.filter(keeps) }
+        : {}),
+      byDepartmentProduct: managed.byDepartmentProduct.map((entry) => ({
+        ...entry,
+        rows: restrictRows(entry.rows),
+      })),
+    },
+    ignoredWeeks,
+  };
+}
+
 /** Replaces only the weeks carried by the incoming managed export. */
 export function mergeAgaManagedSection(
   existing: AgaManagedSection | undefined,

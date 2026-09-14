@@ -5,6 +5,7 @@ import {
   managedWeekKey,
   mergeAgaManagedSection,
   parseAgaGestionadoWorkbook,
+  restrictAgaManagedToWeek,
 } from "./parseAgaGestionado.ts";
 import { BuildingLocationResolver } from "./buildingLocationMaster.ts";
 
@@ -166,5 +167,96 @@ describe("merge del export Gestionado AGA", () => {
       { week: "2026-08-10", count: 50 },
       { week: "2026-08-17", count: 6 },
     ]);
+  });
+});
+
+describe("semanas posteriores al informe", () => {
+  /** Section with one reported week and one dated after the report. */
+  function withGhostWeek(): AgaManagedSection {
+    return {
+      weeklyTotals: [
+        { week: "2026-09-14", total: 110 },
+        { week: "2026-10-12", total: 227 },
+      ],
+      byDepartment: [
+        {
+          label: "GAM",
+          counts: [
+            { week: "2026-09-14", count: 30 },
+            { week: "2026-10-12", count: 49 },
+          ],
+        },
+        { label: "FANTASMA", counts: [{ week: "2026-10-12", count: 4 }] },
+      ],
+      byProduct: [{ label: "PORTATIL", counts: [{ week: "2026-10-12", count: 7 }] }],
+      byLocation: [{ label: "Sede", counts: [{ week: "2026-09-14", count: 57 }] }],
+      locationTotals: [
+        { week: "2026-09-14", total: 110 },
+        { week: "2026-10-12", total: 227 },
+      ],
+      byDepartmentProduct: [
+        {
+          department: "GAM",
+          rows: [
+            {
+              label: "PORTATIL",
+              counts: [
+                { week: "2026-09-14", count: 3 },
+                { week: "2026-10-12", count: 7 },
+              ],
+            },
+          ],
+        },
+      ],
+      source: { sourceFile: "AGA 2026-09-14.txt", uploadedAt: "2026-09-14T06:20:11.919Z" },
+    };
+  }
+
+  it("saca de todas las series las semanas posteriores a la informada", () => {
+    const { managed, ignoredWeeks } = restrictAgaManagedToWeek(
+      withGhostWeek(),
+      "2026-09-14"
+    );
+
+    expect(ignoredWeeks).toEqual(["2026-10-12"]);
+    expect(managed.weeklyTotals).toEqual([{ week: "2026-09-14", total: 110 }]);
+    expect(managed.locationTotals).toEqual([{ week: "2026-09-14", total: 110 }]);
+    expect(countAt(managed.byDepartment, "GAM", "2026-09-14")).toBe(30);
+    expect(countAt(managed.byDepartment, "GAM", "2026-10-12")).toBeUndefined();
+    // A row that only existed in the discarded week leaves with it instead of
+    // staying as an empty category on slides 2.2 to 2.7.
+    expect(managed.byDepartment.some((row) => row.label === "FANTASMA")).toBe(false);
+    expect(managed.byProduct).toEqual([]);
+    expect(
+      managed.byDepartmentProduct
+        .find((entry) => entry.department === "GAM")
+        ?.rows.find((row) => row.label === "PORTATIL")?.counts
+    ).toEqual([{ week: "2026-09-14", count: 3 }]);
+  });
+
+  it("limpia también lo que dejó escrito una importación anterior", () => {
+    const merged = mergeAgaManagedSection(withGhostWeek(), {
+      weeklyTotals: [{ week: "2026-09-14", total: 759 }],
+      byDepartment: [{ label: "GAM", counts: [{ week: "2026-09-14", count: 31 }] }],
+      byProduct: [],
+      byLocation: [],
+      locationTotals: [{ week: "2026-09-14", total: 759 }],
+      byDepartmentProduct: [],
+    });
+
+    expect(merged.weeklyTotals.map((entry) => entry.week)).toEqual([
+      "2026-09-14",
+      "2026-10-12",
+    ]);
+    expect(
+      restrictAgaManagedToWeek(merged, "2026-09-14").managed.weeklyTotals
+    ).toEqual([{ week: "2026-09-14", total: 759 }]);
+  });
+
+  it("no toca nada sin una semana informada válida", () => {
+    const section = withGhostWeek();
+
+    expect(restrictAgaManagedToWeek(section, "").managed).toBe(section);
+    expect(restrictAgaManagedToWeek(section, "2026-11-16").ignoredWeeks).toEqual([]);
   });
 });

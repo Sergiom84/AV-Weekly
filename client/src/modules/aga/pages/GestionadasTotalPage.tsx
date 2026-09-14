@@ -74,18 +74,26 @@ export default function GestionadasTotalPage({
     };
   });
 
-  const data = entries
-    .filter(entry => {
-      const number = weekNumber(entry.week);
-      return number !== null && selectedWeeks.has(number);
-    })
-    .map(entry => ({
-      semana: weekLabel(entry.week),
-      total: entry.value ?? 0,
-    }));
+  // A week whose correction cleared the figure leaves the slide instead of
+  // charting a zero: an empty cell means "this week has no reading", and a bar
+  // at zero next to eight hundred positions reads as a week where the service
+  // closed nothing.
+  const charted = entries.filter(entry => {
+    const number = weekNumber(entry.week);
+    return number !== null && selectedWeeks.has(number) && entry.value !== null;
+  });
 
-  const previous = entries[entries.length - 2] ?? null;
-  const current = entries[entries.length - 1] ?? null;
+  const data = charted.map(entry => ({
+    semana: weekLabel(entry.week),
+    total: entry.value ?? 0,
+  }));
+
+  // The headline pair is read from the charted weeks, not from every week the
+  // import carries: the cards used to name the last two weeks of the dataset
+  // even when the slide was showing a range that excluded them, so a stray week
+  // dated ahead of the report retitled the slide and its variation.
+  const previous = charted[charted.length - 2] ?? null;
+  const current = charted[charted.length - 1] ?? null;
 
   // The two weeks are told apart by colour, the compared one in the 2025 cyan
   // and the current one in the 2026 navy, which is the pairing every compared
