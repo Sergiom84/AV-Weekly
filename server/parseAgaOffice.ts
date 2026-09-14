@@ -252,21 +252,41 @@ export function agaOfficeRepairedMonth(value: unknown): string | null {
   return parts && parts.day <= 12 ? isoMonth(parts.year, parts.day) : null;
 }
 
-/** An explicit weekly cut disambiguates a wholly converted date column. */
+/**
+ * An explicit weekly cut disambiguates a converted date column.
+ *
+ * Only cells that carry a date take part in the decision: blanks and text that
+ * is not a date are reported apart and skipped when the rows are read.
+ *
+ * A date outside the reported window is not by itself a problem. The export
+ * lists licences whose management started earlier, and `restrictAgaOfficeToWindow`
+ * drops those months before anything is stored. What must not happen is reading
+ * a column the wrong way round, so the cut only decides between two readings:
+ * the whole column is repaired when every dated cell falls outside the window
+ * and exchanging day and month brings all of them inside it; the import stops
+ * when the outside cells could be read either way and the column gives no way
+ * to tell. Anything else is an ordinary column with history in it.
+ */
 export function agaOfficeDatesNeedRepair(values: unknown[], extraction?: string): boolean {
   if (agaOfficeDatesAreSwapped(values)) return true;
   if (!extraction || values.length === 0) return false;
   const writable = new Set(agaOfficeWritableMonths(extraction));
-  const originalValid = values.every((value) => writable.has(agaOfficeMonth(value) ?? ""));
-  if (originalValid) return false;
-  const allOutside = values.every((value) => !writable.has(agaOfficeMonth(value) ?? ""));
-  const swappedValid = values.every((value) => {
+  const dated = values.filter((value) => agaOfficeMonth(value));
+  if (dated.length === 0) return false;
+  const outside = dated.filter((value) => !writable.has(agaOfficeMonth(value)!));
+  if (outside.length === 0) return false;
+  const readsAsWindow = (value: unknown): boolean => {
     const parts = dateCellParts(value);
     if (!parts || parts.day > 12) return false;
     const repaired = `${parts.year}-${String(parts.day).padStart(2, "0")}-${String(parts.month).padStart(2, "0")}`;
     return writable.has(agaOfficeRepairedMonth(value) ?? "") && repaired <= extraction;
-  });
-  if (allOutside && swappedValid) return true;
+  };
+  const explained = outside.filter(readsAsWindow);
+  if (outside.length === dated.length && explained.length === outside.length) return true;
+  // A month later than the reported one cannot be management already started,
+  // and no exchange of day and month explains it either.
+  const impossible = dated.some((value) => agaOfficeMonth(value)! > extraction.slice(0, 7));
+  if (explained.length === 0 && !impossible) return false;
   throw new Error("Fechas Office ambiguas o fuera del periodo informado. Revisa el formato día/mes y la fecha de extracción antes de importar.");
 }
 

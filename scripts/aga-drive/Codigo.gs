@@ -944,20 +944,27 @@ function readOffice(entry, extraction) {
     if (!intercambiadas && limite) {
       var dates = sheet.grid.slice(sheet.headerRow + 1).filter(function(row) {
         return text(row[requestAt]) !== '';
-      }).map(function(row) { return row[dateAt]; });
+      }).map(function(row) { return row[dateAt]; }).filter(function(cell) { return !!toIsoMonth(cell); });
       var inWindow = function(month) { return month === limite || month === anterior; };
       if (dates.length > 0 && !dates.every(function(cell) { return inWindow(toIsoMonth(cell)); })) {
-        var allOutside = dates.every(function(cell) { return !inWindow(toIsoMonth(cell)); });
-        var allRepaired = dates.every(function(cell) {
+        // A date before the window is management started earlier: the export
+        // carries it and the window filter drops it later. Only a column that
+        // reads as the window once day and month are exchanged is repaired, and
+        // only a column that could be read either way stops the import.
+        var fuera = dates.filter(function(cell) { return !inWindow(toIsoMonth(cell)); });
+        var leeComoVentana = function(cell) {
           var parts = celdaDeFecha(cell);
           if (!parts || parts[2] > 12) return false;
           var repaired = parts[0] + '-' + pad2(parts[2]) + '-' + pad2(parts[1]);
           return inWindow(mesIntercambiado(cell)) && repaired <= extraction;
-        });
-        if (!allOutside || !allRepaired) {
+        };
+        var explicadas = fuera.filter(leeComoVentana);
+        var imposible = dates.some(function(cell) { return toIsoMonth(cell) > limite; });
+        if (fuera.length === dates.length && explicadas.length === fuera.length) {
+          intercambiadas = true;
+        } else if (explicadas.length > 0 || imposible) {
           throw new Error('Fechas Office ambiguas o fuera del periodo informado. Revisa día/mes y la fecha de extracción.');
         }
-        intercambiadas = true;
       }
     }
 
