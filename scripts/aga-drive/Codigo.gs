@@ -1001,7 +1001,13 @@ function readOffice(entry, extraction) {
     }
   }
 
-  if (fueraDeVentana > 0) throw new Error('Office contiene posiciones fuera del periodo informado. Revisa las fechas antes de generar el TXT.');
+  // Una gestión iniciada antes de la ventana es histórico: se descarta y se
+  // informa en el resumen, igual que hace el servidor. Solo se aborta cuando no
+  // queda ninguna posición dentro del periodo, porque entonces el TXT no tendría
+  // Office que escribir y el mes informado quedaría en blanco.
+  if (rows === 0 && fueraDeVentana > 0) {
+    throw new Error('Office no contiene ninguna posición del periodo informado. Revisa las fechas antes de generar el TXT.');
+  }
 
   return {
     rows: rows,

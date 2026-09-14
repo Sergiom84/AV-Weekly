@@ -55,11 +55,19 @@ describe("AGA September cut regressions", () => {
     expect(result.office.months).toEqual(["2026-07", "2026-09"]);
     expect(result.report).toMatchObject({ imported: 2, skipped: 1, repairedDates: 0 });
   });
-  it("Apps Script names the out-of-window positions instead of calling the column ambiguous", () => {
+  it("Apps Script discards the out-of-window positions and keeps the cut", () => {
+    const script = drive();
+    const result = script.readOffice(entry(script, OFFICE_HEADERS, [
+      ["a",1,"MICROSOFT WORD",date(9,14)], ["b",1,"MICROSOFT WORD",date(7,20)],
+    ]), "2026-09-14");
+    expect(result).toMatchObject({ rows: 1, corregidas: 0, fueraDeVentana: 1 });
+    expect(result.counts["2026-09"]["MICROSOFT WORD"]).toBe(1);
+  });
+  it("Apps Script still refuses an Office export with nothing inside the window", () => {
     const script = drive();
     expect(() => script.readOffice(entry(script, OFFICE_HEADERS, [
-      ["a",1,"MICROSOFT WORD",date(9,14)], ["b",1,"MICROSOFT WORD",date(7,20)],
-    ]), "2026-09-14")).toThrow(/fuera del periodo informado. Revisa las fechas/);
+      ["a",1,"MICROSOFT WORD",date(7,20)],
+    ]), "2026-09-14")).toThrow(/ninguna posición del periodo informado/);
   });
   it("rejects a repaired date after the explicit cut", () => {
     expect(() => parseAgaOfficeWorkbook(book(OFFICE_HEADERS, [["a",1,"MICROSOFT WORD",date(12)]]), "2026-09-07")).toThrow(/ambiguas/);
