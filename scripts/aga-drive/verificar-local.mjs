@@ -190,7 +190,9 @@ const mappings = {
 };
 
 const gps = entries.gps ? script.readGps(entries.gps, extractionArg, mappings) : null;
-const managed = entries.managed ? script.readManaged(entries.managed, mappings) : null;
+const managed = entries.managed
+  ? script.readManaged(entries.managed, mappings, extractionArg)
+  : null;
 const office = entries.office ? script.readOffice(entries.office, extractionArg) : null;
 
 const lines = [script.TEXTO_HEADER];
@@ -254,7 +256,7 @@ process.stdout.write(`${lines.join("\n")}\n`);
 const diagnostics = [
   gps ? `gps: ${gps.rows} filas (${entries.gps.file})` : "gps: no encontrado",
   managed
-    ? `gestionado: ${managed.rows} filas, ${managed.skipped} sin fecha (${entries.managed.file})`
+    ? `gestionado: ${managed.rows} filas a ${extractionArg} (${entries.managed.file})`
     : "gestionado: no encontrado",
   office
     ? `office: ${office.rows} filas, ${office.skipped} descartadas (${entries.office.file})`

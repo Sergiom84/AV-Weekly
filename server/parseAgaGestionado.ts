@@ -317,14 +317,37 @@ function departmentProductRows(
   }));
 }
 
+function assertExtractionMonday(value: string | null | undefined): string | null {
+  const extraction = String(value ?? "").trim();
+
+  if (!extraction) {
+    return null;
+  }
+
+  const date = new Date(`${extraction}T00:00:00Z`);
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(extraction) ||
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== extraction ||
+    date.getUTCDay() !== 1
+  ) {
+    throw new Error("La fecha de extracción debe ser un lunes válido (AAAA-MM-DD).");
+  }
+
+  return extraction;
+}
+
 export function parseAgaGestionadoWorkbook(
   workbook: XLSX.WorkBook,
-  buildingLocations: Record<string, string> | BuildingLocationMatcher = {}
+  buildingLocations: Record<string, string> | BuildingLocationMatcher = {},
+  extraction?: string | null
 ): AgaGestionadoParseResult {
   if (!workbook || !Array.isArray(workbook.SheetNames)) {
     throw new Error("El fichero enviado no es un libro de Excel válido.");
   }
 
+  const cut = assertExtractionMonday(extraction);
   const resolveLocation = locationResolver(buildingLocations);
   const builders = new Map<string, WeekBuilder>();
   const unknownLocations = new Map<string, number>();
@@ -364,9 +387,10 @@ export function parseAgaGestionadoWorkbook(
     const productAt = columns.get(normalize("Denominación Producto"))!;
     const dateAt = columns.get(normalize("Fecha Gestionado"))!;
     const buildingAt = columns.get(normalize("Denominación Edificio"))!;
-    const dates = grid.slice(1).map((row) => row[dateAt]);
-    const swapped =
-      agaOfficeDatesAreSwapped(dates) || agaManagedDatesAreSwapped(dates);
+    const dates = cut ? [] : grid.slice(1).map((row) => row[dateAt]);
+    const swapped = cut
+      ? false
+      : agaOfficeDatesAreSwapped(dates) || agaManagedDatesAreSwapped(dates);
     const sheetWeeks = new Set<string>();
     let rows = 0;
     let skipped = 0;
@@ -382,9 +406,13 @@ export function parseAgaGestionadoWorkbook(
         continue;
       }
 
-      const parts = swapped ? dateCellParts(row[dateAt]) : null;
+      // A weekly export is the week named in Configuración. Fecha Gestionado
+      // is not the week key: the colleague uploads one week, and Drive/Sheets
+      // convert that column. Without a cut, the swap heuristic remains as a
+      // fallback for a raw workbook opened outside the Drive flow.
+      const parts = cut || !swapped ? null : dateCellParts(row[dateAt]);
       const date = parts ? isoDate(parts.year, parts.day, parts.month) : row[dateAt];
-      const week = managedWeekKey(date);
+      const week = cut ?? managedWeekKey(date);
 
       if (!week) {
         skipped += 1;

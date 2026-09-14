@@ -1392,15 +1392,27 @@ router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res
     }
 
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const extraction =
+      typeof req.body?.extraction === "string" ? req.body.extraction.trim() : undefined;
     const buildings = await readBuildingLocationMaster();
     const parsed = parseAgaGestionadoWorkbook(
       workbook,
-      buildings.masterRows > 0 ? buildings : AGA_BUILDING_LOCATIONS
+      buildings.masterRows > 0 ? buildings : AGA_BUILDING_LOCATIONS,
+      extraction
     );
 
     if (parsed.managed.weeklyTotals.length === 0) {
       return res.status(400).json({
         error: "El export Gestionado no contiene posiciones con una fecha reconocible.",
+        report: parsed.report,
+      });
+    }
+
+    if (!extraction && parsed.managed.weeklyTotals.length !== 1) {
+      return res.status(400).json({
+        error:
+          "El export Gestionado no es de una sola semana. Indica el lunes de extracción " +
+          "(AAAA-MM-DD) para no partir el fichero ni sobrescribir el histórico.",
         report: parsed.report,
       });
     }
@@ -1425,9 +1437,14 @@ router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res
       sourceFile: req.file.originalname,
       uploadedAt: new Date().toISOString(),
     };
+    const cut = extraction || parsed.managed.weeklyTotals[0]?.week || "";
+    const merged = restrictAgaManagedToWeek(
+      mergeAgaManagedSection(existing.managed, { ...selected, source: stamp }),
+      cut
+    );
     const stored: AgaDataset = {
       ...existing,
-      managed: mergeAgaManagedSection(existing.managed, { ...selected, source: stamp }),
+      managed: merged.managed,
     };
 
     await client.execute({
@@ -1442,7 +1459,11 @@ router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res
 
     res.json({
       ...(await buildAgaPayload()),
-      report: { ...parsed.report, file: req.file.originalname },
+      report: {
+        ...parsed.report,
+        file: req.file.originalname,
+        managedIgnoredWeeks: merged.ignoredWeeks,
+      },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al procesar Gestionado ZPT025";

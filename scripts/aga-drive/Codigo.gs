@@ -757,8 +757,22 @@ function readGps(entry, extractionDate, mappings) {
   };
 }
 
-/** The Gestionado ZPT025 export: positions closed in the week. */
-function readManaged(entry, mappings) {
+/**
+ * The Gestionado ZPT025 export: positions closed in the reported week.
+ *
+ * The colleague uploads one week and only one week. `Fecha Gestionado` is not
+ * the week key: Drive and Sheets routinely convert that column, and a Monday
+ * whose closing days are all 1–12 leaves no text cell to detect the swap.
+ * Every counted row is stamped with the extraction Monday from Configuración.
+ * Office is the file that still has to interpret dates.
+ */
+function readManaged(entry, mappings, extraction) {
+  if (!extraction) {
+    throw new Error(
+      'Gestionado necesita la fecha de extracción (el lunes de Configuración).'
+    );
+  }
+
   var totals = {};
   var departments = {};
   var products = {};
@@ -768,30 +782,19 @@ function readManaged(entry, mappings) {
   var unmappedDepartments = {};
   var rows = 0;
   var skipped = 0;
+  var week = extraction;
 
   for (var sheetIndex = 0; sheetIndex < entry.sheets.length; sheetIndex += 1) {
     var sheet = entry.sheets[sheetIndex];
     var requestAt = sheet.columns[normalize('Nº Petición de sistemas')];
     var departmentAt = sheet.columns[normalize('Denominación Departamento')];
     var productAt = sheet.columns[normalize('Denominación Producto')];
-    var dateAt = sheet.columns[normalize('Fecha Gestionado')];
     var buildingAt = sheet.columns[normalize('Denominación Edificio')];
-    var intercambiadas = columnaConFechasIntercambiadas(sheet, dateAt) ||
-      columnaDeUnaSemanaIntercambiada(sheet, dateAt);
 
     for (var index = sheet.headerRow + 1; index < sheet.grid.length; index += 1) {
       var row = sheet.grid[index];
 
       if (text(row[requestAt]) === '') continue;
-
-      var parts = intercambiadas ? celdaDeFecha(row[dateAt]) : null;
-      var fecha = parts ? parts[0] + '-' + pad2(parts[2]) + '-' + pad2(parts[1]) : row[dateAt];
-      var week = managedWeekKey(fecha);
-
-      if (!week) {
-        skipped += 1;
-        continue;
-      }
 
       var rawDepartment = text(row[departmentAt]);
       var department = departmentLabel(rawDepartment, mappings.departments.labels);
@@ -828,6 +831,7 @@ function readManaged(entry, mappings) {
   return {
     rows: rows,
     skipped: skipped,
+    datesIgnored: true,
     totals: totals,
     departments: departments,
     products: products,
@@ -1259,7 +1263,8 @@ function extraccionEscrita() {
  *
  * - An extraction date typed without the apostrophe. Sheets reads `07/09/2026`
  *   as month first and stores 9 July; every week of section 1 is then filed
- *   under S28 and the deck charts a second one.
+ *   under S28 and the deck charts a second one. Gestionado is stamped with
+ *   that same Monday, so a converted extraction date misfiles section 2 too.
  * - A building missing from the mapping tab. Its positions carry no location,
  *   so slide 2.4 draws bars that add up to less than the week.
  *
@@ -1335,7 +1340,7 @@ function procesarSemana() {
     }
 
     var gps = found.gps ? readGps(found.gps, config.extraction, mappings) : null;
-    var managed = found.managed ? readManaged(found.managed, mappings) : null;
+    var managed = found.managed ? readManaged(found.managed, mappings, config.extraction) : null;
     var office = found.office ? readOffice(found.office, config.extraction) : null;
     var annual = readAnnual();
 
@@ -1517,6 +1522,14 @@ function writeCheck(gps, managed, office, config) {
     rows = rows.concat(checkRows('Gestionadas · total', managed.totals));
     rows = rows.concat(checkBreakdown('Gestionadas · departamento', managed.departments));
     rows = rows.concat(checkBreakdown('Gestionadas · ubicación', managed.locations));
+    if (managed.datesIgnored) {
+      rows.push([
+        'Gestionadas · fechas',
+        config.extraction,
+        'Fecha Gestionado ignorada; todo a la extracción',
+        managed.rows
+      ]);
+    }
   }
 
   if (office) {
@@ -1708,7 +1721,8 @@ function writeInstructions() {
     ['2. En la pestaña "' + TAB.config + '", pon la fecha de extracción (el lunes en que se sacan),'],
     ['   con apóstrofo delante para que no se convierta:   \'2026-09-07'],
     ['3. Menú "⭐ AGA Weekly" > "Procesar semana". Sale un recordatorio antes de empezar.'],
-    ['4. Revisa la pestaña "' + TAB.check + '": son los mismos totales de las tablas dinámicas.'],
+    ['4. Revisa la pestaña "' + TAB.check + '": el Gestionado es el fichero entero (una semana),'],
+    ['   sin cortar por Fecha Gestionado. Office sí mira fechas (columna de inicio de gestión).'],
     ['5. Copia la pestaña "' + TAB.plano + '" entera y súbela en AV Weekly > AGA > Texto plano (Drive).'],
     ['   También puedes usar "Guardar PLANO como .txt en la carpeta" y subir el fichero.'],
     [''],

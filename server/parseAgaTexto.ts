@@ -25,6 +25,9 @@ import type {
  * - Labels arrive final. The Drive script owns the mapping tables, so nothing
  *   is renamed, merged or title-cased on the way in. A label this parser did
  *   not expect is a new department, not a defect.
+ * - `[GESTIONADAS*]` is the extraction Monday in `semana`. Extra week keys in
+ *   those sections are folded onto it, so a converted date column cannot
+ *   overwrite unrelated history.
  * - Every section is optional and every section is merged, never replaced
  *   wholesale: a text that only carries `[SEMANAS]` must not erase the managed
  *   or Office sections the dataset already holds.
@@ -177,6 +180,39 @@ function addCount(target: WeekLabelCounts, week: string, label: string, count: n
   byLabel.set(label, (byLabel.get(label) ?? 0) + count);
 }
 
+/**
+ * A weekly Gestionado text is one week: the extraction Monday in the preamble.
+ *
+ * A converted `Fecha Gestionado` column used to write five week keys into the
+ * same file. Folding them onto `semana` recovers the colleague's row count
+ * instead of overwriting unrelated history and retitling slides 2.2–2.7.
+ */
+function stampTotalsToWeek(source: Map<string, number>, week: string): Map<string, number> {
+  if (source.size === 0) {
+    return source;
+  }
+
+  let total = 0;
+
+  for (const count of Array.from(source.values())) {
+    total += count;
+  }
+
+  return new Map([[week, total]]);
+}
+
+function stampCountsToWeek(source: WeekLabelCounts, week: string): WeekLabelCounts {
+  const stamped: WeekLabelCounts = new Map();
+
+  for (const byLabel of Array.from(source.values())) {
+    for (const [label, count] of Array.from(byLabel)) {
+      addCount(stamped, week, label, count);
+    }
+  }
+
+  return stamped;
+}
+
 /** Counts of one week, descending by count and then alphabetically. */
 function toCounts(counts: Map<string, number> | undefined): AgaCount[] {
   return Array.from(counts ?? [], ([label, count]) => ({ label, count })).sort(
@@ -239,13 +275,13 @@ export function parseAgaTexto(input: string): AgaTextoParseResult {
   const weekDepartmentsRaw: WeekLabelCounts = new Map();
   const weekProjects: WeekLabelCounts = new Map();
 
-  const managedTotals = new Map<string, number>();
-  const managedDepartments: WeekLabelCounts = new Map();
-  const managedProducts: WeekLabelCounts = new Map();
-  const managedLocations: WeekLabelCounts = new Map();
-  const managedLocationTotals = new Map<string, number>();
+  let managedTotals = new Map<string, number>();
+  let managedDepartments: WeekLabelCounts = new Map();
+  let managedProducts: WeekLabelCounts = new Map();
+  let managedLocations: WeekLabelCounts = new Map();
+  let managedLocationTotals = new Map<string, number>();
   /** `department -> week -> product -> count`, kept in insertion order. */
-  const managedDepartmentProducts = new Map<string, WeekLabelCounts>();
+  let managedDepartmentProducts = new Map<string, WeekLabelCounts>();
 
   /** `family -> month -> count`. */
   const officeFamilies = new Map<string, Map<string, number>>();
@@ -475,6 +511,20 @@ export function parseAgaTexto(input: string): AgaTextoParseResult {
     });
 
   /* Section 2 ------------------------------------------------------------- */
+
+  if (meta.week) {
+    managedTotals = stampTotalsToWeek(managedTotals, meta.week);
+    managedDepartments = stampCountsToWeek(managedDepartments, meta.week);
+    managedProducts = stampCountsToWeek(managedProducts, meta.week);
+    managedLocations = stampCountsToWeek(managedLocations, meta.week);
+    managedLocationTotals = stampTotalsToWeek(managedLocationTotals, meta.week);
+    managedDepartmentProducts = new Map(
+      Array.from(managedDepartmentProducts, ([department, counts]) => [
+        department,
+        stampCountsToWeek(counts, meta.week!),
+      ])
+    );
+  }
 
   const hasManaged =
     managedTotals.size > 0 ||

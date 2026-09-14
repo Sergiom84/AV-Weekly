@@ -145,6 +145,30 @@ describe("parseAgaTexto", () => {
     expect(managed?.weeklyTotals).toEqual([{ week: "2026-08-17", total: 1480 }]);
   });
 
+  it("folds a split Gestionado block onto the extraction Monday", () => {
+    const { managed } = parseAgaTexto(
+      [
+        "AGA TEXTO PLANO v1",
+        "semana\t2026-09-14",
+        "[GESTIONADAS]",
+        "2026-07-13\t132",
+        "2026-08-10\t180",
+        "2026-09-14\t110",
+        "2026-10-12\t227",
+        "2026-11-16\t109",
+        "[GESTIONADAS PRODUCTO]",
+        "2026-09-14\tRATON INALAMBRICO\t14",
+        "2026-08-10\tRATON INALAMBRICO\t30",
+        "2026-10-12\tRATON INALAMBRICO\t36",
+      ].join("\n")
+    );
+
+    expect(managed?.weeklyTotals).toEqual([{ week: "2026-09-14", total: 758 }]);
+    expect(
+      managed?.byProduct.find((row) => row.label === "RATON INALAMBRICO")?.counts
+    ).toEqual([{ week: "2026-09-14", count: 80 }]);
+  });
+
   it("rejects a text without the version header", () => {
     expect(() => parseAgaTexto("[SEMANAS]\n2026-08-17\t846")).toThrow(/AGA TEXTO PLANO v1/);
   });

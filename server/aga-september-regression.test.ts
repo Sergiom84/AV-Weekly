@@ -129,6 +129,15 @@ describe("AGA September cut regressions", () => {
     const result = parseAgaGestionadoWorkbook(book(MANAGED_HEADERS, septemberManagedRows()));
     expect(result.managed.weeklyTotals).toEqual([{ week: "2026-09-14", total: 758 }]);
   });
+  it("stamps every managed row on the extraction Monday and ignores Fecha Gestionado", () => {
+    const result = parseAgaGestionadoWorkbook(
+      book(MANAGED_HEADERS, septemberManagedRows()),
+      {},
+      "2026-09-14"
+    );
+    expect(result.managed.weeklyTotals).toEqual([{ week: "2026-09-14", total: 758 }]);
+    expect(result.report.weeks).toEqual(["2026-09-14"]);
+  });
   it("leaves a managed column that already reads as one week alone", () => {
     const rows = [7, 8, 9, 10, 11].map((day, index) => [
       `ok-${index}`,
@@ -149,12 +158,26 @@ describe("AGA September cut regressions", () => {
   });
   it("runs the same managed repair in Apps Script", () => {
     const script = drive();
-    const result = script.readManaged(entry(script, MANAGED_HEADERS, septemberManagedRows()), {
-      departments: { labels: {}, managed: {} },
-      buildings: {},
-    });
+    const result = script.readManaged(
+      entry(script, MANAGED_HEADERS, septemberManagedRows()),
+      {
+        departments: { labels: {}, managed: {} },
+        buildings: {},
+      },
+      "2026-09-14"
+    );
     expect(result.rows).toBe(758);
-    expect(result.totals["2026-09-14"]).toBe(758);
+    expect(result.datesIgnored).toBe(true);
+    expect(result.totals).toEqual({ "2026-09-14": 758 });
+  });
+  it("Apps Script refuses Gestionado without an extraction Monday", () => {
+    const script = drive();
+    expect(() =>
+      script.readManaged(entry(script, MANAGED_HEADERS, septemberManagedRows()), {
+        departments: { labels: {}, managed: {} },
+        buildings: {},
+      })
+    ).toThrow(/extracci/);
   });
   it("Apps Script refuses unknown Office products without generating a partial section", () => {
     const script = drive();

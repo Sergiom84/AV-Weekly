@@ -52,12 +52,15 @@ Sheets intenta convertirlo). Ese corte representa la semana AGA 36, del 31 de
 agosto al 6 de septiembre. El número opcional de semana no corrige una fecha
 de extracción equivocada.
 
-El script detecta fechas convertidas con día y mes intercambiados en Gestionado
-y Office. En Office, una columna compuesta enteramente por fechas se contrasta
-con el mes del corte y el anterior; una interpretación ambigua bloquea el proceso.
-Las fechas ya normalizadas no se invierten otra vez. Los productos Office sin
-familia también bloquean la generación: `MICROSOFT OFFICE 2021 (MAC)` tiene una
-serie propia y no se suma a Standard.
+El Gestionado semanal es el fichero entero: una semana, la del lunes de
+`Configuración`. `Fecha Gestionado` no se usa para agrupar. Drive y Sheets
+convierten esa columna, y un cierre entre el 1 y el 12 no deja ninguna celda
+de texto que ancle el intercambio; partir por fecha escribe cinco semanas y
+envenena el histórico. Office sí mira fechas: una columna convertida se
+contrasta con el mes del corte y el anterior; una interpretación ambigua
+bloquea el proceso. Las fechas ya normalizadas no se invierten otra vez. Los
+productos Office sin familia también bloquean la generación:
+`MICROSOFT OFFICE 2021 (MAC)` tiene una serie propia y no se suma a Standard.
 
 Actualizar este archivo o `Codigo.gs` localmente no actualiza el script instalado
 en Google Sheets. En una hoja existente, sustituir y guardar el script; conservar
@@ -79,12 +82,13 @@ con las fechas mal convertidas escribe en meses que ya nadie va a volver a
 escribir. Las posiciones que caen fuera se descartan y se cuentan en
 `Comprobación`.
 
-**Las fechas americanas se corrigen sólo cuando el fichero lo demuestra.**
-Si una columna mezcla fechas de verdad con texto de día 13 o mayor, es que un
-Excel en inglés convirtió las que podía y les cambió el día por el mes; entonces
-se deshace el cambio y `Comprobación` dice cuántas celdas se corrigieron. Una
-columna homogénea no se toca: sin la mezcla no hay prueba, y adivinar el formato
-es peor que dejar el dato fuera.
+**Las fechas americanas se corrigen en Office, no en Gestionado.**
+Si una columna de Office mezcla fechas de verdad con texto de día 13 o mayor,
+es que un Excel en inglés convirtió las que podía y les cambió el día por el
+mes; entonces se deshace el cambio y `Comprobación` dice cuántas celdas se
+corrigieron. Una columna homogénea de Office se contrasta con el mes informado.
+Gestionado no entra en ese juego: `Comprobación` anota que `Fecha Gestionado`
+se ignoró y que las 758 filas (o las que sean) van a la extracción.
 
 **El GPS en bruto no trae la columna `semana`.** El script le pone la fecha de
 extracción de `Configuración`. Si el fichero sí trae la columna, manda la

@@ -63,6 +63,23 @@ describe("parser del export Gestionado AGA", () => {
     ).toEqual([{ label: "PORTATIL", counts: [{ week: "2026-08-17", count: 2 }] }]);
   });
 
+  it("sella todas las filas al lunes de extracción y no lee Fecha Gestionado", () => {
+    const parsed = parseAgaGestionadoWorkbook(
+      workbook([
+        headers,
+        ["PORTATIL", new Date(2026, 6, 9), "G1", "SEDE", "GAM (GESTION APROVISIONAMIENTO MICRO)"],
+        ["RATON", new Date(2026, 9, 9), "G2", "SEDE", "ALMACEN"],
+        ["TECLADO", new Date(2026, 10, 9), "G3", "SEDE", "PORTATILES PLATAFORMA"],
+      ]),
+      { SEDE: "Sede" },
+      "2026-09-14"
+    );
+
+    expect(parsed.managed.weeklyTotals).toEqual([{ week: "2026-09-14", total: 3 }]);
+    expect(countAt(parsed.managed.byDepartment, "GAM", "2026-09-14")).toBe(1);
+    expect(countAt(parsed.managed.byDepartment, "Almacén", "2026-09-14")).toBe(1);
+  });
+
   it("conserva todas las categorías aunque no vayan a caber en la gráfica", () => {
     const rows = Array.from({ length: 20 }, (_, index) => [
       `PRODUCTO ${index + 1}`,
