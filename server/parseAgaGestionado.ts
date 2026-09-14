@@ -154,6 +154,62 @@ export function managedWeekKey(value: unknown): string | null {
   return isoDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
 }
 
+/**
+ * Whether a wholly converted `Fecha Gestionado` column reads as one week once
+ * its day and month are exchanged.
+ *
+ * `agaOfficeDatesAreSwapped` needs a text cell to anchor the reading, and the
+ * export only leaves one behind when some closing day is 13 or higher. The
+ * ZPT025 of 14/09/2026 closed between the 7th and the 11th, so the spreadsheet
+ * converted every single cell and the column arrived as "the 9th" of five
+ * different months: the import spread one week over five, wrote 110 positions
+ * into the reported week and overwrote two unrelated weeks of the stored
+ * history with the rest.
+ *
+ * The tell that stands without a text cell is the export itself: it lists the
+ * positions closed in one week. So the exchange is taken when it gathers every
+ * converted cell into a single week and the literal reading scatters them over
+ * several. Text cells are already right and must agree with that week, which
+ * also keeps an export whose dates arrived correct from being repaired twice.
+ */
+export function agaManagedDatesAreSwapped(values: unknown[]): boolean {
+  const literal = new Set<string>();
+  const swapped = new Set<string>();
+  const textWeeks = new Set<string>();
+  let converted = 0;
+
+  for (const value of values) {
+    const parts = dateCellParts(value);
+
+    if (!parts) {
+      const week = managedWeekKey(value);
+      if (week) textWeeks.add(week);
+      continue;
+    }
+
+    if (parts.day > 12) {
+      return false;
+    }
+
+    const literalWeek = managedWeekKey(isoDate(parts.year, parts.month, parts.day));
+    const swappedWeek = managedWeekKey(isoDate(parts.year, parts.day, parts.month));
+
+    if (!literalWeek || !swappedWeek) {
+      return false;
+    }
+
+    converted += 1;
+    literal.add(literalWeek);
+    swapped.add(swappedWeek);
+  }
+
+  if (converted === 0 || swapped.size !== 1 || literal.size < 2) {
+    return false;
+  }
+
+  return Array.from(textWeeks).every((week) => swapped.has(week));
+}
+
 function newWeekBuilder(): WeekBuilder {
   return {
     total: 0,
@@ -308,7 +364,9 @@ export function parseAgaGestionadoWorkbook(
     const productAt = columns.get(normalize("Denominación Producto"))!;
     const dateAt = columns.get(normalize("Fecha Gestionado"))!;
     const buildingAt = columns.get(normalize("Denominación Edificio"))!;
-    const swapped = agaOfficeDatesAreSwapped(grid.slice(1).map((row) => row[dateAt]));
+    const dates = grid.slice(1).map((row) => row[dateAt]);
+    const swapped =
+      agaOfficeDatesAreSwapped(dates) || agaManagedDatesAreSwapped(dates);
     const sheetWeeks = new Set<string>();
     let rows = 0;
     let skipped = 0;

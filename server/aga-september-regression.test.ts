@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createContext, runInContext } from "node:vm";
 import * as XLSX from "xlsx";
 import { parseAgaOfficeWorkbook, agaOfficeDatesAreSwapped } from "./parseAgaOffice.ts";
-import { parseAgaGestionadoWorkbook } from "./parseAgaGestionado.ts";
+import { agaManagedDatesAreSwapped, parseAgaGestionadoWorkbook } from "./parseAgaGestionado.ts";
 import { parseAgaTexto } from "./parseAgaTexto.ts";
 
 const OFFICE_HEADERS = ["Nº Petición de sistemas", "Nº Posición de petición", "Denominación Producto", "Fecha de inicio de la gestión"];
@@ -109,6 +109,52 @@ describe("AGA September cut regressions", () => {
     expect(result.rows).toBe(42);
     expect(result.corregidas).toBe(42);
     expect(result.counts["2026-09"]["MICROSOFT OFFICE STANDARD"]).toBe(42);
+  });
+  // The ZPT025 of 14/09/2026: 758 positions closed between Monday the 7th and
+  // Friday the 11th, every cell converted into "the 9th" of the month that was
+  // really the day. Nothing anchors the reading as text, so the column has to
+  // be recognised by the week it gathers into.
+  function septemberManagedRows() {
+    return [[7, 132], [8, 180], [9, 110], [10, 227], [11, 109]].flatMap(([month, count], group) =>
+      Array.from({ length: count }, (_, n) => [
+        `sep-${group}-${n}`,
+        "GAM",
+        "PORTATIL",
+        date(month),
+        "SEDE",
+      ])
+    );
+  }
+  it("gathers a wholly converted managed column into the single week it reports", () => {
+    const result = parseAgaGestionadoWorkbook(book(MANAGED_HEADERS, septemberManagedRows()));
+    expect(result.managed.weeklyTotals).toEqual([{ week: "2026-09-14", total: 758 }]);
+  });
+  it("leaves a managed column that already reads as one week alone", () => {
+    const rows = [7, 8, 9, 10, 11].map((day, index) => [
+      `ok-${index}`,
+      "GAM",
+      "PORTATIL",
+      date(9, day),
+      "SEDE",
+    ]);
+    expect(agaManagedDatesAreSwapped(rows.map(row => row[3]))).toBe(false);
+    expect(parseAgaGestionadoWorkbook(book(MANAGED_HEADERS, rows)).managed.weeklyTotals).toEqual([
+      { week: "2026-09-14", total: 5 },
+    ]);
+  });
+  it("does not exchange a managed column whose swap would scatter the weeks", () => {
+    // 09/01 and 11/02: the exchange moves them into January and February, two
+    // different weeks, so it explains nothing and the literal reading stands.
+    expect(agaManagedDatesAreSwapped([date(1, 9), date(2, 11)])).toBe(false);
+  });
+  it("runs the same managed repair in Apps Script", () => {
+    const script = drive();
+    const result = script.readManaged(entry(script, MANAGED_HEADERS, septemberManagedRows()), {
+      departments: { labels: {}, managed: {} },
+      buildings: {},
+    });
+    expect(result.rows).toBe(758);
+    expect(result.totals["2026-09-14"]).toBe(758);
   });
   it("Apps Script refuses unknown Office products without generating a partial section", () => {
     const script = drive();

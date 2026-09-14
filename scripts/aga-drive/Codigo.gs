@@ -776,7 +776,8 @@ function readManaged(entry, mappings) {
     var productAt = sheet.columns[normalize('Denominación Producto')];
     var dateAt = sheet.columns[normalize('Fecha Gestionado')];
     var buildingAt = sheet.columns[normalize('Denominación Edificio')];
-    var intercambiadas = columnaConFechasIntercambiadas(sheet, dateAt);
+    var intercambiadas = columnaConFechasIntercambiadas(sheet, dateAt) ||
+      columnaDeUnaSemanaIntercambiada(sheet, dateAt);
 
     for (var index = sheet.headerRow + 1; index < sheet.grid.length; index += 1) {
       var row = sheet.grid[index];
@@ -839,6 +840,57 @@ function readManaged(entry, mappings) {
 
 /** `dd/mm/yyyy` or `dd.mm.yyyy` text, as `[day, month, year]`. */
 var TEXT_DATE = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/;
+
+/**
+ * Whether a wholly converted `Fecha Gestionado` column reads as one week once
+ * its day and month are exchanged.
+ *
+ * `columnaConFechasIntercambiadas` needs a text cell to anchor the reading, and
+ * the export only leaves one behind when some closing day is 13 or higher. The
+ * ZPT025 of 14/09/2026 closed between the 7th and the 11th, so every cell came
+ * back converted and the column read as "the 9th" of five different months:
+ * one week spread over five, of which only the fragment that landed on the
+ * reported week was charted.
+ *
+ * The tell that stands without a text cell is the export itself: it lists the
+ * positions closed in one week. Mirrors `agaManagedDatesAreSwapped`.
+ */
+function columnaDeUnaSemanaIntercambiada(sheet, at) {
+  var literal = {};
+  var intercambiada = {};
+  var textos = {};
+  var convertidas = 0;
+
+  for (var index = sheet.headerRow + 1; index < sheet.grid.length; index += 1) {
+    var value = (sheet.grid[index] || [])[at];
+    var parts = celdaDeFecha(value);
+
+    if (!parts) {
+      var semanaTexto = managedWeekKey(value);
+      if (semanaTexto) textos[semanaTexto] = true;
+      continue;
+    }
+
+    if (parts[2] > 12) return false;
+
+    var semanaLiteral = managedWeekKey(parts[0] + '-' + pad2(parts[1]) + '-' + pad2(parts[2]));
+    var semanaCambiada = managedWeekKey(parts[0] + '-' + pad2(parts[2]) + '-' + pad2(parts[1]));
+
+    if (!semanaLiteral || !semanaCambiada) return false;
+
+    convertidas += 1;
+    literal[semanaLiteral] = true;
+    intercambiada[semanaCambiada] = true;
+  }
+
+  var semanas = Object.keys(intercambiada);
+
+  if (convertidas === 0 || semanas.length !== 1 || Object.keys(literal).length < 2) {
+    return false;
+  }
+
+  return Object.keys(textos).every(function(semana) { return semana === semanas[0]; });
+}
 
 /**
  * Whether a date column was converted by a spreadsheet reading `dd/mm/yyyy` as
