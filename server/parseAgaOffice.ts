@@ -252,21 +252,31 @@ export function agaOfficeRepairedMonth(value: unknown): string | null {
   return parts && parts.day <= 12 ? isoMonth(parts.year, parts.day) : null;
 }
 
-/** An explicit weekly cut disambiguates a wholly converted date column. */
+/**
+ * An explicit weekly cut disambiguates a wholly converted date column.
+ *
+ * The repair is taken when it explains the whole column and the literal reading
+ * does not: every cell has a day that can be read as a month, every repaired
+ * month falls in the reported window and no repaired date is later than the
+ * extraction. The literal reading only has to fail somewhere, not everywhere —
+ * a column converted from `dd/mm` scatters the weekly cut over the months of
+ * the year, and two of those months are the window itself. The September 2026
+ * export landed 3 of its 42 rows on 09 and 2 on 08 that way, which used to be
+ * enough to block the whole import.
+ */
 export function agaOfficeDatesNeedRepair(values: unknown[], extraction?: string): boolean {
   if (agaOfficeDatesAreSwapped(values)) return true;
   if (!extraction || values.length === 0) return false;
   const writable = new Set(agaOfficeWritableMonths(extraction));
   const originalValid = values.every((value) => writable.has(agaOfficeMonth(value) ?? ""));
   if (originalValid) return false;
-  const allOutside = values.every((value) => !writable.has(agaOfficeMonth(value) ?? ""));
   const swappedValid = values.every((value) => {
     const parts = dateCellParts(value);
     if (!parts || parts.day > 12) return false;
     const repaired = `${parts.year}-${String(parts.day).padStart(2, "0")}-${String(parts.month).padStart(2, "0")}`;
     return writable.has(agaOfficeRepairedMonth(value) ?? "") && repaired <= extraction;
   });
-  if (allOutside && swappedValid) return true;
+  if (swappedValid) return true;
   throw new Error("Fechas Office ambiguas o fuera del periodo informado. Revisa el formato día/mes y la fecha de extracción antes de importar.");
 }
 

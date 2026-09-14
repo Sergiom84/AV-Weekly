@@ -74,6 +74,42 @@ describe("AGA September cut regressions", () => {
     expect(result.corregidas).toBe(28);
     expect(result.counts["2026-09"]["MICROSOFT OFFICE 2021 (MAC)"]).toBe(1);
   });
+  // The workbook of 14/09/2026: 42 positions closed between the 1st and the
+  // 11th of September, converted into "the 9th" of eleven different months. Two
+  // of them fall back inside the reported window by chance, which is exactly
+  // what the import may not read as a reason to stop.
+  function septemberConvertedRows() {
+    return [[1, 11], [2, 6], [3, 6], [4, 6], [7, 4], [8, 2], [9, 3], [10, 3], [11, 1]].flatMap(
+      ([month, count], group) =>
+        Array.from({ length: count }, (_, n) => [
+          `sep-${group}-${n}`,
+          1,
+          "MICROSOFT OFFICE STANDARD",
+          date(month),
+        ])
+    );
+  }
+  it("repairs a converted column whose swapped months touch the reported window", () => {
+    const result = parseAgaOfficeWorkbook(
+      book(OFFICE_HEADERS, septemberConvertedRows()),
+      "2026-09-14"
+    );
+    expect(result.office.months).toEqual(["2026-09"]);
+    expect(result.report).toMatchObject({ imported: 42, skipped: 0, repairedDates: 42 });
+    expect(
+      result.office.families.find(f => f.label === "MICROSOFT OFFICE STANDARD")?.values
+    ).toEqual([42]);
+  });
+  it("runs the same repair in Apps Script", () => {
+    const script = drive();
+    const result = script.readOffice(
+      entry(script, OFFICE_HEADERS, septemberConvertedRows()),
+      "2026-09-14"
+    );
+    expect(result.rows).toBe(42);
+    expect(result.corregidas).toBe(42);
+    expect(result.counts["2026-09"]["MICROSOFT OFFICE STANDARD"]).toBe(42);
+  });
   it("Apps Script refuses unknown Office products without generating a partial section", () => {
     const script = drive();
     expect(() => script.readOffice(entry(script, OFFICE_HEADERS, [["a",1,"UNKNOWN",date(9,2)]]), "2026-09-07")).toThrow(/sin familia/);

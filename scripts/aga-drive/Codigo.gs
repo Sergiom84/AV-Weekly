@@ -947,14 +947,19 @@ function readOffice(entry, extraction) {
       }).map(function(row) { return row[dateAt]; });
       var inWindow = function(month) { return month === limite || month === anterior; };
       if (dates.length > 0 && !dates.every(function(cell) { return inWindow(toIsoMonth(cell)); })) {
-        var allOutside = dates.every(function(cell) { return !inWindow(toIsoMonth(cell)); });
+        // The repair is taken when it explains the whole column: every cell
+        // readable as `mm/dd`, every repaired month inside the window and no
+        // repaired date after the extraction. The literal reading only has to
+        // fail somewhere. Demanding that it fail everywhere blocked the real
+        // September export, where 5 of its 42 converted rows happened to land
+        // on August and September. Mirrors `agaOfficeDatesNeedRepair`.
         var allRepaired = dates.every(function(cell) {
           var parts = celdaDeFecha(cell);
           if (!parts || parts[2] > 12) return false;
           var repaired = parts[0] + '-' + pad2(parts[2]) + '-' + pad2(parts[1]);
           return inWindow(mesIntercambiado(cell)) && repaired <= extraction;
         });
-        if (!allOutside || !allRepaired) {
+        if (!allRepaired) {
           throw new Error('Fechas Office ambiguas o fuera del periodo informado. Revisa día/mes y la fecha de extracción.');
         }
         intercambiadas = true;
