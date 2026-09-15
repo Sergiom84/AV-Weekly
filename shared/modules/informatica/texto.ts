@@ -21,7 +21,12 @@ import type { InformaticaDataset, InformaticaDateCell } from "./types.ts";
 export const INFORMATICA_TEXTO_HEADER = "INFORMATICA TEXTO PLANO v1";
 
 export const INFORMATICA_TEXTO_SECTIONS = {
-  /** `edificio` `dt` `aliasSmartTech` `aliasWorkOrder` `aliasImacs` `aliasPeticiones` `visible` `orden` — dimension table, no period. */
+  /**
+   * `edificio` `dt` `aliasSmartTech` `aliasWorkOrder` `aliasImacs` `aliasPeticiones` `visible` `orden`
+   * — dimension table, no period. The weekly Drive text omits this section so
+   * street addresses never leave the spreadsheet; data rows use `E{hash}` and
+   * the app expands them against the stored table.
+   */
   edificios: "EDIFICIOS",
   /** `fecha` `mes` `semana` `categoria` `subcategoria` `metrica` `edificio` `tickets` */
   incidencias: "INCIDENCIAS",

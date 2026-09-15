@@ -303,8 +303,9 @@ describe("texto generado por el script de Drive", () => {
       asOfDate: "2026-08-24",
       generated: "2026-08-24T00:00:00.000Z",
     });
+    expect(texto).not.toMatch(/\[EDIFICIOS\]/);
+    expect(texto).not.toMatch(/ANTONIO MAURA|CASTELLANA|MENDEZ NUÑEZ/i);
     expect(dataset.sheetsFound).toEqual([
-      "edificios",
       "incidencias",
       "encuestas",
       "workOrders",
@@ -320,7 +321,7 @@ describe("texto generado por el script de Drive", () => {
     ]);
 
     const generated = [
-      "edificios", "incidencias", "encuestas", "workOrders", "peticiones",
+      "incidencias", "encuestas", "workOrders", "peticiones",
       "peticionesProducto", "peticionesAnual", "citas", "citasAnual", "hic",
       "comparativas", "slas", "imacs",
     ] as const;

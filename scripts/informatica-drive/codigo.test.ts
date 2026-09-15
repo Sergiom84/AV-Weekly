@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContext, runInContext } from "node:vm";
 import { describe, expect, it } from "vitest";
+import { edificioCode } from "../../shared/modules/informatica/buildingCodes.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -46,11 +47,57 @@ function loadCodigo() {
       buckets: Record<string, number>
     ) => void;
     rows: (buckets: Record<string, number>) => unknown[][];
+    edificioCode: (name: string) => string;
+    serializarPlano: (
+      agregado: Record<string, unknown[][]>,
+      meta: Record<string, string>
+    ) => string;
   };
 }
 
 describe("Codigo.gs weekly safeguards", () => {
   const gs = loadCodigo();
+
+  it("usa el mismo código de edificio que la app", () => {
+    expect(gs.edificioCode("-PL ANTONIO MAURA, 6,")).toBe(
+      edificioCode("-PL ANTONIO MAURA, 6,")
+    );
+    expect(gs.edificioCode("Smart Tech Antoni Maura")).toBe(
+      edificioCode("Smart Tech Antoni Maura")
+    );
+  });
+
+  it("codifica edificios en el TXT y no escribe direcciones", () => {
+    const { serializarPlano } = gs;
+    const address = "-PL ANTONIO MAURA, 6,";
+    const texto = serializarPlano(
+      {
+        edificios: [
+          ["A. Maura", "DT Cataluña", "", "", address, "", "Si", "1"],
+        ],
+        workOrders: [
+          ["2026-09-11", "2026/09", "37", "A. Maura", "TRASLADO", "1"],
+        ],
+        citas: [
+          [
+            "2026-09-11",
+            "2026/09",
+            "37",
+            "Smart Tech Antoni Maura",
+            "Con Cita",
+            "2",
+          ],
+        ],
+        imacs: [["2026-09-01", "2026/09", address, "Solicitudes", "3"]],
+      },
+      { week: "2026-09-15", scope: "completo" }
+    );
+
+    expect(texto).not.toMatch(/ANTONIO MAURA/i);
+    expect(texto).not.toMatch(/\[EDIFICIOS\]/);
+    expect(texto).toContain(edificioCode("A. Maura"));
+    expect(texto).toContain(edificioCode(address));
+  });
 
   it("descarta Grand Total y Total como edificios", () => {
     expect(gs.esAliasEdificioBasura("Grand Total")).toBe(true);

@@ -159,6 +159,80 @@ function normalize(value) {
     .toUpperCase();
 }
 
+/**
+ * Building key and FNV-1a code. Keep in lockstep with
+ * `shared/modules/informatica/buildingCodes.ts`.
+ */
+function edificioCodeKey(value) {
+  return String(value == null ? '' : value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+function fnv1a32(value) {
+  var hash = 2166136261;
+
+  for (var index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+
+  return hash;
+}
+
+function edificioCode(name) {
+  var key = edificioCodeKey(name);
+
+  return key === '' ? '' : 'E' + fnv1a32(key);
+}
+
+function encodeBuildingCell(value) {
+  var label = planoCell(value);
+  var code = edificioCode(label);
+
+  return code === '' ? label : code;
+}
+
+/**
+ * Replaces building labels with opaque codes and drops EDIFICIOS so the
+ * weekly text never carries street addresses.
+ */
+function codificarEdificiosAgregado(agregado) {
+  var encoded = {};
+  var key;
+
+  for (key in agregado) {
+    if (!Object.prototype.hasOwnProperty.call(agregado, key)) continue;
+    encoded[key] = agregado[key];
+  }
+
+  encoded.edificios = [];
+
+  function encodeColumn(section, column) {
+    var rows = encoded[section] || [];
+    var copy = [];
+
+    for (var index = 0; index < rows.length; index += 1) {
+      var row = rows[index].slice();
+      row[column] = encodeBuildingCell(row[column]);
+      copy.push(row);
+    }
+
+    encoded[section] = copy;
+  }
+
+  encodeColumn('incidencias', 6);
+  encodeColumn('workOrders', 3);
+  encodeColumn('citas', 3);
+  encodeColumn('imacs', 2);
+
+  return encoded;
+}
+
 /** Trimmed text of a cell, collapsing the padding the exports add ("  001"). */
 function text(value) {
   if (value === null || value === undefined) return '';
@@ -3064,6 +3138,7 @@ function planoCell(value) {
 
 /** Exact counterpart of shared/modules/informatica/texto.ts. */
 function serializarPlano(agregado, meta) {
+  agregado = codificarEdificiosAgregado(agregado);
   var out = [TEXTO_HEADER];
 
   if (meta.week) out.push('semana\t' + planoCell(meta.week));

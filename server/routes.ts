@@ -99,6 +99,10 @@ import {
 } from "./parseInformaticaPlano.js";
 import { parseInformaticaTexto } from "./parseInformaticaTexto.js";
 import {
+  catalogFromEdificios,
+  resolveInformaticaBuildingCodes,
+} from "../shared/modules/informatica/buildingCodes.ts";
+import {
   mergeReportedResolutionHistory,
   parseInformeWeeklyWorkbook,
 } from "./parseInformeWeekly.js";
@@ -767,6 +771,34 @@ async function readBuildingLocationMaster(): Promise<BuildingLocationResolver> {
 }
 
 /**
+ * Restores coded building labels using the stored Edificios table and the
+ * location master. Weekly texts omit EDIFICIOS so the proxy never sees
+ * addresses; the dimension table already in the app is the catalogue.
+ */
+function decodeInformaticaBuildingCodes(
+  incoming: InformaticaDataset,
+  existing: InformaticaDataset | null,
+  buildings: BuildingLocationResolver
+): InformaticaDataset {
+  const edificios =
+    incoming.edificios && incoming.edificios.length > 0
+      ? incoming.edificios
+      : existing?.edificios;
+  const catalog = [
+    ...catalogFromEdificios(edificios),
+    ...catalogFromEdificios(existing?.edificios),
+    ...buildings.catalogNames(),
+  ];
+  const expanded = resolveInformaticaBuildingCodes(incoming, catalog);
+
+  if (!expanded.edificios?.length && existing?.edificios?.length) {
+    return { ...expanded, edificios: existing.edificios };
+  }
+
+  return expanded;
+}
+
+/**
  * Frozen monthly series, read from their own table.
  *
  * Never merged into `informatica_dataset` on the way in: an upload with
@@ -1074,8 +1106,9 @@ router.post("/api/informatica/upload/texto", upload.single("file"), async (req, 
 
     const { dataset, meta } = parseInformaticaTexto(texto);
     const buildings = await readBuildingLocationMaster();
-    const normalized = normalizeInformaticaBuildingLocations(dataset, buildings).dataset;
     const existing = await readStoredInformaticaDataset();
+    const decoded = decodeInformaticaBuildingCodes(dataset, existing, buildings);
+    const normalized = normalizeInformaticaBuildingLocations(decoded, buildings).dataset;
     const normalizedExisting = existing
       ? normalizeInformaticaBuildingLocations(existing, buildings).dataset
       : null;
@@ -1086,6 +1119,8 @@ router.post("/api/informatica/upload/texto", upload.single("file"), async (req, 
     };
     // Drive serializes one auditable complete snapshot. Reusing omitted sections
     // from an older import would make optional data (notably WASP) look current.
+    // EDIFICIOS is the exception: coded weekly texts omit it so the proxy does
+    // not see addresses, and the stored dimension table must survive.
     const stored =
       meta.scope === "completo"
         ? { ...normalized, source }

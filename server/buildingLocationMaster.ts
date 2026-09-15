@@ -109,6 +109,7 @@ export class BuildingLocationResolver implements BuildingLocationMatcher {
   private readonly address = new Map<string, string | null>();
   private readonly observed = new Map<string, string | null>();
   private readonly observedSource = new Map<string, string>();
+  private readonly labels: string[] = [];
   readonly masterRows: number;
 
   constructor(
@@ -125,6 +126,8 @@ export class BuildingLocationResolver implements BuildingLocationMatcher {
         continue;
       }
 
+      this.labels.push(building, location);
+
       addUnique(this.exact, buildingLookupKey(building), location);
       // A canonical output remains canonical if a converted workbook is
       // normalised a second time.
@@ -140,6 +143,7 @@ export class BuildingLocationResolver implements BuildingLocationMatcher {
       const location = String(row.location ?? "").trim();
 
       if (alias && location) {
+        this.labels.push(alias);
         const key = buildingLookupKey(alias);
         addUnique(this.observed, key, location);
         this.observedSource.set(key, alias);
@@ -181,6 +185,11 @@ export class BuildingLocationResolver implements BuildingLocationMatcher {
     }
 
     return location;
+  }
+
+  /** Original labels used to expand coded PLANO buildings. */
+  catalogNames(): string[] {
+    return this.labels;
   }
 
   learnedAliases(): BuildingLocationAliasRow[] {
