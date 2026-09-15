@@ -249,13 +249,30 @@ function UploadZone({
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [countLabel, setCountLabel] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pasted, setPasted] = useState("");
   const [pasteExpanded, setPasteExpanded] = useState(false);
   const pasteId = `${id}-pegar`;
   const pasteLong = isLongPastedTexto(pasted);
   const pastePreview = pasteLong && !pasteExpanded;
+  const canPaste = Boolean(onPasteTexto);
+  const pendingName =
+    pendingFiles.length === 0
+      ? null
+      : pendingFiles.length === 1
+        ? pendingFiles[0].name
+        : `${pendingFiles.length} ficheros`;
 
   const uploadedLabel = formatUploadedAt(uploadedAt);
+
+  const clearPendingFile = () => {
+    setPendingFiles([]);
+    setLocalError(null);
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  };
 
   const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(event.target.files ?? []);
@@ -265,9 +282,15 @@ function UploadZone({
       return;
     }
 
-    setBusy(true);
     setLocalError(null);
     setCountLabel(null);
+
+    if (canPaste) {
+      setPendingFiles(files);
+      return;
+    }
+
+    setBusy(true);
     const result = await onUpload(files);
     setBusy(false);
 
@@ -286,14 +309,32 @@ function UploadZone({
   const handlePaste = async () => {
     const texto = pasted.trim();
 
-    if (!onPasteTexto || texto === "") {
+    if (onPasteTexto && texto !== "") {
+      setBusy(true);
+      setLocalError(null);
+      setCountLabel(null);
+      const result = await onPasteTexto(texto);
+      setBusy(false);
+
+      if (!result.success) {
+        setLocalError(result.error ?? "Carga fallida");
+        return;
+      }
+
+      setPasted("");
+      setPasteExpanded(false);
+      clearPendingFile();
+      return;
+    }
+
+    if (pendingFiles.length === 0) {
       return;
     }
 
     setBusy(true);
     setLocalError(null);
     setCountLabel(null);
-    const result = await onPasteTexto(texto);
+    const result = await onUpload(pendingFiles);
     setBusy(false);
 
     if (!result.success) {
@@ -301,8 +342,12 @@ function UploadZone({
       return;
     }
 
-    setPasted("");
-    setPasteExpanded(false);
+    if (multiple) {
+      const merged = readMergedCount(result.payload) ?? pendingFiles.length;
+      setCountLabel(merged === 1 ? "1 fichero" : `${merged} ficheros`);
+    }
+
+    clearPendingFile();
   };
 
   const capturePastedTexto = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -327,16 +372,28 @@ function UploadZone({
         >
           {label}
         </Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          disabled={disabled || busy}
-          onClick={() => inputRef.current?.click()}
-        >
-          {busy ? "Cargando" : "Seleccionar"}
-        </Button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled || busy}
+            onClick={() => inputRef.current?.click()}
+          >
+            {busy && !canPaste ? "Cargando" : "Seleccionar"}
+          </Button>
+          {canPaste && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled || busy || pendingFiles.length === 0}
+              onClick={clearPendingFile}
+            >
+              Quitar
+            </Button>
+          )}
+        </div>
       </div>
 
       <input
@@ -350,8 +407,8 @@ function UploadZone({
       />
 
       <p className="mt-2 min-w-0 break-all font-mono text-xs text-muted-foreground">
-        {sourceFile ?? "Sin fichero"}
-        {uploadedLabel ? ` · ${uploadedLabel}` : ""}
+        {pendingName ?? sourceFile ?? "Sin fichero"}
+        {pendingName ? "" : uploadedLabel ? ` · ${uploadedLabel}` : ""}
         {countLabel ? ` · ${countLabel}` : ""}
       </p>
 
@@ -409,7 +466,11 @@ function UploadZone({
               variant="outline"
               size="sm"
               className="ml-auto shrink-0"
-              disabled={disabled || busy || pasted.trim() === ""}
+              disabled={
+                disabled ||
+                busy ||
+                (pasted.trim() === "" && pendingFiles.length === 0)
+              }
               onClick={() => void handlePaste()}
             >
               {busy ? "Cargando" : "Cargar"}
