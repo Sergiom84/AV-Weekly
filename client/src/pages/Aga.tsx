@@ -97,6 +97,7 @@ export default function Aga() {
     saving,
     error,
     uploadTo,
+    pasteTo,
     updatePage,
     addPage,
     movePage,
@@ -139,6 +140,10 @@ export default function Aga() {
           multiple: slot.multiple ?? false,
           accept: slot.accept,
           onUpload: (files: File[]) => uploadTo(slot.id, files),
+          onPasteTexto:
+            slot.id === "texto"
+              ? (texto: string) => pasteTo(slot.id, texto)
+              : undefined,
         };
       }),
     [
@@ -146,6 +151,7 @@ export default function Aga() {
       dataset.office?.source,
       dataset.texto,
       dataset.source,
+      pasteTo,
       uploadTo,
     ]
   );

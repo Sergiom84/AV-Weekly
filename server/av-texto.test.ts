@@ -33,6 +33,17 @@ origen	Tendencias AV_2026
 `;
 
 describe("AV texto plano", () => {
+  it("lee el pegado de Drive con las filas TSV entre comillas", () => {
+    const fromDrive = SAMPLE.split("\n")
+      .map(line =>
+        line.includes("\t") ? `"${line.replace(/"/g, '""')}"` : line
+      )
+      .join("\n");
+
+    expect(parseAvTexto(fromDrive).document.meta.week).toBe("35");
+    expect(parseAvTexto(fromDrive).weekly.maxWeek).toBe(35);
+  });
+
   it("reconstruye matrices, resoluciones, mensual y comparativa", () => {
     const parsed = parseAvTexto(SAMPLE);
 

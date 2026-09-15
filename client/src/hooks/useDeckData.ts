@@ -425,6 +425,37 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
     [scheduleSave]
   );
 
+  const postUpload = useCallback(
+    async (
+      endpoint: string,
+      init: RequestInit,
+      fallback: string
+    ): Promise<DeckActionResult> => {
+      const res = await fetch(endpoint, init);
+
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, fallback));
+      }
+
+      const contentType = res.headers.get("Content-Type") ?? "";
+
+      if (!contentType.includes("application/json")) {
+        throw new Error(
+          "El servidor devolvió una respuesta inesperada (no JSON)."
+        );
+      }
+
+      const body = await res.json();
+
+      if (mountedRef.current) {
+        applyPayload(body);
+      }
+
+      return { success: true, payload: body };
+    },
+    [applyPayload]
+  );
+
   const upload = useCallback(
     async (
       endpoint: string,
@@ -454,27 +485,11 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
           formData.append("file", files[0]);
         }
 
-        const res = await fetch(endpoint, { method: "POST", body: formData });
-
-        if (!res.ok) {
-          throw new Error(await readErrorMessage(res, fallback));
-        }
-
-        const contentType = res.headers.get("Content-Type") ?? "";
-
-        if (!contentType.includes("application/json")) {
-          throw new Error(
-            "El servidor devolvió una respuesta inesperada (no JSON)."
-          );
-        }
-
-        const body = await res.json();
-
-        if (mountedRef.current) {
-          applyPayload(body);
-        }
-
-        return { success: true, payload: body };
+        return await postUpload(
+          endpoint,
+          { method: "POST", body: formData },
+          fallback
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : fallback;
 
@@ -489,7 +504,47 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
         }
       }
     },
-    [applyPayload]
+    [postUpload]
+  );
+
+  const uploadText = useCallback(
+    async (
+      endpoint: string,
+      texto: string,
+      fallback: string
+    ): Promise<DeckActionResult> => {
+      if (texto.trim() === "") {
+        return { success: false, error: fallback };
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        return await postUpload(
+          endpoint,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ texto }),
+          },
+          fallback
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : fallback;
+
+        if (mountedRef.current) {
+          setError(message);
+        }
+
+        return { success: false, error: message };
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [postUpload]
   );
 
   const resetDeck = useCallback(async (): Promise<DeckActionResult> => {
@@ -542,6 +597,7 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
     saving,
     error,
     upload,
+    uploadText,
     updatePage,
     addPage,
     movePage,

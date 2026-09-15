@@ -45,7 +45,7 @@ export function useInformaticaDeck() {
     messages: MESSAGES,
   });
 
-  const { upload } = state;
+  const { upload, uploadText } = state;
 
   const uploadTo = useCallback(
     (slotId: string, input: File | File[]) => {
@@ -69,5 +69,18 @@ export function useInformaticaDeck() {
     [upload]
   );
 
-  return { ...state, dataset: state.data, uploadTo };
+  const pasteTo = useCallback(
+    (slotId: string, texto: string) => {
+      const slot = MODULE.deck?.uploads.find(entry => entry.id === slotId);
+
+      if (!slot) {
+        return Promise.resolve({ success: false, error: "Origen desconocido" });
+      }
+
+      return uploadText(slot.path, texto, slot.error);
+    },
+    [uploadText]
+  );
+
+  return { ...state, dataset: state.data, uploadTo, pasteTo };
 }

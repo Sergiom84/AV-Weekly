@@ -1,3 +1,4 @@
+import { unwrapDriveCopiedTexto } from "./driveTexto.ts";
 import { agaOfficeWritableMonths } from "./parseAgaOffice.ts";
 import {
   AGA_TEXTO_HEADER,
@@ -268,7 +269,7 @@ const SECTION_LINE = /^\[(.+)\]$/;
 const KNOWN_SECTIONS = new Set<string>(Object.values(AGA_TEXTO_SECTIONS));
 
 export function parseAgaTexto(input: string): AgaTextoParseResult {
-  const lines = String(input ?? "").split(/\r\n|\r|\n/);
+  const lines = unwrapDriveCopiedTexto(input).split("\n");
 
   const weekTotals = new Map<string, number>();
   const weekDepartments: WeekLabelCounts = new Map();

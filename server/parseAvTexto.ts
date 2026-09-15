@@ -1,3 +1,4 @@
+import { unwrapDriveCopiedTexto } from "./driveTexto.ts";
 import { densifyWeeklyMatrix } from "./parseInformeWeekly.ts";
 import type { WeeklyMatrix, WeeklyRow } from "../shared/deck/core.ts";
 import type { InformeWeeklyDataset, SupportType } from "../shared/informe.ts";
@@ -160,7 +161,7 @@ export function weeklyFromAvTexto(
 }
 
 export function parseAvTexto(input: string): AvTextoParseResult {
-  const lines = input.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const lines = unwrapDriveCopiedTexto(input).split("\n");
 
   if (normalize(lines[0] ?? "") !== normalize(AV_TEXTO_HEADER)) {
     throw new Error(

@@ -56,6 +56,19 @@ const SAMPLE = [
 ].join("\n");
 
 describe("parseAgaTexto", () => {
+  it("reads a Drive paste with quoted TSV cells", () => {
+    const fromDrive = SAMPLE.split("\n")
+      .map(line =>
+        line.includes("\t") ? `"${line.replace(/"/g, '""')}"` : line
+      )
+      .join("\n");
+
+    expect(parseAgaTexto(fromDrive).report.meta).toEqual(
+      parseAgaTexto(SAMPLE).report.meta
+    );
+    expect(parseAgaTexto(fromDrive).weeks[1]?.total).toBe(846);
+  });
+
   it("reads the preamble metadata", () => {
     const { report } = parseAgaTexto(SAMPLE);
 

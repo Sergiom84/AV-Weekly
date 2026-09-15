@@ -1,3 +1,4 @@
+import { unwrapDriveCopiedTexto } from "./driveTexto.ts";
 import {
   INFORMATICA_TEXTO_HEADER,
   INFORMATICA_TEXTO_META,
@@ -197,7 +198,7 @@ export function parseInformaticaTexto(texto: string): {
   dataset: InformaticaDataset;
   meta: InformaticaTextoMeta;
 } {
-  const lines = texto.replace(/\r\n?/g, "\n").split("\n");
+  const lines = unwrapDriveCopiedTexto(texto).split("\n");
 
   if (lines.length === 0 || lines[0].trim() !== INFORMATICA_TEXTO_HEADER) {
     throw new Error(

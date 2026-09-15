@@ -68,6 +68,7 @@ export default function Informe() {
     saving,
     error,
     uploadTo,
+    pasteTo,
     updatePage,
     addPage,
     movePage,
@@ -138,10 +139,15 @@ export default function Informe() {
       uploadedAt: sources[slot.id]?.uploadedAt ?? null,
       // AV keeps one workbook per zone: the sidebar never sends more than one.
       onUpload: (files: File[]) => uploadTo(slot.id, files[0]),
+      onPasteTexto:
+        slot.id === "texto"
+          ? (texto: string) => pasteTo(slot.id, texto)
+          : undefined,
     }));
   }, [
     monthly.sourceFile,
     monthly.uploadedAt,
+    pasteTo,
     uploadTo,
     weekly.resolutionSource,
     weekly.sourceFile,

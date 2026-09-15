@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { printDeckAsPdf } from "@/lib/printDeck";
@@ -33,6 +34,8 @@ export interface SidebarUpload {
   /** File picker filter. Defaults to ".xlsx,.xls" when omitted. */
   accept?: string;
   onUpload: (files: File[]) => Promise<DeckActionResult>;
+  /** Paste the Drive PLANO tab as text, skipping the file picker. */
+  onPasteTexto?: (texto: string) => Promise<DeckActionResult>;
 }
 
 export interface SidebarExportAction {
@@ -74,6 +77,45 @@ interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
    * server-side render that takes its time and admits one export at a time.
    */
   pdfHref: string;
+}
+
+/** Lines shown in the paste box until the colleague expands it. */
+const PASTE_PREVIEW_LINES = 8;
+
+function previewPastedTexto(texto: string): string {
+  let seen = 0;
+
+  for (let index = 0; index < texto.length; index += 1) {
+    if (texto.charCodeAt(index) === 10) {
+      seen += 1;
+
+      if (seen === PASTE_PREVIEW_LINES) {
+        return texto.slice(0, index);
+      }
+    }
+  }
+
+  return texto;
+}
+
+function isLongPastedTexto(texto: string): boolean {
+  if (texto === "") {
+    return false;
+  }
+
+  let lines = 1;
+
+  for (let index = 0; index < texto.length; index += 1) {
+    if (texto.charCodeAt(index) === 10) {
+      lines += 1;
+
+      if (lines > PASTE_PREVIEW_LINES) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function formatUploadedAt(value: string | null): string | null {
@@ -189,6 +231,7 @@ interface UploadZoneProps {
   accept: string;
   disabled: boolean;
   onUpload: (files: File[]) => Promise<DeckActionResult>;
+  onPasteTexto?: (texto: string) => Promise<DeckActionResult>;
 }
 
 function UploadZone({
@@ -200,11 +243,17 @@ function UploadZone({
   accept,
   disabled,
   onUpload,
+  onPasteTexto,
 }: UploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [countLabel, setCountLabel] = useState<string | null>(null);
+  const [pasted, setPasted] = useState("");
+  const [pasteExpanded, setPasteExpanded] = useState(false);
+  const pasteId = `${id}-pegar`;
+  const pasteLong = isLongPastedTexto(pasted);
+  const pastePreview = pasteLong && !pasteExpanded;
 
   const uploadedLabel = formatUploadedAt(uploadedAt);
 
@@ -232,6 +281,41 @@ function UploadZone({
     if (inputRef.current) {
       inputRef.current.value = "";
     }
+  };
+
+  const handlePaste = async () => {
+    const texto = pasted.trim();
+
+    if (!onPasteTexto || texto === "") {
+      return;
+    }
+
+    setBusy(true);
+    setLocalError(null);
+    setCountLabel(null);
+    const result = await onPasteTexto(texto);
+    setBusy(false);
+
+    if (!result.success) {
+      setLocalError(result.error ?? "Carga fallida");
+      return;
+    }
+
+    setPasted("");
+    setPasteExpanded(false);
+  };
+
+  const capturePastedTexto = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const texto = event.clipboardData.getData("text");
+
+    if (texto === "") {
+      return;
+    }
+
+    event.preventDefault();
+    setPasted(texto);
+    setPasteExpanded(false);
+    setLocalError(null);
   };
 
   return (
@@ -270,6 +354,69 @@ function UploadZone({
         {uploadedLabel ? ` · ${uploadedLabel}` : ""}
         {countLabel ? ` · ${countLabel}` : ""}
       </p>
+
+      {onPasteTexto && (
+        <div className="mt-3 space-y-2">
+          <Label
+            htmlFor={pasteId}
+            className="font-mono text-sm font-semibold leading-snug text-foreground"
+          >
+            Pegar
+          </Label>
+          <Textarea
+            id={pasteId}
+            value={pastePreview ? previewPastedTexto(pasted) : pasted}
+            readOnly={pastePreview}
+            disabled={disabled || busy}
+            onChange={event => {
+              if (pastePreview) {
+                return;
+              }
+
+              setPasted(event.target.value);
+            }}
+            onPaste={capturePastedTexto}
+            onKeyDown={event => {
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                event.preventDefault();
+                void handlePaste();
+              }
+            }}
+            className={
+              pastePreview
+                ? "min-h-[6.5rem] resize-none font-mono text-xs"
+                : "min-h-[6.5rem] resize-y font-mono text-xs"
+            }
+            spellCheck={false}
+          />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {pasteLong ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="font-mono text-xs"
+                disabled={disabled || busy}
+                onClick={() => setPasteExpanded(open => !open)}
+              >
+                {pasteExpanded ? "Contraer" : "Expandir"}
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto shrink-0"
+              disabled={disabled || busy || pasted.trim() === ""}
+              onClick={() => void handlePaste()}
+            >
+              {busy ? "Cargando" : "Cargar"}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {localError && (
         <p className="mt-2 font-mono text-xs text-destructive" role="alert">
@@ -390,6 +537,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
               accept={slot.accept ?? ".xlsx,.xls"}
               disabled={loading}
               onUpload={slot.onUpload}
+              onPasteTexto={slot.onPasteTexto}
             />
           ))}
 

@@ -108,6 +108,7 @@ export default function Informatica() {
     saving,
     error,
     uploadTo,
+    pasteTo,
     updatePage,
     addPage,
     movePage,
@@ -140,8 +141,9 @@ export default function Informatica() {
         multiple: slot.multiple ?? false,
         accept: slot.accept,
         onUpload: (files: File[]) => uploadTo(slot.id, files),
+        onPasteTexto: (texto: string) => pasteTo(slot.id, texto),
       })),
-    [dataset.source, uploadTo]
+    [dataset.source, pasteTo, uploadTo]
   );
 
   const artwork = MODULE.deck?.artwork;

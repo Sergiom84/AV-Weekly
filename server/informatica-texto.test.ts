@@ -177,6 +177,27 @@ describe("parseInformaticaTexto", () => {
     expect(fila?.total).toBe(306);
   });
 
+  it("lee el pegado de Drive con las filas TSV entre comillas", () => {
+    const canonical = [
+      INFORMATICA_TEXTO_HEADER,
+      "semana\t2026-09-15",
+      "asOfDate\t2026-09-15",
+      "",
+      "[PETICIONES]",
+      '2026-08-17\t2026/08\t34\tOn Site\tEn vuelo\tPeticiones\t306',
+    ].join("\n");
+    const fromDrive = [
+      INFORMATICA_TEXTO_HEADER,
+      '"semana\t2026-09-15"',
+      '"asOfDate\t2026-09-15"',
+      "",
+      "[PETICIONES]",
+      '"2026-08-17\t2026/08\t34\tOn Site\tEn vuelo\tPeticiones\t306"',
+    ].join("\n");
+
+    expect(parseInformaticaTexto(fromDrive)).toEqual(parseInformaticaTexto(canonical));
+  });
+
   // An empty date must come back as `null`, never as `""`: the round trip has
   // to be stable, and `InformaticaDateCell` declares the absence as `null`.
   it("lee como null la celda de fecha vacia, no como cadena vacia", () => {
@@ -388,7 +409,7 @@ describe("POST /api/informatica/upload/texto", () => {
     closeClient = async () => client.close();
 
     const app = express();
-    app.use(express.json());
+    app.use(express.json({ limit: "25mb" }));
     app.use(routes);
 
     await new Promise<void>((resolve) => {
@@ -432,6 +453,37 @@ describe("POST /api/informatica/upload/texto", () => {
     await expect(response.json()).resolves.toMatchObject({
       error: expect.stringContaining("texto plano"),
     });
+  });
+
+  it("acepta el pegado de Drive con las filas entre comillas", async () => {
+    const fromDrive = [
+      INFORMATICA_TEXTO_HEADER,
+      '"semana\t2026-09-15"',
+      '"asOfDate\t2026-09-15"',
+      '"alcance\tcompleto"',
+      "",
+      "[PETICIONES]",
+      '"2026-08-17\t2026/08\t34\tOn Site\tEn vuelo\tPeticiones\t306"',
+    ].join("\n");
+    const response = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texto: fromDrive }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.peticiones).toEqual([
+      {
+        fecha: "2026-08-17",
+        semana: 34,
+        mes: "2026/08",
+        origen: "On Site",
+        estado: "En vuelo",
+        entidad: "Peticiones",
+        total: 306,
+      },
+    ]);
   });
 
   it("rechaza un texto sin la cabecera del formato", async () => {

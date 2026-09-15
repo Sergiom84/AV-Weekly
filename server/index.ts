@@ -10,6 +10,7 @@ import {
 } from "./department-access.js";
 import { initDb } from "./db.js";
 import routes from "./routes.js";
+import { MAX_TEXTO_PASTE_BYTES } from "./upload-limits.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +25,7 @@ async function startServer() {
   // data and must stay before the access middleware.
   app.get("/healthz", (_req, res) => res.status(200).json({ status: "ok" }));
   app.use(createAccessMiddleware());
-  app.use(express.json());
+  app.use(express.json({ limit: MAX_TEXTO_PASTE_BYTES }));
   app.use(createDepartmentAccessRouter());
   app.use(createDepartmentApiMiddleware());
 
