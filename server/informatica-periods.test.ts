@@ -49,6 +49,13 @@ describe("Informatica reported-month window", () => {
           metrica: "Resueltas",
           total: 3,
         },
+        {
+          ambito: "SSCC",
+          mes: "2026/10",
+          categoria: "",
+          metrica: "Resueltas",
+          total: 1,
+        },
       ],
       source,
     };
@@ -77,9 +84,9 @@ describe("Informatica reported-month window", () => {
     const dataset: InformaticaDataset = {
       incidencias: [
         {
-          fecha: "2026-09-01",
-          semana: 36,
-          mes: "2026/09",
+          fecha: "2026-10-01",
+          semana: 40,
+          mes: "2026/10",
           categoria: "",
           subcategoria: "",
           metrica: "Resueltas",
@@ -87,14 +94,41 @@ describe("Informatica reported-month window", () => {
           tickets: 1,
         },
       ],
+      hic: [
+        {
+          ambito: "SSCC",
+          mes: "2026/09",
+          categoria: "",
+          metrica: "Resueltas",
+          total: 3,
+        },
+        {
+          ambito: "SSCC",
+          mes: "2026/10",
+          categoria: "",
+          metrica: "Resueltas",
+          total: 9,
+        },
+      ],
       source: { ...source, asOfDate: "2026-09-15" },
     };
 
     expect(coverageEnd(dataset)).toBe("2026-09-15");
+    expect(reportMonths(dataset, dataset.hic ?? [], row => row.mes)).toEqual([
+      "2026/09",
+    ]);
     expect(reportedWeek(coverageEnd(dataset))).toEqual({
       start: "2026-09-07",
       end: "2026-09-13",
     });
+  });
+
+  it("ignores a declared cut that is not a real calendar day", () => {
+    expect(coverageEnd({ source: { ...source, asOfDate: "2026-13-01" } })).toBe(
+      null
+    );
+    expect(lastClosedMonth(["2026/08", "2026/09"], "n/a")).toBeNull();
+    expect(lastClosedMonth(["2026/08", "2026/09"], "2026-9-15")).toBeNull();
   });
 
   it("cuts annual axes through the in-flight month of the extract", () => {

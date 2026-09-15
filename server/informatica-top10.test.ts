@@ -93,6 +93,9 @@ describe("Top Ten incidencias SSCC", () => {
           row(COMPONENTS, "PORTATIL", "2026/09", 67),
           row(COMPONENTS, "SOFTWARE", "2026/09", 46),
           row(COMPONENTS, "SISTEMA OPERATIVO", "2026/09", 27),
+          row(COMPONENTS, "PORTATIL", "2026/10", 900),
+          row(COMPONENTS, "SOFTWARE", "2026/10", 800),
+          row(COMPONENTS, "SISTEMA OPERATIVO", "2026/10", 700),
         ],
         "2026-09-14"
       )

@@ -82,6 +82,40 @@ export function isoDay(cell: InformaticaDateCell): string | null {
 }
 
 /**
+ * Calendar day as `YYYY-MM-DD`, or null when the value is not a real date.
+ *
+ * Accepts a trailing time (`2026-09-15T09:35:51.354Z`) because that is how an
+ * ISO timestamp arrives, and rejects month 13 / day 32 so a garbage cut cannot
+ * be read as a later month than any real one.
+ */
+function isoCut(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() + 1 !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+/**
  * Day the extract was cut.
  *
  * The declared `asOfDate` wins: it is the date the team typed when they
@@ -94,10 +128,10 @@ export function isoDay(cell: InformaticaDateCell): string | null {
  * the reported week into a period that has not been worked.
  */
 export function coverageEnd(dataset: InformaticaDataset): string | null {
-  const declared = dataset.source?.asOfDate;
+  const declared = isoCut(dataset.source?.asOfDate);
 
-  if (typeof declared === "string" && /^\d{4}-\d{2}-\d{2}/.test(declared)) {
-    return declared.slice(0, 10);
+  if (declared !== null) {
+    return declared;
   }
 
   const cells: InformaticaDateCell[] = [
@@ -340,17 +374,21 @@ export function lastClosedMonth(
   }
 
   if (end !== null) {
-    const endMonth = `${end.slice(0, 4)}/${end.slice(5, 7)}`;
+    const cut = isoCut(end);
 
-    if (/^\d{4}\/\d{2}$/.test(endMonth)) {
-      for (let index = ordered.length - 1; index >= 0; index -= 1) {
-        if (ordered[index] <= endMonth) {
-          return ordered[index];
-        }
-      }
-
+    if (cut === null) {
       return null;
     }
+
+    const endMonth = `${cut.slice(0, 4)}/${cut.slice(5, 7)}`;
+
+    for (let index = ordered.length - 1; index >= 0; index -= 1) {
+      if (ordered[index] <= endMonth) {
+        return ordered[index];
+      }
+    }
+
+    return null;
   }
 
   return ordered[ordered.length - 1];
