@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { InformaticaDataset } from "../shared/modules/informatica/types.ts";
 import {
+  coverageEnd,
   lastClosedMonth,
+  monthIndexOf,
   reportMonths,
   reportedWeek,
   snapshotRows,
@@ -10,14 +12,14 @@ import {
 
 const source = { sourceFile: null, uploadedAt: null };
 
-describe("Informatica complete-month reporting", () => {
-  it("excludes the partial extract month from every complete-month window", () => {
+describe("Informatica reported-month window", () => {
+  it("keeps the in-flight extract month on every monthly window", () => {
     const dataset: InformaticaDataset = {
       incidencias: [
         {
-          fecha: "2026-08-14",
-          semana: 33,
-          mes: "2026/08",
+          fecha: "2026-09-14",
+          semana: 38,
+          mes: "2026/09",
           categoria: "",
           subcategoria: "",
           metrica: "Resueltas",
@@ -26,13 +28,6 @@ describe("Informatica complete-month reporting", () => {
         },
       ],
       hic: [
-        {
-          ambito: "SSCC",
-          mes: "2026/06",
-          categoria: "",
-          metrica: "Resueltas",
-          total: 10,
-        },
         {
           ambito: "SSCC",
           mes: "2026/07",
@@ -47,18 +42,92 @@ describe("Informatica complete-month reporting", () => {
           metrica: "Resueltas",
           total: 5,
         },
+        {
+          ambito: "SSCC",
+          mes: "2026/09",
+          categoria: "",
+          metrica: "Resueltas",
+          total: 3,
+        },
       ],
       source,
     };
 
     expect(reportMonths(dataset, dataset.hic ?? [], row => row.mes)).toEqual([
-      "2026/06",
       "2026/07",
+      "2026/08",
+      "2026/09",
     ]);
   });
 
-  it("returns no closed month when the known cut only covers a partial month", () => {
-    expect(lastClosedMonth(["2026/08"], "2026-08-14")).toBeNull();
+  it("reports the month of the cut even when that month is still in progress", () => {
+    expect(lastClosedMonth(["2026/08", "2026/09"], "2026-09-14")).toBe(
+      "2026/09"
+    );
+    expect(lastClosedMonth(["2026/08"], "2026-08-14")).toBe("2026/08");
+  });
+
+  it("does not report a month the operational cut has not reached", () => {
+    expect(lastClosedMonth(["2026/07", "2026/08", "2026/09"], "2026-07-31")).toBe(
+      "2026/07"
+    );
+  });
+
+  it("prefers the declared extraction date over the last operational row", () => {
+    const dataset: InformaticaDataset = {
+      incidencias: [
+        {
+          fecha: "2026-09-01",
+          semana: 36,
+          mes: "2026/09",
+          categoria: "",
+          subcategoria: "",
+          metrica: "Resueltas",
+          edificio: "SSCC",
+          tickets: 1,
+        },
+      ],
+      source: { ...source, asOfDate: "2026-09-15" },
+    };
+
+    expect(coverageEnd(dataset)).toBe("2026-09-15");
+    expect(reportedWeek(coverageEnd(dataset))).toEqual({
+      start: "2026-09-07",
+      end: "2026-09-13",
+    });
+  });
+
+  it("cuts annual axes through the in-flight month of the extract", () => {
+    const closed = lastClosedMonth(["2026/08", "2026/09"], "2026-09-14");
+    const result = yearlyComparison(
+      [
+        { mes: "2025/08", total: 80 },
+        { mes: "2025/09", total: 90 },
+        { mes: "2026/08", total: 8 },
+        { mes: "2026/09", total: 9 },
+      ],
+      row => row.mes,
+      row => row.total,
+      { throughMonth: monthIndexOf(closed ?? "") }
+    );
+
+    expect(result.data.map(entry => entry.mes)).toEqual([
+      "Ene",
+      "Feb",
+      "Mar",
+      "Abr",
+      "May",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Sep",
+    ]);
+    expect(result.totals).toEqual(
+      new Map([
+        [2025, 170],
+        [2026, 17],
+      ])
+    );
   });
 
   it("cuts annual axes and totals at the same closed month", () => {

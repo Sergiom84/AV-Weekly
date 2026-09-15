@@ -35,7 +35,7 @@ const SERIES: CategorySeries[] = [
   },
 ];
 
-/** Requests and interventions by building for the latest closed month. */
+/** Requests and interventions by building for the latest reported month. */
 export default function ImacsChartPage({
   page,
   editing,

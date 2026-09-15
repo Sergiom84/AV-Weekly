@@ -52,9 +52,8 @@ interface HicWorkOrdersPageProps extends InformaticaPageProps {
  * resueltas + 4-4 columna B incidencias resueltas" — and the frozen history
  * confirms it, 566 + 38 = 604 for 2025/07 and 1245 + 44 = 1289 for 2025/11.
  *
- * Unlike the complete-month pages, this one publishes the month in flight: the
- * reference slide shows it cut at the extraction date, and hiding it would drop
- * the very week the report is about.
+ * Publishes the month in flight: the reference slide shows it cut at the
+ * extraction date, and hiding it would drop the very week the report is about.
  */
 export default function HicWorkOrdersPage({
   page,

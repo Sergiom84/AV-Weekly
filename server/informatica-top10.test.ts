@@ -7,8 +7,8 @@ import type {
 } from "../shared/modules/informatica/types.ts";
 
 /**
- * Ranking of the 2.1.3 slide. The closed month is July: August is in flight
- * and must not reorder the ten or appear as a column.
+ * Ranking of the 2.1.3 slide. Months after the operational cut stay off the
+ * axis; the month the cut falls in is drawn, even when it is still in progress.
  */
 
 const COMPONENTS = "11-10 - Comparativa Comonente_";
@@ -81,8 +81,24 @@ const comparativas: InformaticaComparativaRow[] = [
 describe("Top Ten incidencias SSCC", () => {
   const result = topTenComparison(dataset(comparativas));
 
-  it("cierra en julio y no dibuja el mes en curso", () => {
+  it("cierra en julio y no dibuja meses posteriores al corte", () => {
     expect(result.columns).toEqual(["Jun 26", "Jul 26"]);
+  });
+
+  it("dibuja el mes en curso cuando el corte cae dentro de él", () => {
+    const inFlight = topTenComparison(
+      dataset(
+        [
+          ...comparativas,
+          row(COMPONENTS, "PORTATIL", "2026/09", 67),
+          row(COMPONENTS, "SOFTWARE", "2026/09", 46),
+          row(COMPONENTS, "SISTEMA OPERATIVO", "2026/09", 27),
+        ],
+        "2026-09-14"
+      )
+    );
+
+    expect(inFlight.columns).toEqual(["Jun 26", "Jul 26", "Ago 26", "Sep 26"]);
   });
 
   it("ordena los diez por el mes cerrado, no por el extracto a medias", () => {

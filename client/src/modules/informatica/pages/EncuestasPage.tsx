@@ -17,7 +17,7 @@ const SCORES = [1, 2, 3, 4, 5];
 
 /**
  * `2.1.5 Encuestas Incidencias SSCC`: score, response count and share for the
- * latest closed month represented in the source data.
+ * latest month represented in the source data, including the one in progress.
  */
 export default function EncuestasPage({
   page,

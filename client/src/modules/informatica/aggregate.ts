@@ -56,21 +56,6 @@ export function percent(value: number, digits = 1): string {
   })} %`;
 }
 
-/** Last calendar day of a `YYYY/MM` month, as `YYYY-MM-DD`. */
-function lastDayOf(month: string): string {
-  const year = yearOf(month);
-  const index = monthIndexOf(month);
-
-  if (!Number.isFinite(year) || !Number.isFinite(index)) {
-    return "";
-  }
-
-  // Day 0 of the next month is the last day of this one, leap years included.
-  const date = new Date(Date.UTC(year, index, 0));
-
-  return date.toISOString().slice(0, 10);
-}
-
 /**
  * `Fecha` cell as `YYYY-MM-DD`. The template writes an Excel serial but a
  * hand-edited workbook carries ISO text, so both are accepted — the same
@@ -97,18 +82,24 @@ export function isoDay(cell: InformaticaDateCell): string | null {
 }
 
 /**
- * Last day the workbook has data for, across the sheets that record what
- * happened.
+ * Day the extract was cut.
  *
- * The flat book is an extract cut on the day it was taken, so knowing where it
- * stops is what tells a full month apart from an in-flight one.
+ * The declared `asOfDate` wins: it is the date the team typed when they
+ * generated the week, so every page of the deck reports the same cut. Without
+ * it the last dated incident, work order or request is the fallback.
  *
  * `Citas` is deliberately not one of the sheets consulted: appointments are
  * booked ahead, so that sheet runs past the cut — to 2026-08-26 in a book whose
- * incidents stop on the 14th. Reading the cut off future bookings would call a
- * month closed before it has been worked.
+ * incidents stop on the 14th. Reading the cut off future bookings would pull
+ * the reported week into a period that has not been worked.
  */
 export function coverageEnd(dataset: InformaticaDataset): string | null {
+  const declared = dataset.source?.asOfDate;
+
+  if (typeof declared === "string" && /^\d{4}-\d{2}-\d{2}/.test(declared)) {
+    return declared.slice(0, 10);
+  }
+
   const cells: InformaticaDateCell[] = [
     ...(dataset.incidencias ?? []).map(row => row.fecha),
     ...(dataset.workOrders ?? []).map(row => row.fecha),
@@ -327,16 +318,16 @@ export function inWeek(
 }
 
 /**
- * Latest month the workbook covers all the way to its last calendar day.
+ * Latest month the extract reports, including the one still in progress.
  *
- * The reported month of a monthly report has to be a whole month. The extract
- * is cut on the day it is taken, so its final month is normally a fortnight
- * long — 2026/08 stops on the 14th in the current book — and printing "the
- * month" on it would put half a month next to full ones and read as a collapse
- * in volume.
+ * A weekly extract is cut mid-month — 2026-09-15 still sits inside September —
+ * and that in-flight month is what 2.1.1 already publishes as "Sep 26". Waiting
+ * for the last calendar day hid September on Top Ten, surveys, work orders,
+ * appointments and IMACs, so those slides read as if the week had not happened.
  *
- * Falls back to the latest month when no dated sheet says where the data
- * stops: showing the most recent month is a better failure than showing none.
+ * Months after the cut stay out: comparativas can carry a relative "Mes Actual"
+ * that the operational sheets have not reached yet. Falls back to the latest
+ * month when no dated sheet says where the data stops.
  */
 export function lastClosedMonth(
   months: string[],
@@ -349,19 +340,17 @@ export function lastClosedMonth(
   }
 
   if (end !== null) {
-    for (let index = ordered.length - 1; index >= 0; index -= 1) {
-      const month = ordered[index];
-      const closes = lastDayOf(month);
+    const endMonth = `${end.slice(0, 4)}/${end.slice(5, 7)}`;
 
-      if (closes !== "" && end >= closes) {
-        return month;
+    if (/^\d{4}\/\d{2}$/.test(endMonth)) {
+      for (let index = ordered.length - 1; index >= 0; index -= 1) {
+        if (ordered[index] <= endMonth) {
+          return ordered[index];
+        }
       }
-    }
 
-    // A known cut that does not reach the end of any reported month means
-    // there is no complete month to show. Returning the newest one here would
-    // silently present a partial period as closed.
-    return null;
+      return null;
+    }
   }
 
   return ordered[ordered.length - 1];
@@ -380,10 +369,10 @@ export function reportMonth<T>(
 }
 
 /**
- * Ordered months a complete-month visual may show.
+ * Ordered months a monthly visual may show.
  *
  * The final month is the same one `reportMonth` uses for KPIs, so chart axes,
- * rankings and headline figures cannot disagree about whether an extract's
+ * rankings and headline figures cannot disagree about whether the extract's
  * in-flight month belongs in the report.
  */
 export function reportMonths<T>(
@@ -661,7 +650,7 @@ export function seriesColor(index: number): string {
 /* 2.1.3 Top Ten                                                               */
 /* -------------------------------------------------------------------------- */
 
-/** Rows kept per view, ranked by the latest closed month. */
+/** Rows kept per view, ranked by the latest reported month. */
 const TOP_TEN = 10;
 
 /** Detail tables of the 2.1.3 slide, in the order the page prints them. */
@@ -677,10 +666,9 @@ export interface TopTenView {
  * Matrices of the 2.1.3 slide: components for the chart, then the three
  * detail tables.
  *
- * Ranking uses the last closed month so an in-flight extract cannot reorder
- * the ten. When that month has no positive totals the window as a whole is
- * the fallback, which is the same rule the page used while this lived in
- * the component.
+ * Ranking uses the latest reported month, the same one the rest of the 2.1
+ * block publishes, including the month still in progress. When that month has
+ * no positive totals the window as a whole is the fallback.
  */
 export function topTenComparison(dataset: InformaticaDataset): {
   columns: string[];

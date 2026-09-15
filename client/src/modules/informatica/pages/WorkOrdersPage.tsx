@@ -13,10 +13,8 @@ interface WorkOrdersPageProps extends InformaticaPageProps {
  * `2.1.6 WorkOrders`: matrix of buildings by work order type for the reported
  * month, following the framed hierarchy of AV's resolution-detail table.
  *
- * The month is the last closed one, the same one every other page of the
- * report reads. Taking the most recent month instead would put the fortnight
- * the extract was cut in — 462 orders against July's 1.152 — next to full
- * months on the neighbouring slides.
+ * The month is the latest one the extract reports, including the fortnight
+ * still in progress, the same one 2.1.1 already publishes.
  */
 export default function WorkOrdersPage({
   page,
