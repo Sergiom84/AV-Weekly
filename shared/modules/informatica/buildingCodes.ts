@@ -88,6 +88,43 @@ function expandField(value: string, catalog: string[]): string {
   return value.trim() === "" ? value : expandEdificioCode(value, catalog);
 }
 
+/** Building fields of a dataset, section by section, as the text writes them. */
+const CODED_FIELDS: {
+  section: keyof InformaticaDataset;
+  field: string;
+}[] = [
+  { section: "incidencias", field: "edificio" },
+  { section: "workOrders", field: "edificio" },
+  { section: "citas", field: "edificio" },
+  { section: "imacs", field: "ciudad" },
+];
+
+/**
+ * Codes still unexpanded after `resolveInformaticaBuildingCodes`.
+ *
+ * An unknown code is not a cosmetic defect: `E3361717668` reaches the slide as
+ * the name of an office and the report publishes a hash to the bank. The
+ * importer refuses the upload on this list rather than storing it, so the
+ * failure is visible on the week it happens instead of on the printed deck.
+ */
+export function unresolvedEdificioCodes(dataset: InformaticaDataset): string[] {
+  const found = new Set<string>();
+
+  for (const { section, field } of CODED_FIELDS) {
+    const rows = dataset[section] as Record<string, unknown>[] | undefined;
+
+    for (const row of rows ?? []) {
+      const value = String(row[field] ?? "");
+
+      if (isEdificioCode(value)) {
+        found.add(value.trim());
+      }
+    }
+  }
+
+  return Array.from(found).sort();
+}
+
 /** Restores coded building fields on an imported dataset. */
 export function resolveInformaticaBuildingCodes(
   dataset: InformaticaDataset,

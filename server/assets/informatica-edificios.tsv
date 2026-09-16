@@ -1,0 +1,157 @@
+# Catalogo de edificios de Informatica.
+#
+# Celdas: edificio	dt	aliasSmartTech	aliasWorkOrder	aliasImacs	aliasPeticiones	visible	orden
+# Mismo orden que la seccion [EDIFICIOS] del texto plano.
+#
+# Origen: output/informatica-plano-2026-08-24.txt, el ultimo texto que la
+# hoja de Drive escribio con la seccion completa antes de codificar los
+# edificios. Cargarlo con:
+#
+#   node scripts/importar-edificios-informatica.mjs
+#
+# Un edificio nuevo se anade aqui y se vuelve a ejecutar el script.
+
+A. Maura	DT Cataluña				-PL ANTONIO MAURA, 6,	Si	1
+A. Maura	DT Cataluña				BARCELONA-PL ANTONIO MAURA, 6,	Si	2
+A. Maura	DT Cataluña				BARCELONA-PZ. ANTONIO MAURA, 6,	Si	3
+Alicante	DT Este				-RAMBLA MENDEZ NUÑEZ, 42,	Si	4
+Alicante	DT Este				ALICANTE-RAMBLA MENDEZ NUÑEZ, 42,	Si	5
+Alicante	DT Noroeste	Smart Tech Alicante, Méndez Nuñez				Si	6
+Alicante Rambla Mendez Nuñez				Alicante Rambla Mendez Nuñez		Si	7
+Alicante, Méndez Nuñez			Alicante, Méndez Nuñez			Si	8
+Antoni Maura			Antoni Maura			Si	9
+Antoni Maura	DT Cataluña	Smart Tech Antoni Maura				Si	10
+Asia Planta 3 Ciudad BBVA			Asia Planta 3 Ciudad BBVA			Si	11
+Baleares Plaza del Olivar				Baleares Plaza del Olivar		Si	12
+Baleares, Plaza del Olivar			Baleares, Plaza del Olivar			Si	13
+Barcelona Antoni Maura				Barcelona Antoni Maura		Si	14
+Barcelona Calabria				Barcelona Calabria		Si	15
+Barcelona El prat				Barcelona El prat		Si	16
+Barcelona Manlleu				Barcelona Manlleu		Si	17
+Barcelona Sabadell				Barcelona Sabadell		Si	18
+Barcelona Tarrasa				Barcelona Tarrasa		Si	19
+Bilbao	DT Norte				-GRAN VIA, 12,	Si	20
+Bilbao	DT Norte				BILBAO-GRAN VIA 12	Si	21
+Bilbao	DT Norte				BILBAO-GRAN VIA, 12 PLANTA 5ª,	Si	22
+Bilbao	DT Norte				BILBAO-GRAN VIA, 12,	Si	23
+Bilbao	DT Norte				BILBAO-PLAZA PIO BAROJA, 3,	Si	24
+Bilbao	DT Norte				BILBAO-PLAZA SAN NICOLAS, 4,	Si	25
+Bilbao	DT Norte	Smart Tech Bilbao, Gran Vía				Si	26
+Bilbao Gran Vía				Bilbao Gran Vía		Si	27
+Bilbao San Nicolás				Bilbao San Nicolás		Si	28
+Bilbao, Gran Vía			Bilbao, Gran Vía			Si	29
+Canarias	DT Canarias				-ALBAREDA, 6,	Si	30
+Canarias	DT Canarias				LAS PALMAS-ALBAREDA, 6,	Si	31
+Canarias	DT Canarias				LAS PALMAS-C/ ALBAREDA, 6,	Si	32
+Canarias	DT Canarias	Smart Tech Las Palmas, Albareda				Si	33
+Coruña	DT Noroeste				-CANTON PEQUEÑO, 18-21 /D.LORIGA, 9,	Si	34
+Coruña	DT Noroeste				CORUÑA-CANTON PEQUEÑO,18	Si	35
+Coruña	DT Noroeste				LA CORUÑA-CANTON PEQUEÑO, 18-21 /D.LORIGA, 9,	Si	36
+Coruña	DT Norte	Smart Tech Coruña, Cantón Pequeño				Si	37
+Coruña Cantón Pequeño				Coruña Cantón Pequeño		Si	38
+Coruña, Cantón Pequeño			Coruña, Cantón Pequeño			Si	39
+El Prat	DT Cataluña				EL PRAT DE LLOBREGAT-AVINGUDA VERGE DE MONTSERRAT, 99,	Si	40
+El Prat	DT Cataluña				EL PRAT DE LLOBREGAT-C. DEL PI, 2 - POLÍGON MAS MATEU,	Si	41
+El Prat	DT Cataluña				EL PRAT DE LLOBREGAT-CR DEL ROURE, 6,	Si	42
+El Prat	DT Cataluña				EL PRAT DE LLOBREGAT-CR PI,	Si	43
+Las Palmas Albareda 6				Las Palmas Albareda 6		Si	44
+Las Palmas, Albareda			Las Palmas, Albareda			Si	45
+Madrid Moraleja				Madrid Moraleja		Si	46
+Madrid Recoletos				Madrid Recoletos		Si	47
+Madrid SEDE				Madrid SEDE		Si	48
+Madrid Tablas I				Madrid Tablas I		Si	49
+Madrid Tres Cantos				Madrid Tres Cantos		Si	50
+Madrid Vaguada				Madrid Vaguada		Si	51
+Mallorca	DT Este				-PLAZA OLIVAR, S/N - C/V SAN MIGUEL,30,	Si	52
+Mallorca	DT Este				PALMA DE MALLORCA-PLAZA OLIVAR, S/N - C/V SAN MIGUEL,30,	Si	53
+Mallorca	DT Noroeste	Smart Tech Baleares, Plaza del Olivar				Si	54
+Moraleja	DT Centro				ALCOBENDAS-CONDE DE GAITANES, 45,	Si	55
+Málaga Larios/Nuñez				Málaga Larios/Nuñez		Si	56
+Oviedo	DT Norte				-MENDIZABAL, 1,	Si	57
+Oviedo	DT Norte				OVIEDO-MENDIZABAL, 1,	Si	58
+Oviedo	DT Norte	Smart Tech Oviedo, Mendizabal				Si	59
+Oviedo Mendizábal				Oviedo Mendizábal		Si	60
+Oviedo, Mendizabal			Oviedo, Mendizabal			Si	61
+Principal América del Norte Ciudad BBVA			Principal América del Norte Ciudad BBVA			Si	62
+Recoletos			Recoletos			Si	63
+Recoletos	DT Centro				-PASEO DE RECOLETOS, 10,	Si	64
+Recoletos	DT Centro				MADRID-PASEO DE RECOLETOS, 10,	Si	65
+Recoletos	DT Centro				MADRID-PASEO DE RECOLETOS,10	Si	66
+Recoletos	DT Centro				MADRID-PASEO DE RECOLETOS,16	Si	67
+Recoletos	DT Centro				MADRID-Pº DE RECOLETOS,10	Si	68
+Recoletos	DT Centro				MADRID-Pº RECOLETOS, 10,	Si	69
+Recoletos	DT Centro				MADRID-RECOLETOS,	Si	70
+Recoletos	DT Centro	Smart Tech Recoletos				Si	71
+Sede	DT Centro				-AZUL, 4,	Si	72
+Sede	DT Centro				MADRID-AV. DE MANOTERAS, 20,	Si	73
+Sede	DT Centro				MADRID-AVDA. MANOTERAS,20	Si	74
+Sede	DT Centro				MADRID-AZUL, 4,	Si	75
+Sede	DT Centro				MADRID-C/ AZUL, 4,	Si	76
+Sede	DT Centro				MADRID-MAROJAL,17	Si	77
+Sede - Asia	DT Centro	Smart Tech Asia Planta 3 (AM)				Si	78
+Sede - Principal	DT Centro	Smart Tech Principal AN				Si	79
+Seguros	DT Centro	Smart Tech Seguros Tablas I				Si	80
+Sevilla	DT Sur				-AVENIDA DE LA PALMERA, 61-63,	Si	81
+Sevilla	DT Sur				SEVILLA-AV.DE LA PALMERA, 61-63 - 1¦ PLANTA,	Si	82
+Sevilla	DT Sur				SEVILLA-AVDA LA PALMERA S/N,	Si	83
+Sevilla	DT Sur				SEVILLA-AVENIDA DE LA PALMERA, 61-63,	Si	84
+Sevilla	DT Sur	Smart Tech Sevilla, Palmera				Si	85
+Sevilla Avenida de la Palmera				Sevilla Avenida de la Palmera		Si	86
+Sevilla Plaza Nueva				Sevilla Plaza Nueva		Si	87
+Sevilla, Palmera			Sevilla, Palmera			Si	88
+Tablas I			Tablas I			Si	89
+Tablas I	DT Centro				MADRID-C/ FEDERICO MOMPOU, 5,	Si	90
+Tablas I	DT Centro				MADRID-FEDERICO MOMPOU,5	Si	91
+Tablas I	DT Centro				MADRID-ISABEL COLBRAND, 20/FEDERICO MOMPOU,	Si	92
+Tablas I	DT Centro	Smart Tech Tablas I				Si	93
+Tablas I	DT centro				-C/ FEDERICO MOMPOU, 5,	Si	94
+Tablas III	DT Centro				-ISABEL DE COLBRAND, 4,	Si	95
+Tablas III	DT Centro				MADRID-ISABEL DE COLBRAND, 4,	Si	96
+Tenerife	DT Canarias				-LA MARINA, 5,	Si	97
+Tenerife	DT Canarias				SANTA CRUZ DE TENERIFE-LA MARINA, 5,	Si	98
+Tenerife	DT Canarias	Smart Tech Tenerife, La Marina				Si	99
+Tenerife La Marina				Tenerife La Marina		Si	100
+Terrasa			Terrasa			Si	101
+Terrasa	DT Cataluña				-RBLA D'EGARA, 350,	Si	102
+Terrasa	DT Cataluña				TERRASSA-RAMBLA D'EGARA, 348,	Si	103
+Terrasa	DT Cataluña				TERRASSA-RAMBLA D'EGARA, 380,	Si	104
+Terrasa	DT Cataluña				TERRASSA-RBLA D'EGARA, 350,	Si	105
+Terrasa	DT Cataluña	Smart Tech Terrasa				Si	106
+Tres Cantos			Tres Cantos			Si	107
+Tres Cantos	DT Centro				-BATANES, 3/RONDA VALDECARRIZO, 21,	Si	108
+Tres Cantos	DT Centro				TRES CANTOS-BATANES, 3/RONDA VALDECARRIZO, 21,	Si	109
+Tres Cantos	DT Centro				TRES CANTOS-RONDA DE VALDECARRIZO 21 B,21 B	Si	110
+Tres Cantos	DT Centro	Smart Tech Tres Cantos				Si	111
+Valencia	DT Este				-PINTOR SOROLLA, 1-3/POETA QUEROL,17,	Si	112
+Valencia	DT Este				VALENCIA-PINTOR SOROLLA, 1-3/POETA QUEROL,17,	Si	113
+Valencia	DT Este				VALENCIA-PLAZA DEL AYUNTAMIENTO, 9,	Si	114
+Valencia	DT Noroeste	Smart Tech Valencia, Poeta Querol				Si	115
+Valencia Pintor Sorolla				Valencia Pintor Sorolla		Si	116
+Valencia Poeta Querol				Valencia Poeta Querol		Si	117
+Valencia, Poeta Querol			Valencia, Poeta Querol			Si	118
+Valladolid	DT Norte				-DUQUE DE LA VICTORIA, 12,	Si	119
+Valladolid	DT Norte				VALLADOLID-DUQUE DE LA VICTORIA, 12,	Si	120
+Valladolid	DT Norte				VALLADOLID-DUQUE DE LA VICTORIA, 12-EDIF.ANEXO,	Si	121
+Valladolid	DT Norte	Smart Tech Valladolid, Duque de la Vict				Si	122
+Valladolid Duque de la Victoria				Valladolid Duque de la Victoria		Si	123
+Valladolid, Duque de la Victoria			Valladolid, Duque de la Victoria			Si	124
+Zaragoza	DT Noroeste				-PLAZA DE SALAMERO, 14 / IMPERIAL,	Si	125
+Zaragoza	DT Noroeste				ZARAGOZA-PLAZA ARAGON, 13,	Si	126
+Zaragoza	DT Noroeste				ZARAGOZA-PLAZA DE SALAMERO, 14 / IMPERIAL,	Si	127
+Zaragoza	DT Norte	Smart Tech Zaragoza Salamero				Si	128
+Zaragoza Plaza Salamero				Zaragoza Plaza Salamero		Si	129
+Zaragoza, Salamero			Zaragoza, Salamero			Si	130
+Zelandia			Zelandia			Si	131
+zaragoza oficina 1834				zaragoza oficina 1834		Si	132
+zaragoza oficina 6900				zaragoza oficina 6900		Si	133
+zaragoza oficina 6901				zaragoza oficina 6901		Si	134
+
+# Etiquetas que el informe no publica como sede pero que aparecen en los datos.
+# Van marcadas No: buildingDirectory las ignora, asi que la tabla sigue
+# leyendose igual, y catalogFromEdificios si las incluye, que es lo que permite
+# devolver su codigo a texto en vez de bloquear la carga semanal.
+#N/A			#N/A			No	135
+Tenerife, La Marina	DT Canarias		Tenerife, La Marina			No	136
+Smart Tech Zelandia		Smart Tech Zelandia				No	137
+Smart Tech Anillo Planta 2 AN		Smart Tech Anillo Planta 2 AN				No	138
+Smart Tech OPPLUS Málaga		Smart Tech OPPLUS Málaga				No	139

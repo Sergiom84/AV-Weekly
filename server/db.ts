@@ -85,6 +85,19 @@ export async function initDb() {
       PRIMARY KEY (serie, mes)
     );
 
+    -- Building dimension table of Informatica, outside informatica_dataset for
+    -- the same reason as informatica_historico. The weekly Drive text codes
+    -- every building as E{hash} and no longer writes [EDIFICIOS], so this is
+    -- the only place that can name a code back and rename an alias to the site
+    -- the deck publishes. Seeded from server/assets/informatica-edificios.tsv
+    -- and grown by any upload that still carries the section.
+    CREATE TABLE IF NOT EXISTS informatica_edificios (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL,
+      source_file TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- Authoritative Edificio -> Ubicacion master shared by importers. Conflicts
     -- are preserved as separate rows so the resolver can refuse ambiguity.
     CREATE TABLE IF NOT EXISTS building_location_master (

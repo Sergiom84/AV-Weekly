@@ -1,0 +1,83 @@
+# Etiquetas de edificio observadas en los datos reales, por seccion.
+#
+# Celdas: seccion	etiqueta
+#
+# Extraidas de informatica-plano-2026-08-24.txt, el ultimo texto semanal que
+# la hoja de Drive escribio antes de codificar los edificios. Son los nombres
+# que el informe estaba publicando, asi que el catalogo tiene que saber
+# devolver el codigo de cada uno. server/informatica-edificios-asset.test.ts
+# recorre esta lista y falla si alguno no resuelve.
+#
+# Cuando aparezca un edificio nuevo se anade aqui y en informatica-edificios.tsv.
+
+WORKORDERS	#N/A
+WORKORDERS	Alicante, Méndez Nuñez
+WORKORDERS	Antoni Maura
+WORKORDERS	Baleares, Plaza del Olivar
+WORKORDERS	Bilbao, Gran Vía
+WORKORDERS	Coruña, Cantón Pequeño
+WORKORDERS	Las Palmas, Albareda
+WORKORDERS	Moraleja
+WORKORDERS	Oviedo, Mendizabal
+WORKORDERS	Recoletos
+WORKORDERS	Sede
+WORKORDERS	Sevilla, Palmera
+WORKORDERS	Tablas I
+WORKORDERS	Tenerife, La Marina
+WORKORDERS	Terrasa
+WORKORDERS	Tres Cantos
+WORKORDERS	Valencia, Poeta Querol
+WORKORDERS	Valladolid, Duque de la Victoria
+WORKORDERS	Zaragoza, Salamero
+CITAS	Smart Tech Alicante, Méndez Nuñez
+CITAS	Smart Tech Anillo Planta 2 AN
+CITAS	Smart Tech Antoni Maura
+CITAS	Smart Tech Asia Planta 3 (AM)
+CITAS	Smart Tech Baleares, Plaza del Olivar
+CITAS	Smart Tech Bilbao, Gran Vía
+CITAS	Smart Tech Coruña, Cantón Pequeño
+CITAS	Smart Tech Las Palmas, Albareda
+CITAS	Smart Tech OPPLUS Málaga
+CITAS	Smart Tech Oviedo, Mendizabal
+CITAS	Smart Tech Principal AN
+CITAS	Smart Tech Recoletos
+CITAS	Smart Tech Seguros Tablas I
+CITAS	Smart Tech Sevilla, Palmera
+CITAS	Smart Tech Tablas I
+CITAS	Smart Tech Tenerife, La Marina
+CITAS	Smart Tech Terrasa
+CITAS	Smart Tech Tres Cantos
+CITAS	Smart Tech Valencia, Poeta Querol
+CITAS	Smart Tech Valladolid, Duque de la Vict
+CITAS	Smart Tech Zaragoza Salamero
+CITAS	Smart Tech Zelandia
+IMACS	Alicante Rambla Mendez Nuñez
+IMACS	Baleares Plaza del Olivar
+IMACS	Barcelona Antoni Maura
+IMACS	Barcelona Calabria
+IMACS	Barcelona El prat
+IMACS	Barcelona Manlleu
+IMACS	Barcelona Sabadell
+IMACS	Barcelona Tarrasa
+IMACS	Bilbao Gran Vía
+IMACS	Bilbao San Nicolás
+IMACS	Coruña Cantón Pequeño
+IMACS	Las Palmas Albareda 6
+IMACS	Madrid Moraleja
+IMACS	Madrid Recoletos
+IMACS	Madrid SEDE
+IMACS	Madrid Tablas I
+IMACS	Madrid Tres Cantos
+IMACS	Madrid Vaguada
+IMACS	Málaga Larios/Nuñez
+IMACS	Oviedo Mendizábal
+IMACS	Sevilla Avenida de la Palmera
+IMACS	Sevilla Plaza Nueva
+IMACS	Tenerife La Marina
+IMACS	Valencia Pintor Sorolla
+IMACS	Valencia Poeta Querol
+IMACS	Valladolid Duque de la Victoria
+IMACS	Zaragoza Plaza Salamero
+IMACS	zaragoza oficina 1834
+IMACS	zaragoza oficina 6900
+IMACS	zaragoza oficina 6901

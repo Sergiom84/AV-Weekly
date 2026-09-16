@@ -23,6 +23,7 @@ import type {
   BuildingLocationImportReport,
   InformaticaDataset,
   InformaticaDeckState,
+  InformaticaEdificioRow,
   InformaticaHistoricoRow,
   InformaticaPayload,
 } from "../shared/modules/informatica/types.ts";
@@ -101,7 +102,9 @@ import { parseInformaticaTexto } from "./parseInformaticaTexto.js";
 import {
   catalogFromEdificios,
   resolveInformaticaBuildingCodes,
+  unresolvedEdificioCodes,
 } from "../shared/modules/informatica/buildingCodes.ts";
+import { mergeEdificioCatalog } from "./informaticaEdificios.js";
 import {
   mergeReportedResolutionHistory,
   parseInformeWeeklyWorkbook,
@@ -771,31 +774,105 @@ async function readBuildingLocationMaster(): Promise<BuildingLocationResolver> {
 }
 
 /**
- * Restores coded building labels using the stored Edificios table and the
- * location master. Weekly texts omit EDIFICIOS so the proxy never sees
- * addresses; the dimension table already in the app is the catalogue.
+ * Building catalogue, read from its own table.
+ *
+ * Not from `informatica_dataset`: an upload with complete scope replaces that
+ * row wholesale, which is how the catalogue was lost the week the Drive text
+ * stopped writing `[EDIFICIOS]`. Seeded by
+ * `scripts/importar-edificios-informatica.mjs`.
+ */
+async function readInformaticaEdificios(): Promise<InformaticaEdificioRow[]> {
+  const result = await client.execute("SELECT data FROM informatica_edificios WHERE id = 1");
+
+  if (result.rows.length === 0) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(result.rows[0].data as string) as InformaticaEdificioRow[];
+
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Folds the section an upload still carries into the stored catalogue.
+ *
+ * An empty list is not written: the catalogue only grows, and a coded text
+ * carries no buildings at all.
+ */
+async function saveInformaticaEdificios(
+  rows: InformaticaEdificioRow[],
+  sourceFile: string
+): Promise<void> {
+  if (rows.length === 0) {
+    return;
+  }
+
+  await client.execute({
+    sql: `INSERT INTO informatica_edificios (id, data, source_file, updated_at)
+          VALUES (1, ?, ?, datetime('now'))
+          ON CONFLICT(id) DO UPDATE
+          SET data = excluded.data,
+              source_file = excluded.source_file,
+              updated_at = excluded.updated_at`,
+    args: [JSON.stringify(rows), sourceFile],
+  });
+}
+
+/**
+ * Restores coded building labels. Weekly texts omit EDIFICIOS so the proxy
+ * never sees addresses; the catalogue table is what names a code back, with the
+ * location master and the stored dataset as extra sources of labels.
  */
 function decodeInformaticaBuildingCodes(
   incoming: InformaticaDataset,
   existing: InformaticaDataset | null,
-  buildings: BuildingLocationResolver
+  buildings: BuildingLocationResolver,
+  edificios: InformaticaEdificioRow[]
 ): InformaticaDataset {
-  const edificios =
-    incoming.edificios && incoming.edificios.length > 0
-      ? incoming.edificios
-      : existing?.edificios;
   const catalog = [
     ...catalogFromEdificios(edificios),
+    ...catalogFromEdificios(incoming.edificios),
     ...catalogFromEdificios(existing?.edificios),
     ...buildings.catalogNames(),
   ];
   const expanded = resolveInformaticaBuildingCodes(incoming, catalog);
 
-  if (!expanded.edificios?.length && existing?.edificios?.length) {
-    return { ...expanded, edificios: existing.edificios };
+  return expanded.edificios?.length ? expanded : { ...expanded, edificios };
+}
+
+/**
+ * Message of an import whose buildings could not be named back.
+ *
+ * Returns `null` when there is nothing to report. Storing the dataset anyway
+ * would put `E3361717668` on a slide as the name of an office, so the upload is
+ * refused and the codes are listed: the week it breaks is the week it shows.
+ */
+function informaticaBuildingCodeError(
+  dataset: InformaticaDataset,
+  catalogSize: number
+): string | null {
+  const pending = unresolvedEdificioCodes(dataset);
+
+  if (pending.length === 0) {
+    return null;
   }
 
-  return expanded;
+  const shown = pending.slice(0, 10).join(", ");
+  const rest = pending.length > 10 ? ` y ${pending.length - 10} más` : "";
+  const cause =
+    catalogSize === 0
+      ? "El catálogo de edificios está vacío."
+      : `El catálogo tiene ${catalogSize} filas y no cubre estos edificios.`;
+
+  return (
+    `${cause} No se pueden traducir ${pending.length} códigos del texto: ${shown}${rest}. ` +
+    "Actualiza server/assets/informatica-edificios.tsv y ejecuta " +
+    "node scripts/importar-edificios-informatica.mjs antes de volver a subirlo."
+  );
 }
 
 /**
@@ -818,22 +895,27 @@ async function readInformaticaHistorico(): Promise<InformaticaHistoricoRow[]> {
 }
 
 async function buildInformaticaPayload(): Promise<InformaticaResponse> {
-  const [deck, dataset, buildings, historico] = await Promise.all([
+  const [deck, dataset, buildings, historico, edificios] = await Promise.all([
     readStoredInformaticaDeck(),
     readStoredInformaticaDataset(),
     readBuildingLocationMaster(),
     readInformaticaHistorico(),
+    readInformaticaEdificios(),
   ]);
 
   const data = dataset
     ? normalizeInformaticaBuildingLocations(dataset, buildings).dataset
     : emptyInformaticaDataset();
+  // The deck renames each source alias through this table, so it is served from
+  // the catalogue whenever the stored snapshot came from a text that omitted it.
+  const named =
+    data.edificios?.length || edificios.length === 0 ? data : { ...data, edificios };
 
   return {
     deck: deck ?? createDefaultInformaticaDeck(),
     // An empty table stays absent rather than becoming an empty array, so a page
     // asking "is this section present" gets the same answer as before it existed.
-    data: historico.length === 0 ? data : { ...data, historico },
+    data: historico.length === 0 ? named : { ...named, historico },
   };
 }
 
@@ -1040,6 +1122,13 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
       uploadedAt: new Date().toISOString(),
     });
 
+    // The flat workbook is the other place a building master can enter the app,
+    // and the catalogue is what names the coded weekly text back.
+    await saveInformaticaEdificios(
+      mergeEdificioCatalog(await readInformaticaEdificios(), dataset.edificios ?? []),
+      stored.source.sourceFile ?? describeSourceFiles(files)
+    );
+
     await client.batch(
       [
         ...buildings.learnedAliases().map((row) => ({
@@ -1107,7 +1196,20 @@ router.post("/api/informatica/upload/texto", upload.single("file"), async (req, 
     const { dataset, meta } = parseInformaticaTexto(texto);
     const buildings = await readBuildingLocationMaster();
     const existing = await readStoredInformaticaDataset();
-    const decoded = decodeInformaticaBuildingCodes(dataset, existing, buildings);
+    // A text that still carries EDIFICIOS grows the catalogue; a coded one only
+    // reads it. Either way the catalogue, not the snapshot, is the dimension
+    // table from here on.
+    const catalog = mergeEdificioCatalog(
+      await readInformaticaEdificios(),
+      dataset.edificios ?? []
+    );
+    const decoded = decodeInformaticaBuildingCodes(dataset, existing, buildings, catalog);
+    const pending = informaticaBuildingCodeError(decoded, catalog.length);
+
+    if (pending !== null) {
+      return res.status(400).json({ error: pending });
+    }
+
     const normalized = normalizeInformaticaBuildingLocations(decoded, buildings).dataset;
     const normalizedExisting = existing
       ? normalizeInformaticaBuildingLocations(existing, buildings).dataset
@@ -1120,12 +1222,13 @@ router.post("/api/informatica/upload/texto", upload.single("file"), async (req, 
     // Drive serializes one auditable complete snapshot. Reusing omitted sections
     // from an older import would make optional data (notably WASP) look current.
     // EDIFICIOS is the exception: coded weekly texts omit it so the proxy does
-    // not see addresses, and the stored dimension table must survive.
+    // not see addresses, and the catalogue is written to its own table below.
     const stored =
       meta.scope === "completo"
         ? { ...normalized, source }
         : mergeInformaticaDataset(normalizedExisting, normalized, source);
 
+    await saveInformaticaEdificios(catalog, source.sourceFile);
     await client.execute({
       sql: `INSERT INTO informatica_dataset (id, data, source_file, uploaded_at)
             VALUES (1, ?, ?, datetime('now'))
