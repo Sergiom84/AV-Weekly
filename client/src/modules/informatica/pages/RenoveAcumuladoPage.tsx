@@ -50,10 +50,9 @@ export default function RenoveAcumuladoPage({
   );
   const colorOf = (ambito: string) =>
     series.find(entry => entry.label === ambito)?.color;
-  const charted = data.reduce(
-    (sum, point) => sum + point.Holding + point["España"],
-    0
-  );
+  // Only the national scope adds up to the KPI: Holding is a subset of España
+  // and its column is drawn beside it, not on top of it.
+  const charted = data.reduce((sum, point) => sum + point["España"], 0);
 
   return (
     <PageShell
@@ -94,12 +93,7 @@ export default function RenoveAcumuladoPage({
 
       <div className="flex min-h-0 flex-1 flex-col">
         {series.length > 0 && (
-          <CategoryBarChart
-            categoryKey="mes"
-            series={series}
-            data={data}
-            stacked
-          />
+          <CategoryBarChart categoryKey="mes" series={series} data={data} />
         )}
       </div>
     </PageShell>

@@ -141,7 +141,6 @@ export default function RenoveSemanalPage({
             categoryKey="semana"
             series={series}
             data={data}
-            stacked
             angledCategories
           />
         )}

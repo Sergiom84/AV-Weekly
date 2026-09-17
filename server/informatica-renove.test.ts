@@ -62,7 +62,7 @@ describe("Renove totals", () => {
    */
   it("keeps the dismissed units inside the accumulated figure", () => {
     const rows = [
-      row("2026-04-07", "Holding", "RENOVADO", 764),
+      row("2026-04-07", "España", "RENOVADO", 764),
       row("2026-04-07", "España", "RECHAZADO", 36),
       row("2026-04-07", "España", "PENDIENTE USUARIO", 181),
     ];
@@ -71,13 +71,33 @@ describe("Renove totals", () => {
     expect(totals.total).toBe(800);
     expect(totals.renovados).toBe(764);
     expect(totals.desestimados).toBe(36);
-    expect(totals.porAmbito.Holding + totals.porAmbito["España"]).toBe(800);
+  });
+
+  /**
+   * The workbook repeats every Holding unit inside España: 407 of Holding's 409
+   * petition numbers are in both, and no decided one is missing from España.
+   * Adding the scopes published 815 decided units where the campaign has 424.
+   */
+  it("does not add Holding to the national total", () => {
+    const rows = [
+      row("2026-04-07", "España", "RENOVADO", 424),
+      row("2026-04-07", "Holding", "RENOVADO", 391),
+    ];
+    const totals = renoveTotals(rows);
+
+    expect(totals.total).toBe(424);
+    expect(totals.porAmbito["España"]).toBe(424);
+    // Holding keeps its own figure: it is reported beside the total, not inside
+    // it, so the slide can still say how much of the campaign is Holding.
+    expect(totals.porAmbito.Holding).toBe(391);
   });
 
   it("counts the units waiting on the user apart from the campaign", () => {
     const rows = [
       row("2026-08-19", "España", "RENOVADO", 25),
-      row(null, "Holding", "Pendiente Usuario", 181),
+      row(null, "España", "Pendiente Usuario", 181),
+      // The same units, repeated in the Holding tabs.
+      row(null, "Holding", "Pendiente Usuario", 176),
     ];
 
     expect(renovePendientesUsuario(rows)).toBe(181);
@@ -98,7 +118,7 @@ describe("Renove weekly series", () => {
     expect(renoveWeekLabel("2026-08-17")).toBe("S34");
   });
 
-  it("stacks the two scopes per week and stops at the reported one", () => {
+  it("reports the two scopes per week and stops at the reported one", () => {
     const rows = [
       row("2025-12-02", "Holding", "RENOVADO", 1),
       row("2026-08-19", "España", "RENOVADO", 17),
@@ -119,19 +139,21 @@ describe("Renove weekly series", () => {
   it("drops the undated rows from the chart and keeps them in the totals", () => {
     const rows = [
       row("2026-08-19", "España", "RENOVADO", 17),
-      row(null, "Holding", "RECHAZADO", 34),
+      row(null, "España", "RECHAZADO", 34),
     ];
     const window = renoveWindow(rows, "2026-08-24");
     const charted = renoveWeekSeries(rows, window);
 
     expect(charted).toHaveLength(1);
-    expect(charted[0].Holding).toBe(0);
+    expect(charted[0]["España"]).toBe(17);
+    // The undated 34 are out of the chart and inside the KPI, which is what
+    // makes the strip larger than the sum of the columns.
     expect(renoveTotals(rows).total).toBe(51);
   });
 
   it("strips the 1899 date of a row and keeps the unit counted", () => {
     const rows = renoveReportedRows([
-      row("1899-12-30", "Holding", "RENOVADO", 3),
+      row("1899-12-30", "España", "RENOVADO", 3),
       row("2026-08-19", "España", "RENOVADO", 17),
     ]);
     const window = renoveWindow(rows, "2026-08-24");
@@ -150,12 +172,13 @@ describe("Renove weekly series", () => {
     const rows = [
       row("2026-08-05", "España", "RENOVADO", 10),
       row("2026-08-19", "España", "RENOVADO", 17),
+      // The same week, repeated in the Holding tabs: it must not be added.
       row("2026-08-19", "Holding", "RENOVADO", 2),
     ];
     const window = renoveWindow(rows, "2026-08-24");
 
-    expect(renoveTotals(renoveInWeek(rows, window)).total).toBe(19);
-    expect(renoveTotals(renoveInMonth(rows, "2026/08")).total).toBe(29);
+    expect(renoveTotals(renoveInWeek(rows, window)).total).toBe(17);
+    expect(renoveTotals(renoveInMonth(rows, "2026/08")).total).toBe(27);
   });
 });
 

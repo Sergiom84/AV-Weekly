@@ -17,10 +17,25 @@ import {
  * tested directly, rather than repeated inside two components.
  */
 
-/** Scopes of the report, in the order the columns stack. */
+/** Scopes of the report, in the order the columns are drawn. */
 export const RENOVE_AMBITOS = ["Holding", "España"] as const;
 
 export type RenoveAmbito = (typeof RENOVE_AMBITOS)[number];
+
+/**
+ * Scope that carries the whole campaign.
+ *
+ * The two scopes are not disjoint and never were meant to be added: measured on
+ * `Dashboards Renoves SSCC`, 407 of Holding's 409 petition numbers are also in
+ * España, and no decided petition of Holding is missing from it. Where the two
+ * copies of a unit disagree it is because España carries the renewal date and
+ * Holding still has it empty, which is why Holding shows 31 decided rows
+ * without a date against España's 11.
+ *
+ * So España is the national total and Holding a subset of it. Stacking the two
+ * published 815 decided units where there are 424.
+ */
+const RENOVE_TOTAL_AMBITO: RenoveAmbito = "España";
 
 /**
  * What the report does with a status.
@@ -92,11 +107,17 @@ export function renoveAmbito(row: InformaticaRenoveRow): RenoveAmbito {
 }
 
 export interface RenoveTotals {
-  /** Renewed plus dismissed: the figure the slide calls "Renovado Acumulado". */
+  /**
+   * Renewed plus dismissed: the figure the slide calls "Renovado Acumulado".
+   *
+   * Counted over the national scope alone, not over both. See
+   * `RENOVE_TOTAL_AMBITO`: Holding is inside España, so adding them counts the
+   * same machine twice.
+   */
   total: number;
   renovados: number;
   desestimados: number;
-  /** Decided units per scope. The two add up to `total`. */
+  /** Decided units per scope. `España` equals `total`; `Holding` is inside it. */
   porAmbito: Record<RenoveAmbito, number>;
 }
 
@@ -116,8 +137,15 @@ export function renoveTotals(rows: InformaticaRenoveRow[]): RenoveTotals {
       continue;
     }
 
+    const ambito = renoveAmbito(row);
+
+    totals.porAmbito[ambito] += row.equipos;
+
+    if (ambito !== RENOVE_TOTAL_AMBITO) {
+      continue;
+    }
+
     totals.total += row.equipos;
-    totals.porAmbito[renoveAmbito(row)] += row.equipos;
 
     if (grupo === "renovado") totals.renovados += row.equipos;
     else totals.desestimados += row.equipos;
@@ -126,10 +154,14 @@ export function renoveTotals(rows: InformaticaRenoveRow[]): RenoveTotals {
   return totals;
 }
 
-/** Units still pending on the user, the second KPI of `2.7`. */
+/**
+ * Units still pending on the user, the second KPI of `2.7`.
+ *
+ * National scope only, for the same reason as `renoveTotals`.
+ */
 export function renovePendientesUsuario(rows: InformaticaRenoveRow[]): number {
   return rows
-    .filter(renovePendienteUsuario)
+    .filter(row => renovePendienteUsuario(row) && renoveAmbito(row) === RENOVE_TOTAL_AMBITO)
     .reduce((sum, row) => sum + row.equipos, 0);
 }
 
