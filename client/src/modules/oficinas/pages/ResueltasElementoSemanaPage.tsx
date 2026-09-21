@@ -13,7 +13,6 @@ import {
   disambiguate,
   percent,
   readElementWeek,
-  variationLabel,
   weekHeadline,
   weekLabel,
 } from "../aggregate";
@@ -118,15 +117,24 @@ export default function ResueltasElementoSemanaPage({
       }
       kpis={[
         {
-          label: week === null ? "Total semana" : `Total ${weekHeadline(week)}`,
+          // Both cards name their week and their year, the same shape the rest
+          // of the deck uses: the slide is read on its own and "la semana" says
+          // nothing once the report is filed next to the previous ones.
+          label:
+            week === null
+              ? "Total semana"
+              : `Total ${weekHeadline(week)} - ${year}`,
           value: total.toLocaleString("es-ES"),
         },
         {
           label:
             previousWeek === null
-              ? "Variación semanal"
-              : `Variación vs ${weekHeadline(previousWeek)}`,
-          value: variationLabel(previousTotal, week === null ? null : total),
+              ? "Total semana anterior"
+              : `Total ${weekHeadline(previousWeek)} - ${year}`,
+          value:
+            previousTotal === null
+              ? "—"
+              : previousTotal.toLocaleString("es-ES"),
         },
         {
           label: "Ratio por oficina",
