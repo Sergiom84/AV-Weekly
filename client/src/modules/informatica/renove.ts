@@ -22,20 +22,21 @@ export const RENOVE_AMBITOS = ["Holding", "España"] as const;
 
 export type RenoveAmbito = (typeof RENOVE_AMBITOS)[number];
 
-/**
- * Scope that carries the whole campaign.
+/*
+ * The two scopes are added, because they are two populations and not two views
+ * of one.
  *
- * The two scopes are not disjoint and never were meant to be added: measured on
- * `Dashboards Renoves SSCC`, 407 of Holding's 409 petition numbers are also in
- * España, and no decided petition of Holding is missing from it. Where the two
- * copies of a unit disagree it is because España carries the renewal date and
- * Holding still has it empty, which is why Holding shows 31 decided rows
- * without a date against España's 11.
+ * They used to be counted over España alone. That was right while the section
+ * came from `Dashboards Renoves SSCC`, where 407 of Holding's 409 petition
+ * numbers were also in España — but only because the board's four "España - "
+ * tabs had been published from the Holding workbook, so both scopes held the
+ * same rows and adding them counted every machine twice.
  *
- * So España is the national total and Holding a subset of it. Stacking the two
- * published 815 decided units where there are 424.
+ * Read from the two workbooks, `Renove Global PC España` and `Renove Global PC
+ * Holding` share 2 petition numbers out of 978. Counting España alone now drops
+ * Holding's 427 renewals from the report instead of protecting it from a
+ * duplicate.
  */
-const RENOVE_TOTAL_AMBITO: RenoveAmbito = "España";
 
 /**
  * What the report does with a status.
@@ -107,17 +108,11 @@ export function renoveAmbito(row: InformaticaRenoveRow): RenoveAmbito {
 }
 
 export interface RenoveTotals {
-  /**
-   * Renewed plus dismissed: the figure the slide calls "Renovado Acumulado".
-   *
-   * Counted over the national scope alone, not over both. See
-   * `RENOVE_TOTAL_AMBITO`: Holding is inside España, so adding them counts the
-   * same machine twice.
-   */
+  /** Renewed plus dismissed: the figure the slide calls "Renovado Acumulado". */
   total: number;
   renovados: number;
   desestimados: number;
-  /** Decided units per scope. `España` equals `total`; `Holding` is inside it. */
+  /** Decided units per scope. The two add up to `total`. */
   porAmbito: Record<RenoveAmbito, number>;
 }
 
@@ -137,14 +132,7 @@ export function renoveTotals(rows: InformaticaRenoveRow[]): RenoveTotals {
       continue;
     }
 
-    const ambito = renoveAmbito(row);
-
-    totals.porAmbito[ambito] += row.equipos;
-
-    if (ambito !== RENOVE_TOTAL_AMBITO) {
-      continue;
-    }
-
+    totals.porAmbito[renoveAmbito(row)] += row.equipos;
     totals.total += row.equipos;
 
     if (grupo === "renovado") totals.renovados += row.equipos;
@@ -154,14 +142,10 @@ export function renoveTotals(rows: InformaticaRenoveRow[]): RenoveTotals {
   return totals;
 }
 
-/**
- * Units still pending on the user, the second KPI of `2.7`.
- *
- * National scope only, for the same reason as `renoveTotals`.
- */
+/** Units still pending on the user, the second KPI of `2.7`, over both scopes. */
 export function renovePendientesUsuario(rows: InformaticaRenoveRow[]): number {
   return rows
-    .filter(row => renovePendienteUsuario(row) && renoveAmbito(row) === RENOVE_TOTAL_AMBITO)
+    .filter(renovePendienteUsuario)
     .reduce((sum, row) => sum + row.equipos, 0);
 }
 

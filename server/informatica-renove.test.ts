@@ -78,29 +78,34 @@ describe("Renove totals", () => {
    * petition numbers are in both, and no decided one is missing from España.
    * Adding the scopes published 815 decided units where the campaign has 424.
    */
-  it("does not add Holding to the national total", () => {
+  it("adds the two scopes, which are two populations and not two views", () => {
     const rows = [
       row("2026-04-07", "España", "RENOVADO", 424),
       row("2026-04-07", "Holding", "RENOVADO", 391),
     ];
     const totals = renoveTotals(rows);
 
-    expect(totals.total).toBe(424);
+    // España alone used to be the total, back when the section came from the
+    // board that published Holding under both prefixes. The two workbooks share
+    // 2 petition numbers out of 978, so dropping Holding drops Holding.
+    expect(totals.total).toBe(815);
     expect(totals.porAmbito["España"]).toBe(424);
-    // Holding keeps its own figure: it is reported beside the total, not inside
-    // it, so the slide can still say how much of the campaign is Holding.
     expect(totals.porAmbito.Holding).toBe(391);
+    expect(totals.porAmbito["España"] + totals.porAmbito.Holding).toBe(
+      totals.total
+    );
   });
 
   it("counts the units waiting on the user apart from the campaign", () => {
     const rows = [
       row("2026-08-19", "España", "RENOVADO", 25),
       row(null, "España", "Pendiente Usuario", 181),
-      // The same units, repeated in the Holding tabs.
       row(null, "Holding", "Pendiente Usuario", 176),
     ];
 
-    expect(renovePendientesUsuario(rows)).toBe(181);
+    // Pending units are outside total/renovados/desestimados, and inside their
+    // own KPI, over both scopes.
+    expect(renovePendientesUsuario(rows)).toBe(357);
     expect(renoveTotals(rows).total).toBe(25);
   });
 });
@@ -172,13 +177,12 @@ describe("Renove weekly series", () => {
     const rows = [
       row("2026-08-05", "España", "RENOVADO", 10),
       row("2026-08-19", "España", "RENOVADO", 17),
-      // The same week, repeated in the Holding tabs: it must not be added.
       row("2026-08-19", "Holding", "RENOVADO", 2),
     ];
     const window = renoveWindow(rows, "2026-08-24");
 
-    expect(renoveTotals(renoveInWeek(rows, window)).total).toBe(17);
-    expect(renoveTotals(renoveInMonth(rows, "2026/08")).total).toBe(27);
+    expect(renoveTotals(renoveInWeek(rows, window)).total).toBe(19);
+    expect(renoveTotals(renoveInMonth(rows, "2026/08")).total).toBe(29);
   });
 });
 
