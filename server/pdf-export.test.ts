@@ -8,6 +8,7 @@ import {
   latestReportDate,
   reportPdfFilename,
   resolveClientOrigin,
+  type DeckPdfCookie,
   type DeckPdfRenderer,
 } from "./pdf-export.js";
 
@@ -67,7 +68,10 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-async function listenWith(renderer: DeckPdfRenderer) {
+async function listenWith(
+  renderer: DeckPdfRenderer,
+  cookie: DeckPdfCookie | null = null
+) {
   const app = express();
   const send = createDeckPdfSender(renderer);
   app.get("/pdf", (req, res) => {
@@ -75,6 +79,7 @@ async function listenWith(renderer: DeckPdfRenderer) {
       origin: "http://127.0.0.1",
       path: "/av",
       department: "AV",
+      cookie,
     });
   });
 
@@ -153,6 +158,24 @@ describe("PDF export coordination", () => {
     expect((await fetch(url)).status).toBe(500);
     expect((await fetch(url)).status).toBe(200);
     expect(calls).toBe(2);
+  });
+
+  it("hands the access cookie to the renderer so the deck is not the PIN form", async () => {
+    const seen: (DeckPdfCookie | null)[] = [];
+    const { server, url } = await listenWith(
+      async (_origin, _path, _signal, cookie) => {
+        seen.push(cookie);
+        return Buffer.from("%PDF-ok");
+      },
+      { name: "avw_access_av", value: "token" }
+    );
+    servers.push(server);
+
+    const response = await fetch(url);
+    await response.arrayBuffer();
+
+    expect(response.status).toBe(200);
+    expect(seen).toEqual([{ name: "avw_access_av", value: "token" }]);
   });
 });
 

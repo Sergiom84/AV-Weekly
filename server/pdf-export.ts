@@ -4,16 +4,32 @@ import {
   reportFileBaseName,
 } from "../shared/deck/pdf-download.ts";
 
+/** Access cookie handed to the headless render, see `departmentAccessCookie`. */
+export interface DeckPdfCookie {
+  name: string;
+  value: string;
+}
+
 export type DeckPdfRenderer = (
   origin: string,
   path: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  cookie: DeckPdfCookie | null
 ) => Promise<Buffer>;
 
 export interface DeckPdfRequest {
   origin: string;
   path: string;
   department: string;
+  /**
+   * Department access cookie of the visitor asking for the download.
+   *
+   * The render opens the deck as an anonymous visitor, so without this it is
+   * shown the PIN form and never the slides. It is taken from the request that
+   * already passed the gate, so the export can never reach a deck the caller
+   * was not allowed to open.
+   */
+  cookie?: DeckPdfCookie | null;
   /**
    * Date the download is named after. Defaults to today, which is only right
    * while the report is exported the same day it is imported; a module that
@@ -146,7 +162,8 @@ export function createDeckPdfSender(renderer: DeckPdfRenderer) {
       const pdf = await renderer(
         options.origin,
         options.path,
-        controller.signal
+        controller.signal,
+        options.cookie ?? null
       );
 
       if (controller.signal.aborted || res.destroyed) {

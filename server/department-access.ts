@@ -96,6 +96,27 @@ function cookies(header: string | undefined): Record<string, string> {
   );
 }
 
+/**
+ * The access cookie a headless render must carry to see a deck instead of the
+ * PIN form.
+ *
+ * The PDF endpoint renders the real app through the loopback server, and that
+ * page runs `DepartmentAccessGate` like any other visitor. Without the cookie
+ * the gate answers with the keypad, no `section[id^="slide-"]` ever appears and
+ * the export dies on the selector wait. Only the cookie of the department being
+ * exported travels: the request may carry the other three and the render has no
+ * business reading them.
+ */
+export function departmentAccessCookie(
+  cookieHeader: string | undefined,
+  department: DepartmentId
+): { name: string; value: string } | null {
+  const name = cookieName(department);
+  const value = cookies(cookieHeader)[name];
+
+  return value ? { name, value } : null;
+}
+
 function sign(
   department: DepartmentId,
   expiresAt: number,

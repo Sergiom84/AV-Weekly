@@ -121,7 +121,12 @@ import {
   createDeckPdfSender,
   latestReportDate,
   resolveClientOrigin,
+  type DeckPdfCookie,
 } from "./pdf-export.js";
+import {
+  departmentAccessCookie,
+  type DepartmentId,
+} from "./department-access.js";
 import { persistDeckWithHistory } from "./deck-persistence.js";
 import {
   MAX_INFORMATICA_FILE_SIZE_BYTES,
@@ -1903,7 +1908,8 @@ router.post("/api/oficinas/reset-deck", async (_req, res) => {
 async function renderDeckPdf(
   origin: string,
   path: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  cookie: DeckPdfCookie | null
 ): Promise<Buffer> {
   const renderTimeoutMs = 120_000;
   const browser = await puppeteer.launch({
@@ -1927,6 +1933,18 @@ async function renderDeckPdf(
   try {
     if (signal.aborted) {
       throw new Error("La generación del PDF fue cancelada.");
+    }
+    if (cookie) {
+      // Set before the first navigation, or the gate answers with the keypad
+      // and the slide selector never resolves. The domain is read off the
+      // origin rather than hardcoded: it is the loopback server in production
+      // and the Vite port in development.
+      await browser.setCookie({
+        name: cookie.name,
+        value: cookie.value,
+        domain: new URL(origin).hostname,
+        path: "/",
+      });
     }
     const page = await browser.newPage();
     const credentials = configuredCredentials();
@@ -1980,6 +1998,7 @@ function sendDeckPdf(
   res: import("express").Response,
   routePath: string,
   department: string,
+  departmentId: DepartmentId,
   date?: Date
 ) {
   const origin = resolveClientOrigin(req);
@@ -1987,6 +2006,7 @@ function sendDeckPdf(
     origin,
     path: routePath,
     department,
+    cookie: departmentAccessCookie(req.get("cookie"), departmentId),
     date,
   });
 }
@@ -2010,19 +2030,19 @@ async function agaReportDate(): Promise<Date | undefined> {
 }
 
 router.get("/api/informe/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/av", "AV");
+  sendDeckPdf(req, res, "/av", "AV", "av");
 });
 
 router.get("/api/informatica/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/informatica", "Informatica");
+  sendDeckPdf(req, res, "/informatica", "Informatica", "informatica");
 });
 
 router.get("/api/aga/pdf", async (req, res) => {
-  sendDeckPdf(req, res, "/aga", "AGA", await agaReportDate());
+  sendDeckPdf(req, res, "/aga", "AGA", "aga", await agaReportDate());
 });
 
 router.get("/api/oficinas/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/oficinas", "Oficinas");
+  sendDeckPdf(req, res, "/oficinas", "Oficinas", "oficinas");
 });
 
 router.get("/api/uploads/:id", async (req, res) => {

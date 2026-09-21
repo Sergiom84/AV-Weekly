@@ -5,6 +5,7 @@ import {
   createDepartmentAccessRouter,
   createDepartmentApiMiddleware,
   createDepartmentToken,
+  departmentAccessCookie,
   verifyDepartmentToken,
 } from "./department-access.js";
 
@@ -76,5 +77,17 @@ describe("department access", () => {
       headers: { cookie: cookie ?? "" },
     });
     expect(protectedResponse.status).toBe(200);
+  });
+
+  it("hands the PDF render only the cookie of the department it exports", () => {
+    const header =
+      "avw_access_av=av-token; avw_access_oficinas=ofi-token; other=x";
+
+    expect(departmentAccessCookie(header, "oficinas")).toEqual({
+      name: "avw_access_oficinas",
+      value: "ofi-token",
+    });
+    expect(departmentAccessCookie(header, "aga")).toBeNull();
+    expect(departmentAccessCookie(undefined, "oficinas")).toBeNull();
   });
 });
