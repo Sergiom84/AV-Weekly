@@ -31,6 +31,11 @@ function loadCodigo() {
   return context as {
     esAliasEdificioBasura: (name: string) => boolean;
     debeRodarSemanaAnterior: (extraction: Date, lastProcessed: Date | null) => boolean;
+    extraccionYaProcesada: (
+      extraction: Date | null,
+      lastProcessed: Date | null
+    ) => boolean;
+    fechaCorta: (date: Date) => string;
     totalesComprobacion: (
       agregado: Record<string, unknown[][]>,
       extraction: Date
@@ -276,6 +281,22 @@ describe("Codigo.gs weekly safeguards", () => {
     expect(
       gs.debeRodarSemanaAnterior(new Date("2026-08-31T00:00:00.000Z"), extraction)
     ).toBe(true);
+  });
+
+  it("detiene la semana cuando la extracción es la ya procesada", () => {
+    const extraction = new Date("2026-09-15T00:00:00.000Z");
+
+    expect(gs.extraccionYaProcesada(extraction, extraction)).toBe(true);
+    // La primera vez no hay fecha guardada, y ahí la semana tiene que correr.
+    expect(gs.extraccionYaProcesada(extraction, null)).toBe(false);
+    expect(
+      gs.extraccionYaProcesada(extraction, new Date("2026-09-08T00:00:00.000Z"))
+    ).toBe(false);
+    // La hora no decide: Configuración guarda el día y la comparación es por día.
+    expect(
+      gs.extraccionYaProcesada(extraction, new Date("2026-09-15T23:30:00.000Z"))
+    ).toBe(true);
+    expect(gs.fechaCorta(extraction)).toBe("15/09/2026");
   });
 
   it("cuenta solo las citas de la semana de extracción, no el histórico", () => {

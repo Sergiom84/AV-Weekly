@@ -252,6 +252,11 @@ function isoDate(date) {
   return date.getUTCFullYear() + '-' + pad2(date.getUTCMonth() + 1) + '-' + pad2(date.getUTCDate());
 }
 
+/** `dd/mm/aaaa`, the form Configuración shows, for messages read by a person. */
+function fechaCorta(date) {
+  return pad2(date.getUTCDate()) + '/' + pad2(date.getUTCMonth() + 1) + '/' + date.getUTCFullYear();
+}
+
 /* -------------------------------------------------------------------------- */
 /* Sheet access                                                                */
 /* -------------------------------------------------------------------------- */
@@ -1095,6 +1100,20 @@ function debeRodarSemanaAnterior(extraction, lastProcessed) {
   if (!lastProcessed) return true;
 
   return isoDate(extraction) !== isoDate(lastProcessed);
+}
+
+/**
+ * True when the extraction date on Configuración is the one already processed.
+ *
+ * Running the same Monday twice is the most common mistake of the routine:
+ * nothing errors, the week simply rewrites itself and "Semana anterior" stops
+ * rolling, which is invisible on the sheet and wrong on the report. The run
+ * stops on it instead of repeating the work.
+ */
+function extraccionYaProcesada(extraction, lastProcessed) {
+  if (!extraction || !lastProcessed) return false;
+
+  return isoDate(extraction) === isoDate(lastProcessed);
 }
 
 /**
@@ -4098,6 +4117,21 @@ function procesarSemana() {
 
   try {
     config = readConfig();
+
+    // Before classifyFolder, which opens and converts every workbook of the
+    // folder: the run that must not happen is also the slowest thing to undo.
+    if (extraccionYaProcesada(config.extraction, config.lastProcessed)) {
+      throw new Error(
+        'Membrillo, cambia la semana de extracción: "' +
+          CONFIG_KEYS.extraction +
+          '" y "' +
+          CONFIG_KEYS.lastProcessed +
+          '" tienen la misma fecha (' +
+          fechaCorta(config.extraction) +
+          '). Esa semana ya se procesó.'
+      );
+    }
+
     clasificacion = classifyFolder(config.folderId);
 
     var informe = {

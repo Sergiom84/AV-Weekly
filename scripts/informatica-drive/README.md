@@ -53,9 +53,20 @@ por el equipo.
    regenerarlo a mano. El TXT nunca se guarda junto a los Excel de
    `Carpeta Drive`.
 
-Si se vuelve a pulsar `Procesar semana` con la misma fecha de extracción, la
-columna *Semana anterior* se conserva: no se vuelve a copiar `H4:H6` sobre
-`I4:I6`. Cuando la extracción pasa a un mes nuevo, el proceso cierra solo
+Si se vuelve a pulsar `Procesar semana` sin cambiar la fecha de extracción, el
+proceso se detiene antes de leer nada y avisa:
+
+> Membrillo, cambia la semana de extracción: "Fecha de extracción" y "Última
+> extracción procesada" tienen la misma fecha (15/09/2026). Esa semana ya se
+> procesó.
+
+El corte ocurre antes de abrir los ficheros de la carpeta, así que no cuesta
+tiempo ni deja nada a medias. Para rehacer una semana a propósito, basta con
+vaciar `Última extracción procesada` en `Configuración`; en ese caso la columna
+*Semana anterior* sí se vuelve a copiar, que es lo que antes pasaba en silencio
+cada vez que se repetía la ejecución.
+
+Cuando la extracción pasa a un mes nuevo, el proceso cierra solo
 los meses que ya quedaron atrás (agosto se congela al informar septiembre).
 `Cerrar mes` sigue en el menú para congelar el mes en curso a propósito.
 
