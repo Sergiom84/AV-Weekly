@@ -57,15 +57,21 @@ describe("Oficinas weekly template (real workbook)", () => {
     expect(listing?.rows).toBeGreaterThan(1_000);
     expect(weeks.length).toBeGreaterThan(30);
 
-    // Every week reconciles to the digit except two, and both for a reason the
-    // source itself explains:
+    // Every week reconciles to the digit except, at most, two, and both for a
+    // reason the source itself explains:
     //
     // - the first, where the pivot counts requests closed in January that were
     //   opened the year before and this listing, "Año En Curso", cannot see;
-    // - the last, still open when the listing was exported.
+    // - the last, when it was still open as the listing was exported. Whether
+    //   it is depends on the day the team pulled the file, so it is allowed to
+    //   reconcile and not required to: the 21/09/2026 workbook closed week 38
+    //   exactly and used to turn this red for no defect at all.
     //
     // Anything else means the listing stopped being read by closing date.
-    expect(diffs.map((entry) => entry.week)).toEqual([first, last]);
+    expect(
+      diffs.filter((entry) => entry.week !== first && entry.week !== last)
+    ).toEqual([]);
+    expect(diffs.map((entry) => entry.week)).toContain(first);
     expect(byWeek.get(first) ?? 0).toBeLessThan(
       sheet11.find((entry) => entry.week === first)!.value
     );
