@@ -52,7 +52,167 @@ function loadCodigo() {
       agregado: Record<string, unknown[][]>,
       meta: Record<string, string>
     ) => string;
+    requestKind: (fileName: string) => string | null;
+    PETICIONES_ANUAL_SEMILLA: { anio: number; mes: number; peticiones: number }[];
+    aniosConsecutivos: (
+      headersFromM: unknown[]
+    ) => { year: number; column: number }[];
+    columnaParaAnio: (
+      years: { year: number; column: number }[],
+      year: number,
+      nextCellRaw: unknown
+    ) => number;
+    filaMesPeticiones: (labels: unknown[][], monthNumber: number) => number;
+    contarPeticionesAcumuladas: (found: {
+      acumuladas?: { sheets: { headerRow: number; grid: unknown[][] }[] };
+    }) => { counts: Record<string, number>; filas: number; sinFecha: number };
+    totalesPeticionesAnual: (found: {
+      acumuladas?: { sheets: { headerRow: number; grid: unknown[][] }[] };
+    }) => Record<string, number>;
+    escribirPeticionesAnual: (
+      found: Record<string, unknown>,
+      informe: Record<string, unknown>
+    ) => void;
+    citaDate: (value: unknown) => Date | null;
+    numeroMesEspanol: (value: unknown) => number;
+    contarCitasMensuales: (
+      found: {
+        citas?: { sheets: { headerRow: number; grid: unknown[][]; columns?: Record<string, number> }[] };
+      },
+      extraction?: Date | null
+    ) => {
+      byBuilding: Record<string, Record<string, number>>;
+      byMonth: Record<string, number>;
+      filas: number;
+      sinFecha: number;
+    };
+    escribirCitasMensuales: (
+      found: Record<string, unknown>,
+      informe: Record<string, unknown>
+    ) => void;
+    agregarCitas: (
+      found: Record<string, unknown>,
+      extraction: Date,
+      citas: Record<string, number>,
+      citasAnual: Record<string, number>
+    ) => void;
   };
+}
+
+function memorySheet(grid: unknown[][]) {
+  const formulas: Record<string, string> = {};
+
+  function cell(row: number, column: number) {
+    return (grid[row - 1] || [])[column - 1] ?? null;
+  }
+
+  function setCell(row: number, column: number, value: unknown) {
+    while (grid.length < row) grid.push([]);
+    const line = grid[row - 1];
+    while (line.length < column) line.push(null);
+    line[column - 1] = value;
+    delete formulas[`${row}:${column}`];
+  }
+
+  return {
+    grid,
+    getMaxColumns() {
+      return grid.reduce((max, row) => Math.max(max, row.length), 0);
+    },
+    insertColumnBefore(column: number) {
+      for (const row of grid) {
+        if (row.length >= column) row.splice(column - 1, 0, null);
+      }
+    },
+    getRange(row: number, column: number, rowCount = 1, columnCount = 1) {
+      const range = {
+        getValue() {
+          return cell(row, column);
+        },
+        getValues() {
+          const values: unknown[][] = [];
+
+          for (let r = 0; r < rowCount; r += 1) {
+            const line: unknown[] = [];
+
+            for (let c = 0; c < columnCount; c += 1) {
+              line.push(cell(row + r, column + c));
+            }
+
+            values.push(line);
+          }
+
+          return values;
+        },
+        getFormula() {
+          return formulas[`${row}:${column}`] ?? "";
+        },
+        setValue(value: unknown) {
+          setCell(row, column, value);
+          return range;
+        },
+        setValues(values: unknown[][]) {
+          for (let r = 0; r < values.length; r += 1) {
+            for (let c = 0; c < values[r].length; c += 1) {
+              setCell(row + r, column + c, values[r][c]);
+            }
+          }
+          return range;
+        },
+        setFormula(formula: string) {
+          formulas[`${row}:${column}`] = formula;
+          setCell(row, column, formula);
+          return range;
+        },
+        setNumberFormat() {
+          return range;
+        },
+      };
+
+      return range;
+    },
+  };
+}
+
+function loadCodigoWithSheets(tabs: Record<string, ReturnType<typeof memorySheet>>) {
+  const source = readFileSync(join(HERE, "Codigo.gs"), "utf8");
+  const context = createContext({
+    console,
+    Date,
+    MimeType: {
+      MICROSOFT_EXCEL: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      PLAIN_TEXT: "text/plain",
+    },
+    SpreadsheetApp: {
+      getActiveSpreadsheet() {
+        return {
+          getSheetByName(name: string) {
+            return tabs[name] ?? null;
+          },
+          getId() {
+            return "";
+          },
+        };
+      },
+      getUi() {
+        return { alert() {}, ButtonSet: { OK: "OK" } };
+      },
+    },
+  });
+
+  runInContext(source, context, { filename: "Codigo.gs" });
+
+  return context as ReturnType<typeof loadCodigo>;
+}
+
+function loadCodigoWithInforme(grid: unknown[][]) {
+  const sheet = memorySheet(grid);
+  const gs = loadCodigoWithSheets({
+    "2.2.1 Volum de peticiones (Info": sheet,
+    "2.2.1 Volum de peticiones (Informe)": sheet,
+  });
+
+  return { sheet, gs };
 }
 
 describe("Codigo.gs weekly safeguards", () => {
@@ -206,5 +366,274 @@ describe("Codigo.gs weekly safeguards", () => {
     expect(gs.mesSiguiente(new Date("2026-08-01T00:00:00.000Z")).toISOString().slice(0, 10)).toBe(
       "2026-09-01"
     );
+  });
+});
+
+describe("Codigo.gs Acumuladas → 2.2.1 anual", () => {
+  const gs = loadCodigo();
+
+  const monthLabels = [
+    ["Enero"],
+    ["Febrero"],
+    ["Marzo"],
+    ["Abril"],
+    ["Mayo"],
+    ["Junio"],
+    ["Julio"],
+    ["Agosto"],
+    ["Septiembre"],
+    ["Octubre"],
+    ["Noviembre"],
+    ["Diciembre"],
+  ];
+
+  function acumuladasFound(rows: unknown[][]) {
+    return {
+      acumuladas: {
+        sheets: [
+          {
+            headerRow: 0,
+            grid: [
+              ["Denominación Producto", "Estatus de la Posición", "Fecha Gestionado"],
+              ...rows,
+            ],
+          },
+        ],
+      },
+    };
+  }
+
+  it("reconoce Acumuladas por nombre, no por cabecera", () => {
+    expect(gs.requestKind("Acumuladas150926.xlsx")).toBe("acumuladas");
+    expect(gs.requestKind("SSCC Acumuladas.xlsx")).toBe("acumuladas");
+    expect(gs.requestKind("Gestionadas SSCC.xlsx")).toBe("gestionadas");
+    expect(gs.requestKind("Peticiones ON SITE SSCC.xlsx")).toBeNull();
+  });
+
+  it("cuenta posiciones, no Nº Petición distintos, por Fecha Gestionado", () => {
+    const counted = gs.contarPeticionesAcumuladas(
+      acumuladasFound([
+        ["PORTATIL", "@08@", new Date(2026, 8, 9)],
+        ["PORTATIL", "@08@", new Date(2026, 8, 10)],
+        ["HIBRIDO", "@08@", new Date(2026, 8, 11)],
+        ["TECLADO", "@08@", new Date(2026, 7, 20)],
+        ["", "", ""],
+        ["SIN FECHA", "@08@", null],
+      ])
+    );
+
+    expect(counted.filas).toBe(5);
+    expect(counted.sinFecha).toBe(1);
+    expect(counted.counts["2026/09"]).toBe(3);
+    expect(counted.counts["2026/08"]).toBe(1);
+  });
+
+  it("la semilla de agosto 2026 es 776 y el Excel la pisa si trae agosto", () => {
+    expect(gs.PETICIONES_ANUAL_SEMILLA).toEqual([
+      { anio: 2026, mes: 8, peticiones: 776 },
+    ]);
+
+    const withoutFile = gs.totalesPeticionesAnual({});
+    expect(withoutFile["2026/08"]).toBe(776);
+    expect(withoutFile["2026/09"]).toBeUndefined();
+
+    const withSeptember = gs.totalesPeticionesAnual(
+      acumuladasFound(Array.from({ length: 319 }, () => ["P", "@08@", new Date(2026, 8, 15)]))
+    );
+    expect(withSeptember["2026/08"]).toBe(776);
+    expect(withSeptember["2026/09"]).toBe(319);
+  });
+
+  it("mapea agosto a Q11 y septiembre a Q12", () => {
+    const years = gs.aniosConsecutivos([2022, 2023, 2024, 2025, 2026, null, 2022]);
+
+    expect(years).toEqual([
+      { year: 2022, column: 13 },
+      { year: 2023, column: 14 },
+      { year: 2024, column: 15 },
+      { year: 2025, column: 16 },
+      { year: 2026, column: 17 },
+    ]);
+    expect(gs.columnaParaAnio(years, 2026, null)).toBe(17);
+    expect(gs.filaMesPeticiones(monthLabels, 8)).toBe(11);
+    expect(gs.filaMesPeticiones(monthLabels, 9)).toBe(12);
+  });
+
+  it("abre 2027 en R3 y rechaza 2028 si S3 está ocupada", () => {
+    const years = gs.aniosConsecutivos([2022, 2023, 2024, 2025, 2026]);
+
+    expect(gs.columnaParaAnio(years, 2027, "")).toBe(18);
+    expect(() => gs.columnaParaAnio(years, 2027, 2022)).toThrow(/R3 está ocupada/);
+
+    const with2027 = years.concat([{ year: 2027, column: 18 }]);
+    expect(() => gs.columnaParaAnio(with2027, 2028, 2022)).toThrow(/S3 está ocupada/);
+  });
+
+  it("escribe Q11=776 y Q12=319 sin tocar el resto del informe", () => {
+    const grid: unknown[][] = [];
+    grid[0] = [];
+    grid[1] = [];
+    grid[2] = [];
+    grid[2][12] = 2022;
+    grid[2][13] = 2023;
+    grid[2][14] = 2024;
+    grid[2][15] = 2025;
+    grid[2][16] = 2026;
+    grid[2][18] = 2022;
+    const months = [
+      "Enero",
+      "Febrero",
+      "Marzo",
+      "Abril",
+      "Mayo",
+      "Junio",
+      "Julio",
+      "Agosto",
+      "Septiembre",
+      "Octubre",
+      "Noviembre",
+      "Diciembre",
+    ];
+    for (let index = 0; index < months.length; index += 1) {
+      grid[3 + index] = [];
+      grid[3 + index][11] = months[index];
+    }
+    grid[10][16] = 180;
+
+    const { sheet, gs: writer } = loadCodigoWithInforme(grid);
+    const informe: Record<string, unknown> = {};
+
+    writer.escribirPeticionesAnual(
+      acumuladasFound(Array.from({ length: 319 }, () => ["P", "@08@", new Date(2026, 8, 15)])),
+      informe
+    );
+
+    expect(sheet.grid[10][16]).toBe(776);
+    expect(sheet.grid[11][16]).toBe(319);
+    expect(sheet.grid[2][18]).toBe(2022);
+    expect(informe.peticionesAnualCeldas).toBe(2);
+    expect(informe.peticionesAnualFilas).toBe(319);
+  });
+});
+
+describe("Codigo.gs citas mensuales 2.3.3", () => {
+  const gs = loadCodigo();
+
+  function citasFound(rows: unknown[][]) {
+    return {
+      citas: {
+        sheets: [
+          {
+            headerRow: 0,
+            grid: [
+              [
+                "Incidencia",
+                "Walkup",
+                "Cita_Previa",
+                "Remitente",
+                "Estado",
+                "Descripcion",
+                "Asignado_a",
+                "Smart_Tech",
+              ],
+              ...rows,
+            ],
+          },
+        ],
+      },
+    };
+  }
+
+  it("lee fechas americanas de citas antes que el formato europeo", () => {
+    const us = gs.citaDate("08/21/2026, 01:39:57 PM");
+    const shortUs = gs.citaDate("8/21/2026");
+    const eu = gs.citaDate("21/08/2026");
+
+    expect(us?.toISOString().slice(0, 10)).toBe("2026-08-21");
+    expect(shortUs?.toISOString().slice(0, 10)).toBe("2026-08-21");
+    expect(eu?.toISOString().slice(0, 10)).toBe("2026-08-21");
+    expect(gs.numeroMesEspanol("Ene")).toBe(1);
+    expect(gs.numeroMesEspanol("Ago")).toBe(8);
+  });
+
+  it("cuenta por mes y sede, excluye Telefonía y respeta el corte", () => {
+    const counted = gs.contarCitasMensuales(
+      citasFound([
+        ["1", null, new Date(2026, 7, 10), "", "", "", "", "Smart Tech Principal AN"],
+        ["2", null, "08/15/2026, 09:00:00 AM", "", "", "", "", "Smart Tech Principal AN"],
+        ["3", null, new Date(2026, 8, 2), "", "", "", "", "Smart Tech Sevilla, Palmera"],
+        ["4", null, new Date(2026, 8, 3), "", "", "", "", "Smart Tech Telefonía"],
+        ["5", null, new Date(2026, 8, 20), "", "", "", "", "Smart Tech Tablas I"],
+      ]),
+      new Date(Date.UTC(2026, 8, 17))
+    );
+
+    expect(counted.byMonth["2026/08"]).toBe(2);
+    expect(counted.byMonth["2026/09"]).toBe(1);
+    expect(counted.byBuilding["2026/08"]["Smart Tech Principal AN"]).toBe(2);
+    expect(counted.byBuilding["2026/09"]["Smart Tech Sevilla, Palmera"]).toBe(1);
+    expect(counted.filas).toBe(3);
+  });
+
+  it("escribe AT agosto, AU septiembre y BB11/BB12 del histórico anual", () => {
+    const grid: unknown[][] = [];
+    for (let r = 0; r < 23; r += 1) grid[r] = [];
+
+    grid[2][32] = new Date(2025, 6, 1);
+    for (let offset = 0; offset < 13; offset += 1) {
+      grid[2][32 + offset] = new Date(2025, 6 + offset, 1);
+    }
+    grid[2][45] = new Date(2026, 7, 1);
+    grid[3][48] = "Ene";
+    for (let month = 2; month <= 12; month += 1) {
+      grid[2 + month][48] = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"][
+        month - 1
+      ];
+    }
+    grid[2][49] = 2022;
+    grid[2][50] = 2023;
+    grid[2][51] = 2024;
+    grid[2][52] = 2025;
+    grid[2][53] = 2026;
+    grid[2][55] = 2022;
+
+    grid[3][0] = "Smart Tech Las Palmas, Albareda";
+    grid[3][1] = "DT Canarias";
+    grid[3][2] = "Canarias";
+    grid[3][31] = "Canarias";
+    grid[8][0] = "Smart Tech Principal AN";
+    grid[8][1] = "DT Centro";
+    grid[8][2] = "Sede - Principal";
+    grid[8][31] = "Sede - Principal";
+    grid[21][0] = "Smart Tech Sevilla, Palmera";
+    grid[21][1] = "DT Sur";
+    grid[21][2] = "Sevilla";
+    grid[21][31] = "Sevilla";
+
+    const sheet = memorySheet(grid);
+    const writer = loadCodigoWithSheets({
+      "Hoja 18": sheet,
+      "2.3.1 Volum de Citas SmartTech Semanal  (Informe)": sheet,
+    });
+    const informe: Record<string, unknown> = {
+      extraction: new Date(Date.UTC(2026, 8, 17)),
+    };
+
+    writer.escribirCitasMensuales(
+      citasFound([
+        ["1", null, new Date(2026, 7, 10), "", "", "", "", "Smart Tech Principal AN"],
+        ["2", null, new Date(2026, 7, 11), "", "", "", "", "Smart Tech Principal AN"],
+        ["3", null, new Date(2026, 8, 2), "", "", "", "", "Smart Tech Sevilla, Palmera"],
+        ["4", null, new Date(2026, 8, 3), "", "", "", "", "Smart Tech Telefonía"],
+      ]),
+      informe
+    );
+
+    expect(sheet.grid[8][45]).toBe(2);
+    expect(sheet.grid[21][46]).toBe(1);
+    expect(sheet.grid[2][46] instanceof Date || String(sheet.grid[2][46]).includes("2026")).toBe(true);
+    expect(sheet.grid[10][53]).toBe(2);
+    expect(sheet.grid[11][53]).toBe(1);
+    expect(informe.citasMensualColumnas).toBe(2);
   });
 });

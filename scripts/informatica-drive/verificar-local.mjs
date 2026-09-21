@@ -215,8 +215,8 @@ function entry(file, grids, sheets) {
   };
 }
 
-/** Read when present, never required: the Renove workbook only feeds PLANO. */
-const OPTIONAL_KINDS = ["renove"];
+/** Read when present, never required: Renove feeds PLANO; Acumuladas feeds 2.2.1. */
+const OPTIONAL_KINDS = ["renove", "acumuladas"];
 
 function classify(script, folder, cleanPath) {
   const found = Object.fromEntries(

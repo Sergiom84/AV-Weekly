@@ -2,21 +2,24 @@
  * Weekly Informatica report, assembled from the raw exports in a Drive folder.
  *
  * Paste this file into the Apps Script editor of the "SSCC- Informe Semanal
- * limpio" spreadsheet. It reads the five exports the team uploads, refreshes
- * the data tabs, moves the period markers, closes the month when asked, and
- * writes the PLANO tab that AV Weekly imports.
+ * limpio" spreadsheet. It reads the weekly exports the team uploads, refreshes
+ * the data tabs, writes the annual-requests grid from Acumuladas, moves the
+ * period markers, closes the month when asked, and writes the PLANO tab that
+ * AV Weekly imports.
  *
  * It does not replace the formulas of the (Informe) tabs: those keep
- * calculating, because they are the part the team audits.
+ * calculating, because they are the part the team audits. The exception is
+ * the annual-requests grid of 2.2.1 (Informe), a block of values filled from
+ * Acumuladas and the August 2026 seed.
  *
  * Design rules, the same three that govern scripts/aga-drive/Codigo.gs:
  *
  * - Files are identified by their header row, never by their name. Here the
  *   rule is not a precaution but a repair: the work-order export is called
  *   "Peticiones ON SITE SSCC", so its name says the opposite of what it holds.
- *   The single exception is telling the backlog, released and managed exports
- *   apart, since the three share one 19-column header; requestKind reads the
- *   file name for that and for nothing else.
+ *   The single exception is telling the backlog, released, managed and
+ *   acumuladas exports apart, since the four share one 19-column header;
+ *   requestKind reads the file name for that and for nothing else.
  * - The workbook keeps its shape. This script writes the data tabs, the period
  *   markers and the month close, and never the hand-kept masters listed under
  *   "Zonas intocables" in SPEC.md.
@@ -601,10 +604,11 @@ function renoveSheets(grids) {
 /** Fragment of the satisfaction question. Mirrors the server-side converter. */
 var ENCUESTAS_SCORE_HINT = 'Nivel de satis';
 
-/** Which of the three request exports a file is, by name. They share a header. */
+/** Which of the four request exports a file is, by name. They share a header. */
 function requestKind(fileName) {
   var lower = String(fileName).toLowerCase();
 
+  if (lower.indexOf('acumuladas') >= 0) return 'acumuladas';
   if (lower.indexOf('backlog') >= 0) return 'backlog';
   if (lower.indexOf('liberadas') >= 0) return 'liberadas';
   if (lower.indexOf('gestionadas') >= 0) return 'gestionadas';
@@ -666,7 +670,8 @@ function keepNewest(found, duplicated, kind, file, sheets, grids) {
  * templates file carries the surveys, the work orders and the appointments on
  * three different tabs, so the kinds are all tried and none of them breaks the
  * loop. Only the request exports are exclusive, and among themselves they are
- * told apart by requestKind.
+ * told apart by requestKind. Acumuladas is the fourth of that family: same
+ * header, monthly count of positions by Fecha Gestionado.
  *
  * Returns the matches, the handles to trash, the names that matched nothing,
  * the superseded duplicates, and nombres and modificados — the files read
@@ -680,6 +685,7 @@ function classifyFolder(folderId) {
     backlog: null,
     liberadas: null,
     gestionadas: null,
+    acumuladas: null,
     encuestas: null,
     workOrders: null,
     citas: null,
@@ -721,9 +727,9 @@ function classifyFolder(folderId) {
       var grids = readGrids(handle.id);
       var matched = false;
 
-      // Requests first: the three exports share one header, so the name is what
-      // says which of them this is. A fourth file with that header and none of
-      // the three words in its name is reported instead of guessed at.
+      // Requests first: the four exports share one header, so the name is what
+      // says which of them this is. A fifth file with that header and none of
+      // the four words in its name is reported instead of guessed at.
       var requests = findDataSheets(grids, REQUIRED.peticiones);
 
       if (requests.length > 0) {
@@ -1584,17 +1590,31 @@ function literalFecha(date) {
 
 function numeroMesEspanol(value) {
   var months = {
+    ENE: 1,
     ENERO: 1,
+    FEB: 2,
     FEBRERO: 2,
+    MAR: 3,
     MARZO: 3,
+    ABR: 4,
     ABRIL: 4,
+    MAY: 5,
     MAYO: 5,
+    JUN: 6,
     JUNIO: 6,
+    JUL: 7,
     JULIO: 7,
+    AGO: 8,
     AGOSTO: 8,
+    SEP: 9,
+    SEPT: 9,
+    SET: 9,
     SEPTIEMBRE: 9,
+    OCT: 10,
     OCTUBRE: 10,
+    NOV: 11,
     NOVIEMBRE: 11,
+    DIC: 12,
     DICIEMBRE: 12
   };
 
@@ -2149,6 +2169,9 @@ function escribirDatos(clasificacion, informe) {
   for (var unknownAddress = 0; unknownAddress < unknownAddresses.length; unknownAddress += 1) {
     informe.desconocidos.push('Dirección sin DT/edificio: ' + unknownAddresses[unknownAddress]);
   }
+
+  escribirPeticionesAnual(found, informe);
+  escribirCitasMensuales(found, informe);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2708,6 +2731,33 @@ function agregarWorkOrders(found, workOrders) {
   }
 }
 
+/**
+ * Appointment dates are American (MM/DD/YYYY, with or without time). A Date
+ * cell or an Excel serial still goes through toDate; text is tried as US
+ * before the European fallback so 08/21/2026 is 21 August, not dropped.
+ */
+var US_CITA = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?)?$/i;
+
+function citaDate(value) {
+  if (value instanceof Date || (typeof value === 'number' && isFinite(value))) {
+    return toDate(value);
+  }
+
+  var raw = String(value == null ? '' : value).trim();
+
+  if (raw === '') return null;
+
+  var us = US_CITA.exec(raw);
+
+  if (us) {
+    var parsed = utcDate(Number(us[3]), Number(us[1]), Number(us[2]));
+
+    if (parsed) return parsed;
+  }
+
+  return toDate(value);
+}
+
 function agregarCitas(found, extraction, citas, citasAnual) {
   if (!found.citas) return;
 
@@ -2717,8 +2767,8 @@ function agregarCitas(found, extraction, citas, citasAnual) {
 
   for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
     var row = data[rowIndex] || [];
-    var booked = toDate(valueAt(row, source.columns, 'Cita_Previa'));
-    var walkup = booked ? null : toDate(valueAt(row, source.columns, 'Walkup'));
+    var booked = citaDate(valueAt(row, source.columns, 'Cita_Previa'));
+    var walkup = booked ? null : citaDate(valueAt(row, source.columns, 'Walkup'));
     var date = booked || walkup;
     var building = text(valueAt(row, source.columns, 'Smart_Tech'));
 
@@ -2867,27 +2917,564 @@ function agregarSlas(found, slas) {
   }
 }
 
-/** Only historical source for annual requests; it is explicitly labelled as such in the clean book. */
+/**
+ * Months the Acumuladas export does not cover. August 2026 is the last
+ * published figure before that file became the weekly source.
+ */
+var PETICIONES_ANUAL_SEMILLA = [{ anio: 2026, mes: 8, peticiones: 776 }];
+
+/** First data column of the annual-requests grid: M, year headers on row 3. */
+var PETICIONES_ANUAL_FIRST_YEAR_COLUMN = 13;
+
+/** L4:L15 hold Enero…Diciembre. */
+var PETICIONES_ANUAL_MONTH_ROWS = 12;
+
+/**
+ * Consecutive year headers starting at M3, stopping at the first empty cell
+ * or at a cell that is not a year. That stop is what keeps 2027 in R3 from
+ * colliding with the "Datos Año" block that already occupies S3:T7.
+ */
+function aniosConsecutivos(headersFromM) {
+  var years = [];
+
+  for (var index = 0; index < headersFromM.length; index += 1) {
+    if (text(headersFromM[index]) === '') break;
+
+    var year = yearFromCell(headersFromM[index]);
+
+    if (!year) break;
+
+    years.push({ year: year, column: PETICIONES_ANUAL_FIRST_YEAR_COLUMN + index });
+  }
+
+  return years;
+}
+
+/**
+ * Column for `year` in the annual grid. Reuses M…Q for 2022–2026. The first
+ * empty cell after that block (R3) receives 2027. A non-empty neighbour — S3
+ * today holds 2022 of "Datos Año" — is a hard stop, not a cell to overwrite.
+ */
+function columnaParaAnio(years, year, nextCellRaw) {
+  for (var index = 0; index < years.length; index += 1) {
+    if (years[index].year === year) return years[index].column;
+  }
+
+  var nextColumn =
+    years.length === 0
+      ? PETICIONES_ANUAL_FIRST_YEAR_COLUMN
+      : years[years.length - 1].column + 1;
+
+  if (text(nextCellRaw) !== '') {
+    throw new Error(
+      'No hay columna libre para el año ' +
+        year +
+        ' en 2.2.1 Volum de peticiones (Informe): ' +
+        columnLetters(nextColumn) +
+        '3 está ocupada.'
+    );
+  }
+
+  return nextColumn;
+}
+
+function filaMesPeticiones(labels, monthNumber) {
+  for (var index = 0; index < labels.length; index += 1) {
+    if (numeroMesEspanol(labels[index][0]) === monthNumber) return 4 + index;
+  }
+
+  throw new Error(
+    'L4:L15 de 2.2.1 Volum de peticiones (Informe) no contiene el mes ' + monthNumber + '.'
+  );
+}
+
+/**
+ * Positions per YYYY/MM from Fecha Gestionado. One row is one position, even
+ * when several share the same Nº Petición. Rows without a usable date are
+ * skipped rather than assigned to the extraction month.
+ */
+function contarPeticionesAcumuladas(found) {
+  var result = { counts: {}, filas: 0, sinFecha: 0 };
+
+  if (!found || !found.acumuladas || !found.acumuladas.sheets || found.acumuladas.sheets.length === 0) {
+    return result;
+  }
+
+  var source = found.acumuladas.sheets[0];
+  var header = source.grid[source.headerRow] || [];
+  var columns = headerIndex(header);
+  var dateAt = columns[normalize('Fecha Gestionado')];
+
+  if (dateAt === undefined) {
+    throw new Error('Acumuladas no trae la columna Fecha Gestionado.');
+  }
+
+  for (var rowIndex = source.headerRow + 1; rowIndex < source.grid.length; rowIndex += 1) {
+    var row = source.grid[rowIndex] || [];
+
+    if (!rowHasValue(row)) continue;
+
+    result.filas += 1;
+
+    var date = toDate(row[dateAt]);
+
+    if (!date || !fechaOperativa(date)) {
+      result.sinFecha += 1;
+      continue;
+    }
+
+    var key = date.getUTCFullYear() + '/' + pad2(date.getUTCMonth() + 1);
+
+    result.counts[key] = (result.counts[key] || 0) + 1;
+  }
+
+  return result;
+}
+
+/** Seed first, then the live Acumuladas counts, which win on overlap. */
+function totalesPeticionesAnual(found) {
+  var totals = {};
+  var seed = PETICIONES_ANUAL_SEMILLA;
+
+  for (var index = 0; index < seed.length; index += 1) {
+    totals[seed[index].anio + '/' + pad2(seed[index].mes)] = seed[index].peticiones;
+  }
+
+  var counted = contarPeticionesAcumuladas(found);
+  var keys = Object.keys(counted.counts);
+
+  for (var keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+    totals[keys[keyIndex]] = counted.counts[keys[keyIndex]];
+  }
+
+  return totals;
+}
+
+function escribirCeldaPeticionAnual(sheet, year, month, value) {
+  var headers = sheet.getRange(3, PETICIONES_ANUAL_FIRST_YEAR_COLUMN, 1, 20).getValues()[0];
+  var years = aniosConsecutivos(headers);
+  var nextIndex = years.length;
+  var nextRaw = nextIndex < headers.length ? headers[nextIndex] : '';
+  var column = columnaParaAnio(years, year, nextRaw);
+
+  if (yearFromCell(sheet.getRange(3, column).getValue()) !== year) {
+    sheet.getRange(3, column).setValue(year);
+  }
+
+  var labels = sheet.getRange(4, 12, PETICIONES_ANUAL_MONTH_ROWS, 1).getValues();
+  var row = filaMesPeticiones(labels, month);
+
+  sheet.getRange(row, column).setValue(value);
+}
+
+/**
+ * Writes the annual-requests grid of 2.2.1 (Informe). Only the year/month
+ * cells of that block are touched; the rest of the (Informe) tab stays as it
+ * is. Months absent from both the seed and Acumuladas are left untouched.
+ */
+function escribirPeticionesAnual(found, informe) {
+  var sheet = sheetByName(TAB.peticionesInforme, false);
+
+  if (!sheet) {
+    throw new Error('Falta la pestaña 2.2.1 Volum de peticiones (Informe).');
+  }
+
+  var counted = contarPeticionesAcumuladas(found);
+  var totals = totalesPeticionesAnual(found);
+  var keys = Object.keys(totals).sort();
+
+  for (var index = 0; index < keys.length; index += 1) {
+    var parts = keys[index].split('/');
+    var year = Number(parts[0]);
+    var month = Number(parts[1]);
+
+    escribirCeldaPeticionAnual(sheet, year, month, totals[keys[index]]);
+  }
+
+  if (informe) {
+    informe.peticionesAnualCeldas = keys.length;
+    informe.peticionesAnualFilas = counted.filas;
+    informe.peticionesAnualSinFecha = counted.sinFecha;
+  }
+}
+
+/** AG: first monthly SmartTech column of 2.3.1 (Informe). */
+var CITAS_MENSUAL_FIRST_COLUMN = 33;
+
+/** AE4:AE22 / A4:A22: the nineteen published SmartTech points. */
+var CITAS_MENSUAL_FIRST_ROW = 4;
+var CITAS_MENSUAL_LAST_ROW = 22;
+
+/**
+ * Months written as values from the template. Earlier monthly columns stay as
+ * the weekly SUM formulas the book already has.
+ */
+var CITAS_MENSUAL_DESDE = '2026/08';
+
+function sitioSmartTech(building) {
+  var cleaned = text(building).replace(/^\s*smart\s*tech\s+/i, '').trim();
+
+  return cleaned === '' ? text(building) : cleaned;
+}
+
+function aliasCitaEdificio(building) {
+  return normalize(building).indexOf('ZELANDIA') >= 0 ? 'Smart Tech Seguros Tablas I' : building;
+}
+
+function esCitaFueraDeInforme(building) {
+  var key = normalize(building);
+
+  return key.indexOf('TELEFONIA') >= 0 || key.indexOf('ANILLO') >= 0 || key.indexOf('OPPLUS') >= 0;
+}
+
+function mesDeCabeceraCitas(value) {
+  if (typeof value === 'number' && isFinite(value) && value >= 2000 && value <= 2100) {
+    return '';
+  }
+
+  if (value instanceof Date) {
+    var fromDate = toDate(value);
+
+    return fromDate ? monthLabel(fromDate) : '';
+  }
+
+  var raw = text(value);
+
+  if (MONTH_TEXT.test(raw)) return raw;
+
+  var parsed = citaDate(value) || toDate(value);
+
+  return parsed ? monthLabel(parsed) : '';
+}
+
+/**
+ * Column where row 4 is "Ene": the annual comparison (AW today). Monthly
+ * site columns live to its left; year headers AX…BB sit to its right.
+ */
+function columnaHistoricoMesesCitas(sheet) {
+  var last = Math.min(sheet.getMaxColumns(), 80);
+  var width = last - CITAS_MENSUAL_FIRST_COLUMN + 1;
+
+  if (width < 1) return 0;
+
+  var labels = sheet.getRange(4, CITAS_MENSUAL_FIRST_COLUMN, 1, width).getValues()[0];
+
+  for (var index = 0; index < labels.length; index += 1) {
+    if (numeroMesEspanol(labels[index]) === 1) {
+      return CITAS_MENSUAL_FIRST_COLUMN + index;
+    }
+  }
+
+  return 0;
+}
+
+function primerDiaMes(monthKey) {
+  var match = /^(\d{4})\/(\d{2})$/.exec(monthKey);
+
+  if (!match) return null;
+
+  return utcDate(Number(match[1]), Number(match[2]), 1);
+}
+
+/**
+ * Counts appointments per YYYY/MM and Smart_Tech, using American dates.
+ * Telephony is dropped here the same way agregarCitas drops it.
+ */
+function contarCitasMensuales(found, extraction) {
+  var result = { byBuilding: {}, byMonth: {}, filas: 0, sinFecha: 0 };
+
+  if (!found || !found.citas) return result;
+
+  var source = firstSource(found.citas, 'Citas SmartTech');
+  var data = sourceRows(source);
+  var cutoff = extraction ? isoDate(extraction) : '';
+  var columns = source.columns || headerIndex(source.grid[source.headerRow] || []);
+
+  for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+    var row = data[rowIndex] || [];
+    var booked = citaDate(valueAt(row, columns, 'Cita_Previa'));
+    var walkup = booked ? null : citaDate(valueAt(row, columns, 'Walkup'));
+    var date = booked || walkup;
+    var building = text(valueAt(row, columns, 'Smart_Tech'));
+
+    if (building === '' || normalize(building).indexOf('TELEFONIA') >= 0) continue;
+
+    if (!date) {
+      result.sinFecha += 1;
+      continue;
+    }
+
+    if (cutoff && isoDate(date) > cutoff) continue;
+
+    result.filas += 1;
+
+    var month = monthLabel(date);
+
+    result.byMonth[month] = (result.byMonth[month] || 0) + 1;
+
+    if (!result.byBuilding[month]) result.byBuilding[month] = {};
+
+    result.byBuilding[month][building] = (result.byBuilding[month][building] || 0) + 1;
+  }
+
+  return result;
+}
+
+function filasCitasInforme(sheet) {
+  var height = CITAS_MENSUAL_LAST_ROW - CITAS_MENSUAL_FIRST_ROW + 1;
+  var names = sheet.getRange(CITAS_MENSUAL_FIRST_ROW, 1, height, 3).getValues();
+  var shorts = sheet.getRange(CITAS_MENSUAL_FIRST_ROW, 32, height, 1).getValues();
+  var rows = [];
+
+  for (var index = 0; index < names.length; index += 1) {
+    rows.push({
+      row: CITAS_MENSUAL_FIRST_ROW + index,
+      full: text(names[index][0]),
+      dt: text(names[index][1]),
+      shortA: text(names[index][2]),
+      shortAf: text(shorts[index][0])
+    });
+  }
+
+  return rows;
+}
+
+function filaCitaEdificio(rows, building) {
+  var aliased = aliasCitaEdificio(building);
+  var key = normalize(aliased);
+  var site = normalize(sitioSmartTech(aliased));
+
+  for (var index = 0; index < rows.length; index += 1) {
+    var current = rows[index];
+    var full = normalize(current.full);
+    var shortAf = normalize(current.shortAf);
+    var shortA = normalize(current.shortA);
+    var siteFull = normalize(sitioSmartTech(current.full));
+
+    if (full === key || siteFull === site || shortAf === site || shortA === site) {
+      return current;
+    }
+  }
+
+  return null;
+}
+
+function asegurarColumnaMesCitas(sheet, monthKey) {
+  var hist = columnaHistoricoMesesCitas(sheet);
+
+  if (hist === 0) {
+    throw new Error('2.3.1 (Informe) no tiene la columna de meses Ene–Dic del histórico anual.');
+  }
+
+  var width = hist - CITAS_MENSUAL_FIRST_COLUMN;
+  var headers = sheet.getRange(3, CITAS_MENSUAL_FIRST_COLUMN, 1, width).getValues()[0];
+  var empty = 0;
+
+  for (var index = 0; index < headers.length; index += 1) {
+    var mes = mesDeCabeceraCitas(headers[index]);
+    var column = CITAS_MENSUAL_FIRST_COLUMN + index;
+
+    if (mes === monthKey) return column;
+
+    if (mes === '' && text(headers[index]) === '' && empty === 0) empty = column;
+  }
+
+  if (empty > 0) {
+    sheet.getRange(3, empty).setValue(primerDiaMes(monthKey)).setNumberFormat('yyyy/mm');
+    return empty;
+  }
+
+  sheet.insertColumnBefore(hist);
+  sheet.getRange(3, hist).setValue(primerDiaMes(monthKey)).setNumberFormat('yyyy/mm');
+
+  return hist;
+}
+
+function escribirColumnaCitasMensual(sheet, column, rows, counts) {
+  var height = rows.length;
+  var values = [];
+  var written = 0;
+
+  for (var index = 0; index < height; index += 1) values.push([0]);
+
+  var buildings = Object.keys(counts);
+
+  for (var b = 0; b < buildings.length; b += 1) {
+    if (esCitaFueraDeInforme(buildings[b])) continue;
+
+    var target = filaCitaEdificio(rows, buildings[b]);
+
+    if (!target) continue;
+
+    values[target.row - CITAS_MENSUAL_FIRST_ROW][0] += counts[buildings[b]];
+    written += counts[buildings[b]];
+  }
+
+  sheet.getRange(CITAS_MENSUAL_FIRST_ROW, column, height, 1).setValues(values);
+
+  var totalCell = sheet.getRange(CITAS_MENSUAL_LAST_ROW + 1, column);
+  var letter = columnLetters(column);
+
+  if (text(totalCell.getFormula()) === '') {
+    totalCell.setFormula(
+      '=SUM(' + letter + CITAS_MENSUAL_FIRST_ROW + ':' + letter + CITAS_MENSUAL_LAST_ROW + ')'
+    );
+  }
+
+  return written;
+}
+
+function escribirCeldaCitaAnual(sheet, year, monthNumber, value) {
+  var hist = columnaHistoricoMesesCitas(sheet);
+
+  if (hist === 0) {
+    throw new Error('2.3.1 (Informe) no tiene la columna de meses Ene–Dic del histórico anual.');
+  }
+
+  var yearStart = hist + 1;
+  var headers = sheet.getRange(3, yearStart, 1, 12).getValues()[0];
+  var years = [];
+
+  for (var index = 0; index < headers.length; index += 1) {
+    if (text(headers[index]) === '') break;
+
+    var headerYear = yearFromCell(headers[index]);
+
+    if (!headerYear) break;
+
+    years.push({ year: headerYear, column: yearStart + index });
+  }
+
+  var nextRaw = years.length < headers.length ? headers[years.length] : '';
+  var nextColumn =
+    years.length === 0 ? yearStart : years[years.length - 1].column + 1;
+  var column;
+
+  for (var yearIndex = 0; yearIndex < years.length; yearIndex += 1) {
+    if (years[yearIndex].year === year) {
+      column = years[yearIndex].column;
+      break;
+    }
+  }
+
+  if (!column) {
+    if (text(nextRaw) !== '') {
+      throw new Error(
+        'No hay columna libre para el año ' +
+          year +
+          ' en 2.3.1 (Informe): ' +
+          columnLetters(nextColumn) +
+          '3 está ocupada.'
+      );
+    }
+
+    column = nextColumn;
+    sheet.getRange(3, column).setValue(year);
+  }
+
+  var labels = sheet.getRange(4, hist, 12, 1).getValues();
+  var row = 0;
+
+  for (var labelIndex = 0; labelIndex < labels.length; labelIndex += 1) {
+    if (numeroMesEspanol(labels[labelIndex][0]) === monthNumber) {
+      row = 4 + labelIndex;
+      break;
+    }
+  }
+
+  if (row === 0) {
+    throw new Error('El histórico anual de 2.3.1 (Informe) no contiene el mes ' + monthNumber + '.');
+  }
+
+  sheet.getRange(row, column).setValue(value);
+}
+
+/**
+ * Writes 2.3.1 (Informe) monthly site columns (AT = 2026/08, AU = 2026/09, …)
+ * and the matching cells of the annual block (BB11 = August 2026). New months
+ * occupy empty columns before "Ene"; if that block is reached, a column is
+ * inserted so 2027/2028 stay at BC/BD relative to the years.
+ */
+function escribirCitasMensuales(found, informe) {
+  if (!found || !found.citas) return;
+
+  var sheet = sheetByName(TAB.citasInforme, false);
+
+  if (!sheet) {
+    throw new Error('Falta la pestaña 2.3.1 Volum de Citas SmartTech Semanal (Informe).');
+  }
+
+  var extraction = informe && informe.extraction ? toDate(informe.extraction) : null;
+  var counted = contarCitasMensuales(found, extraction);
+  var rows = filasCitasInforme(sheet);
+  var months = Object.keys(counted.byMonth).sort();
+  var written = 0;
+  var unknown = {};
+
+  for (var index = 0; index < months.length; index += 1) {
+    if (months[index] < CITAS_MENSUAL_DESDE) continue;
+
+    var column = asegurarColumnaMesCitas(sheet, months[index]);
+    var buildings = counted.byBuilding[months[index]] || {};
+
+    escribirColumnaCitasMensual(sheet, column, rows, buildings);
+
+    var year = Number(months[index].slice(0, 4));
+    var monthNumber = Number(months[index].slice(5, 7));
+
+    escribirCeldaCitaAnual(sheet, year, monthNumber, counted.byMonth[months[index]]);
+    written += 1;
+
+    var names = Object.keys(buildings);
+
+    for (var b = 0; b < names.length; b += 1) {
+      if (esCitaFueraDeInforme(names[b])) continue;
+      if (!filaCitaEdificio(rows, names[b])) unknown[names[b]] = true;
+    }
+  }
+
+  if (informe) {
+    informe.citasMensualColumnas = written;
+    informe.citasMensualFilas = counted.filas;
+    informe.desconocidos = informe.desconocidos || [];
+
+    var missing = Object.keys(unknown).sort();
+
+    for (var m = 0; m < missing.length; m += 1) {
+      informe.desconocidos.push('SmartTech sin fila en 2.3.1 (Informe): ' + missing[m]);
+    }
+  }
+}
+
+/**
+ * Reads the annual-requests grid after it has been written. Width follows the
+ * consecutive year headers from M3, so 2027 in R3 is included without walking
+ * into the "Datos Año" block at S3.
+ */
 function agregarPeticionesAnual(peticionesAnual) {
   var sheet = sheetByName(TAB.peticionesInforme, false);
 
   if (!sheet) return;
 
-  // L3:Q15: row 3 names years, column L names Spanish months. The source is
-  // an audited aggregate, not a weekly snapshot, so it must not be recreated.
-  var values = sheet.getRange(3, 12, 13, 6).getValues();
-  var years = values[0] || [];
+  var headerRow = sheet.getRange(3, PETICIONES_ANUAL_FIRST_YEAR_COLUMN, 1, 20).getValues()[0];
+  var years = aniosConsecutivos(headerRow);
+
+  if (years.length === 0) return;
+
+  var lastColumn = years[years.length - 1].column;
+  var width = lastColumn - 12 + 1;
+  var values = sheet.getRange(3, 12, 13, width).getValues();
 
   for (var rowIndex = 1; rowIndex < values.length; rowIndex += 1) {
     var monthNumber = numeroMesEspanol(values[rowIndex][0]);
 
     if (monthNumber === 0) continue;
 
-    for (var column = 1; column < values[rowIndex].length; column += 1) {
-      var year = Number(years[column]);
-      var raw = values[rowIndex][column];
+    for (var yearIndex = 0; yearIndex < years.length; yearIndex += 1) {
+      var year = years[yearIndex].year;
+      var raw = values[rowIndex][years[yearIndex].column - 12];
 
-      if (!isFinite(year) || text(raw) === '') continue;
+      if (text(raw) === '') continue;
 
       bump(peticionesAnual, [String(year), year + '/' + pad2(monthNumber)], toNumber(raw));
     }
@@ -3261,6 +3848,20 @@ function registrarArchivosLeidos(clasificacion, informe) {
   } else {
     informe.archivos.push({
       name: 'Dashboards Renoves SSCC (ausente)',
+      modified: null,
+      rows: 0
+    });
+  }
+
+  // Acumuladas is optional the same way: a missing file keeps the annual grid
+  // as last written (plus the August 2026 seed) instead of aborting the week.
+  if (found.acumuladas) {
+    informe.archivos.push(
+      sourceRecord(found.acumuladas, informe.peticionesAnualFilas || 0)
+    );
+  } else {
+    informe.archivos.push({
+      name: 'Acumuladas (ausente)',
       modified: null,
       rows: 0
     });

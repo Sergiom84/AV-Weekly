@@ -33,10 +33,15 @@ por el equipo.
 ## Rutina semanal
 
 1. Dejar en la carpeta un solo fichero de cada tipo: backlog, liberadas,
-   gestionadas, peticiones IMAC y el template semanal. El template contiene
-   encuestas, work orders y citas. Añadir también `Dashboards Renoves SSCC`,
-   que el equipo publica desde su hoja de Google y alimenta las dos páginas de
-   Renove.
+   gestionadas, **Acumuladas**, peticiones IMAC y el template semanal. El
+   template contiene encuestas, work orders y citas. Añadir también
+   `Dashboards Renoves SSCC`, que el equipo publica desde su hoja de Google y
+   alimenta las dos páginas de Renove. El nombre de Acumuladas tiene que
+   contener la palabra `Acumuladas`; el recuento mensual de posiciones
+   (filas, no peticiones distintas) por `Fecha Gestionado` se escribe en
+   `2.2.1 Volum de peticiones (Informe)`: agosto 2026 en `Q11`, septiembre
+   en `Q12`, y así. Sin ese fichero el proceso no se detiene, pero
+   `Comprobación` apunta `Acumuladas (ausente)` y la serie anual no avanza.
 2. Escribir en `Configuración` la fecha de extracción de la semana.
 3. Ejecutar `⭐ Informática Weekly > Procesar semana` **una sola vez**.
 4. Revisar las siete líneas de `Comprobación`: archivo leído, fecha de
@@ -54,13 +59,22 @@ columna *Semana anterior* se conserva: no se vuelve a copiar `H4:H6` sobre
 los meses que ya quedaron atrás (agosto se congela al informar septiembre).
 `Cerrar mes` sigue en el menú para congelar el mes en curso a propósito.
 
-Los ficheros se reconocen por cabeceras. Solo backlog, liberadas y gestionadas
-se distinguen por nombre porque comparten exactamente el mismo formato. Si
-falta un origen obligatorio, el proceso se detiene antes de escribir datos.
+Los ficheros se reconocen por cabeceras. Solo backlog, liberadas, gestionadas
+y Acumuladas se distinguen por nombre porque comparten exactamente el mismo
+formato. Si falta un origen obligatorio, el proceso se detiene antes de
+escribir datos.
 
-`Dashboards Renoves SSCC` es el único origen opcional: el proceso no se detiene
-sin él, pero `Comprobación` escribe `Dashboards Renoves SSCC (ausente)` y el
-TXT sale sin sección `RENOVE`, es decir, con las dos páginas de Renove vacías.
+`Dashboards Renoves SSCC` y `Acumuladas` son opcionales: el proceso no se
+detiene sin ellos. Sin Renove, `Comprobación` escribe `Dashboards Renoves SSCC
+(ausente)` y el TXT sale sin sección `RENOVE`. Sin Acumuladas escribe
+`Acumuladas (ausente)` y la rejilla anual de 2.2.1 se queda como estaba, salvo
+la semilla de agosto 2026.
+
+Las citas del template `6-6 - Citas Smart Tech` alimentan la slide 2.3.3 y, a
+la vez, `2.3.1 (Informe)`: `AT` es agosto 2026, `AU` septiembre, y el script
+añade columnas antes de `Ene` cuando el mes nuevo lo necesita. El histórico
+anual (`AX` = 2022 … `BB` = 2026, `BC` = 2027) recibe el total del mes. Las
+fechas del export van en formato americano.
 De ese libro se leen sus ocho pestañas `Holding - …` y `España - …`; cualquier
 copia de trabajo con otro nombre se ignora para no contar equipos dos veces.
 

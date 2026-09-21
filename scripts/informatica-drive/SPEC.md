@@ -156,7 +156,15 @@ El script no escribe nunca en:
 - `2.1.6 Work Orders (Datos)!AB` — catálogo de 18 edificios.
 - `Hoja 18!BC:BE` — totales anuales 2022 a 2026, histórico previo que no está en ningún
   fichero y que no se puede recalcular.
-- Ninguna pestaña `(Informe)`, salvo los marcadores y el cierre de mes del apartado 6.
+- Ninguna pestaña `(Informe)`, salvo los marcadores, el cierre de mes del apartado 6,
+  la rejilla anual de peticiones `L4:L15` × columnas de año desde `M`
+  (`2.2.1 Volum de peticiones (Informe)`) y las dos rejillas de citas de
+  `2.3.1 Volum de Citas SmartTech Semanal (Informe)`: el bloque mensual por sede
+  (`AE4:AE22` / `AF4:AF22`, cabeceras de mes desde `AG3`, `AT3` = 2026/08) y el
+  histórico anual `AW4:AW15` × `AX3:BB3`. Desde 2026/08 esas celdas se rellenan
+  con el conteo del template `6-6 - Citas Smart Tech` (fechas americanas).
+  No se pisan los bloques «Datos Año» a la derecha (`S3:T7` en peticiones,
+  `BD3` hoy en citas).
 
 Son tablas mantenidas a mano. Borrarlas deja el libro sin poder resolver ningún `VLOOKUP`.
 
@@ -351,14 +359,18 @@ concepto:
 | `RENOVE` | día, mes, semana, ámbito, estado | equipos |
 
 `RENOVE` sale de `Dashboards Renoves SSCC`, que el equipo publica desde su hoja de Google
-en la misma carpeta de Drive. Es el único origen opcional: si el libro no está esa semana,
-la sección no se emite y `Comprobación` lo dice con el nombre `Dashboards Renoves SSCC
+en la misma carpeta de Drive. Es origen opcional: si el libro no está esa semana, la
+sección no se emite y `Comprobación` lo dice con el nombre `Dashboards Renoves SSCC
 (ausente)`. Como el PLANO se importa con `alcance completo`, una semana sin el libro deja
 las dos páginas de Renove vacías; por eso su ausencia se nombra en vez de callarse.
+`Acumuladas` es el otro origen opcional: alimenta la rejilla anual de 2.2.1 (Informe),
+no una sección propia del PLANO. Sin el fichero, `Comprobación` escribe
+`Acumuladas (ausente)` y la serie anual no avanza.
 
-No se emiten `WASP`, `PeticionesAnual` ni `CitasAnual` desde los ficheros semanales:
-ninguno de ellos contiene esos datos. Las páginas del deck que dependen de ellos siguen en
-"Próximamente", que es preferible a inventar la cifra.
+No se emite `WASP` desde los ficheros semanales: no hay origen identificado.
+`PeticionesAnual` sale de la rejilla de `2.2.1 (Informe)` después de que el script
+haya escrito ahí el conteo de Acumuladas y la semilla de agosto 2026. `CitasAnual`
+sigue saliendo de las citas del template, no de un histórico congelado aparte.
 
 Las secciones y sus dimensiones son las mismas que ya declara
 `Documentación/Informática/_esquema-excel-plano.md` y que `server/parseInformaticaPlano.ts`
