@@ -1,3 +1,4 @@
+import { EMPTY_TABLE_CELL } from "@/components/deck/emptyCell";
 import { KPI_CARD_HOVER } from "@/components/deck/KpiRow";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
@@ -128,7 +129,7 @@ export default function EncuestasPage({
                   <tr key={row.score} className="border-b border-border/60 last:border-b-0">
                     <th scope="row" className="px-[0.25cqi] py-[0.32cqi] text-left font-normal">{row.score}</th>
                     <td className="px-[0.25cqi] py-[0.32cqi] text-center">{row.responses.toLocaleString("es-ES")}</td>
-                    <td className="px-[0.25cqi] py-[0.32cqi] text-center">{total > 0 ? percent(row.responses / total) : ""}</td>
+                    <td className="px-[0.25cqi] py-[0.32cqi] text-center">{total > 0 ? percent(row.responses / total) : EMPTY_TABLE_CELL}</td>
                   </tr>
                 ))}
               </tbody>

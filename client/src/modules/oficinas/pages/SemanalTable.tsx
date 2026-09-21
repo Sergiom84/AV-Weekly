@@ -1,3 +1,4 @@
+import { formatTableNumber } from "@/components/deck/emptyCell";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
 import type { OficinasRow } from "@shared/modules/oficinas/types";
 import {
@@ -130,7 +131,7 @@ export default function SemanalTable({
               </td>
               {visibleWeeks.map(week => (
                 <td key={week} className={cellClass}>
-                  {entry.weekly.get(week) ?? ""}
+                  {formatTableNumber(entry.weekly.get(week))}
                 </td>
               ))}
             </tr>
@@ -166,7 +167,7 @@ export default function SemanalTable({
 
                 return (
                   <td key={week} className={cellClass}>
-                    {total === null ? "" : total}
+                    {formatTableNumber(total)}
                   </td>
                 );
               })}

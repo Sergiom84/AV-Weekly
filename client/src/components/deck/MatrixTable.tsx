@@ -1,4 +1,5 @@
 import { useFitTableScale } from "@/hooks/useFitTableScale";
+import { formatTableNumber } from "@/components/deck/emptyCell";
 
 export interface MatrixRow {
   label: string;
@@ -16,7 +17,7 @@ interface MatrixTableProps {
   /** Adds a totals row at the bottom. */
   columnTotals?: boolean;
   totalsLabel?: string;
-  /** Rendering of a cell. Zero is blanked out by default, as in the report. */
+  /** Rendering of a cell. Zero is a hyphen by default, as in the report. */
   formatValue?: (value: number) => string;
   /** AV-style framed table with primary header/footer and grouped first column. */
   variant?: "plain" | "report";
@@ -34,7 +35,7 @@ interface MatrixTableProps {
   nowrapHeaders?: boolean;
 }
 
-const defaultFormat = (value: number) => (value === 0 ? "" : String(value));
+const defaultFormat = formatTableNumber;
 
 /**
  * Width of the label column. Narrow tables (products, SmartTech) need most of
@@ -211,7 +212,7 @@ export default function MatrixTable({
                 <td
                   className={`${cellPad} whitespace-nowrap text-center align-middle font-medium ${variant === "report" ? "bg-muted/40" : ""}`}
                 >
-                  {totalOfRow(row)}
+                  {formatValue(totalOfRow(row))}
                 </td>
               )}
             </tr>
@@ -233,14 +234,14 @@ export default function MatrixTable({
                   key={column}
                   className={`${cellPad} whitespace-nowrap text-center align-middle ${groupRule(index)}`}
                 >
-                  {totalOfColumn(index)}
+                  {formatValue(totalOfColumn(index))}
                 </td>
               ))}
               {rowTotals && (
                 <td
                   className={`${cellPad} whitespace-nowrap text-center align-middle`}
                 >
-                  {grandTotal}
+                  {formatValue(grandTotal)}
                 </td>
               )}
             </tr>

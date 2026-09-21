@@ -1,6 +1,7 @@
 import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
+import { EMPTY_TABLE_CELL } from "@/components/deck/emptyCell";
 import KpiRow from "@/components/deck/KpiRow";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
@@ -152,7 +153,7 @@ export default function MensualGroupedPage({
                     return (
                       <td key={month} className="px-[0.1cqi] py-[0.2cqi] text-center">
                         {row === undefined
-                          ? ""
+                          ? EMPTY_TABLE_CELL
                           : metric(row, entry.key).toLocaleString("es-ES")}
                       </td>
                     );

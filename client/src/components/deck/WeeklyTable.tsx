@@ -1,4 +1,5 @@
 import type { WeeklyRow } from "@shared/informe";
+import { formatTableNumber } from "./emptyCell";
 import EditableNumber from "./EditableNumber";
 
 interface WeeklyTableProps {
@@ -68,7 +69,7 @@ export default function WeeklyTable({
           </th>
           {weeks.map((week) => (
             <td key={week} className="px-[0.2cqi] py-[0.3cqi] text-center">
-              {totalFor(week)}
+              {formatTableNumber(totalFor(week))}
             </td>
           ))}
         </tr>

@@ -1,3 +1,4 @@
+import { EMPTY_TABLE_CELL } from "@/components/deck/emptyCell";
 import KpiRow from "@/components/deck/KpiRow";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
@@ -77,7 +78,7 @@ export default function SlasPage({
           },
           {
             label: "Cumplimiento",
-            value: measured > 0 ? percent(met / measured) : "",
+            value: measured > 0 ? percent(met / measured) : EMPTY_TABLE_CELL,
           },
           { label: "Incumplidos", value: missed.toLocaleString("es-ES") },
         ]}
@@ -131,7 +132,7 @@ export default function SlasPage({
                   {row.total.toLocaleString("es-ES")}
                 </td>
                 <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center font-medium">
-                  {row.share === null ? "" : percent(row.share)}
+                  {row.share === null ? EMPTY_TABLE_CELL : percent(row.share)}
                 </td>
               </tr>
             ))}
@@ -155,7 +156,7 @@ export default function SlasPage({
                   .toLocaleString("es-ES")}
               </td>
               <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
-                {measured > 0 ? percent(met / measured) : ""}
+                {measured > 0 ? percent(met / measured) : EMPTY_TABLE_CELL}
               </td>
             </tr>
           </tbody>

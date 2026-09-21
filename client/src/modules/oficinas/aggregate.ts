@@ -1,3 +1,4 @@
+import { EMPTY_TABLE_CELL } from "@/components/deck/emptyCell";
 import { MONTH_LABELS } from "@shared/deck/core";
 import { yearSeriesColor } from "../../lib/yearSeries";
 import {
@@ -71,7 +72,7 @@ export function percent(share: number): string {
  */
 export function sharePercent(share: number, digits = 1): string {
   if (!Number.isFinite(share)) {
-    return "";
+    return EMPTY_TABLE_CELL;
   }
 
   return `${(share * 100).toLocaleString("es-ES", {

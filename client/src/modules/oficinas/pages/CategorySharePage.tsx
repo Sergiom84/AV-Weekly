@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { EMPTY_TABLE_CELL } from "@/components/deck/emptyCell";
 import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
@@ -350,7 +351,7 @@ function ShareTable({
               </td>
             )}
             <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
-              {total === 0 ? "" : "100%"}
+              {total === 0 ? EMPTY_TABLE_CELL : "100%"}
             </td>
           </tr>
         </tbody>

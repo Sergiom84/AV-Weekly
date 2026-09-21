@@ -1,6 +1,7 @@
 import CategoryBarChart, {
   type CategorySeries,
 } from "@/components/deck/CategoryBarChart";
+import { formatTableNumber } from "@/components/deck/emptyCell";
 import KpiRow from "@/components/deck/KpiRow";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
@@ -126,7 +127,7 @@ export default function MensualCierresPage({
                   </th>
                   {months.map(month => (
                     <td key={month} className="px-[0.1cqi] py-[0.2cqi] text-center">
-                      {valueAtMonth(row, month).toLocaleString("es-ES")}
+                      {formatTableNumber(valueAtMonth(row, month))}
                     </td>
                   ))}
                 </tr>

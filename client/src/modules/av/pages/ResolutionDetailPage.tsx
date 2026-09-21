@@ -12,6 +12,7 @@ import {
   reportedWeekAvailability,
   resolveWeekSelection,
 } from "@shared/informe";
+import { formatTableNumber } from "@/components/deck/emptyCell";
 import EditableNumber from "@/components/deck/EditableNumber";
 import EditableText from "@/components/deck/EditableText";
 import SlideHeading from "@/components/deck/SlideHeading";
@@ -272,7 +273,7 @@ export default function ResolutionDetailPage({
                       </td>
                     ))}
                     <td className="truncate bg-muted/40 px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.26cqi)] text-center font-semibold">
-                      {totals.rowTotals[key]}
+                      {formatTableNumber(totals.rowTotals[key])}
                     </td>
                   </tr>
                 );
@@ -291,11 +292,11 @@ export default function ResolutionDetailPage({
                     key={week}
                     className="truncate px-[0.1cqi] py-[calc(var(--fit-scale,1)*0.42cqi)] text-center"
                   >
-                    {totals.weekTotals[String(week)] ?? 0}
+                    {formatTableNumber(totals.weekTotals[String(week)])}
                   </td>
                 ))}
                 <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.42cqi)] text-center">
-                  {totals.grandTotal}
+                  {formatTableNumber(totals.grandTotal)}
                 </td>
               </tr>
             </tbody>

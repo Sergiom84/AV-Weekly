@@ -4,6 +4,7 @@ import WeeklyBarChart, {
 } from "@/components/deck/WeeklyBarChart";
 import ValueGrid from "@/components/deck/EditorValueGrid";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
+import { EMPTY_TABLE_CELL, formatTableNumber } from "@/components/deck/emptyCell";
 import KpiRow from "@/components/deck/KpiRow";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
 import {
@@ -731,7 +732,7 @@ function DTTable({
                         : "px-[0.2cqi]"
                     }`}
                   >
-                    {entry.offices === 0 ? "" : entry.offices}
+                    {formatTableNumber(entry.offices)}
                   </td>
                   <td
                     className={`truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-center ${
@@ -740,7 +741,7 @@ function DTTable({
                         : "px-[0.2cqi]"
                     }`}
                   >
-                    {entry.ratio === null ? "" : decimal(entry.ratio)}
+                    {entry.ratio === null ? EMPTY_TABLE_CELL : decimal(entry.ratio)}
                   </td>
                   <td
                     className={`truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-center ${
@@ -762,7 +763,7 @@ function DTTable({
                       : "truncate px-[0.2cqi]"
                   }`}
                 >
-                  {valueAt(byLabel.get(entry.dt)?.values, year, week)}
+                  {formatTableNumber(valueAt(byLabel.get(entry.dt)?.values, year, week))}
                 </td>
               ))}
             </tr>
@@ -790,7 +791,7 @@ function DTTable({
                       : "px-[0.2cqi]"
                   }`}
                 >
-                  {offices || ""}
+                  {formatTableNumber(offices)}
                 </td>
                 <td
                   className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center ${
@@ -802,7 +803,7 @@ function DTTable({
                   {/* The published pivot totals the ratio too, over the whole
                       network. Blank while no office master is seeded, like the
                       rows above it. */}
-                  {compact && offices > 0 ? decimal(counted / offices) : ""}
+                  {compact && offices > 0 ? decimal(counted / offices) : EMPTY_TABLE_CELL}
                 </td>
                 <td
                   className={`truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center ${
@@ -826,7 +827,7 @@ function DTTable({
                     : "truncate px-[0.2cqi]"
                 }`}
               >
-                {totals[index] ?? 0}
+                {formatTableNumber(totals[index])}
               </td>
             ))}
           </tr>

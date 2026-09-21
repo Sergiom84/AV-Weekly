@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { formatTableNumber } from "@/components/deck/emptyCell";
 import type { MatrixRow } from "@/components/deck/MatrixTable";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
@@ -78,7 +79,7 @@ function DetailTable({
               </span>
               {columns.map((column, index) => (
                 <span key={column} className="whitespace-nowrap text-center" role="cell">
-                  {row.values[index] || ""}
+                  {formatTableNumber(row.values[index])}
                 </span>
               ))}
             </div>
@@ -99,7 +100,7 @@ function DetailTable({
               className="whitespace-nowrap text-center"
               role="cell"
             >
-              {total || ""}
+              {formatTableNumber(total)}
             </span>
           ))}
         </div>

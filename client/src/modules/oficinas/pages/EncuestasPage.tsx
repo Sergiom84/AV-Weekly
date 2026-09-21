@@ -1,3 +1,4 @@
+import { EMPTY_TABLE_CELL } from "@/components/deck/emptyCell";
 import { KPI_CARD_HOVER } from "@/components/deck/KpiRow";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import ValueGrid from "@/components/deck/EditorValueGrid";
@@ -276,7 +277,7 @@ export default function EncuestasPage({
                       {row.responses.toLocaleString("es-ES")}
                     </td>
                     <td className="px-[0.25cqi] py-[0.32cqi] text-center">
-                      {globalTotal > 0 ? sharePercent(row.responses / globalTotal) : ""}
+                      {globalTotal > 0 ? sharePercent(row.responses / globalTotal) : EMPTY_TABLE_CELL}
                     </td>
                   </tr>
                 ))}

@@ -1,3 +1,4 @@
+import { formatTableNumber } from "@/components/deck/emptyCell";
 import { cn } from "@/lib/utils";
 
 interface EditableNumberProps {
@@ -26,7 +27,7 @@ export default function EditableNumber({
   if (!editing) {
     return (
       <span className={cn("font-mono tabular-nums", overridden && "text-primary", className)}>
-        {value == null || value === 0 ? "" : value}
+        {formatTableNumber(value)}
       </span>
     );
   }
