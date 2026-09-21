@@ -95,12 +95,15 @@ orders se llama `Peticiones ON SITE SSCC`, es decir, el nombre miente.
 | Peticiones (backlog / gestionadas / liberadas) | `Denominación Producto` + `Estatus de la Posición` |
 | Templates | las trece pestañas `N-N - ...` |
 | IMAC | `Fecha limite` + `nº trabajos` |
-| Renove | `Ubicación` + `Estado` en una pestaña llamada `Holding - …` o `España - …` |
+| Renove | nombre de fichero con `Renove` + `España` o `Holding`, y `Ubicación` + `Estado` en las cuatro pestañas derivadas |
 
-Renove es la excepción a la regla de la cabecera: sus ocho pestañas comparten columnas y
-el ámbito solo está en el nombre, así que el nombre de la pestaña identifica y las
-columnas confirman. Una copia de trabajo como `Copia de Renove semanal` queda fuera, que
-es lo que impide contar dos veces las mismas máquinas.
+Renove es la excepción a la regla de la cabecera. El ámbito es el fichero, porque dentro
+del libro no hay ninguna celda que lo declare, y dentro de cada libro seis o siete
+pestañas comparten esas dos columnas: solo se leen `Onboarding semanal`,
+`Renovados onboarding`, `Renove semanal` y `Renovados renove`, que son los resúmenes que
+el propio libro deriva. Las crudas `Renove` y `Onboarding y averías` quedan fuera porque
+son su origen, y una copia de trabajo como `Copia de Renove semanal` también. Eso es lo
+que impide contar dos veces las mismas máquinas.
 
 Los tres ficheros de peticiones comparten la misma cabecera de 19 columnas, así que entre
 ellos se distinguen por nombre de fichero (`Backlog`, `Gestionadas`, `Liberadas`, sin
@@ -358,11 +361,18 @@ concepto:
 | `IMACS` | mes, ciudad, métrica | total |
 | `RENOVE` | día, mes, semana, ámbito, estado | equipos |
 
-`RENOVE` sale de `Dashboards Renoves SSCC`, que el equipo publica desde su hoja de Google
-en la misma carpeta de Drive. Es origen opcional: si el libro no está esa semana, la
-sección no se emite y `Comprobación` lo dice con el nombre `Dashboards Renoves SSCC
-(ausente)`. Como el PLANO se importa con `alcance completo`, una semana sin el libro deja
-las dos páginas de Renove vacías; por eso su ausencia se nombra en vez de callarse.
+`RENOVE` sale de los dos libros de Renove que el equipo deja en la misma carpeta de
+Drive, `Renove Global PC España` y `Renove Global PC Holding`. Ambos son opcionales y se
+nombran por separado: si uno no está esa semana, `Comprobación` escribe
+`Renove España (ausente)` o `Renove Holding (ausente)` y ese ámbito sale vacío. Como el
+PLANO se importa con `alcance completo`, una semana sin los libros deja las dos páginas
+de Renove vacías; por eso su ausencia se nombra en vez de callarse.
+
+El origen anterior era `Dashboards Renoves SSCC`, el tablero al que ambos libros
+publicaban. Se retiró el 21/09/2026: sus cuatro pestañas `España - …` venían publicadas
+desde el libro de Holding, de modo que el ámbito España del informe era en realidad
+Holding repetido. Leer los libros directamente quita el paso de publicación, que era
+donde los dos ámbitos podían cruzarse sin que nada lo dijera.
 `Acumuladas` es el otro origen opcional: alimenta la rejilla anual de 2.2.1 (Informe),
 no una sección propia del PLANO. Sin el fichero, `Comprobación` escribe
 `Acumuladas (ausente)` y la serie anual no avanza.
@@ -494,5 +504,6 @@ Criterio de aceptación: ejecutar el script sobre una copia del libro con los fi
 | Qué hacer si el fichero IMAC trae una pestaña de año que el libro no tiene | pendiente |
 | Quién mantiene los maestros `X:Z`, `Y:Z` y `AB`, y cada cuánto | pendiente, riesgo bajo: el script no los escribe, solo avisa de los valores que no encuentra |
 | Origen de los datos de WASP y de las series anuales de peticiones y citas | sin origen conocido, se sigue pidiendo |
-| Renove ya tiene origen: `Dashboards Renoves SSCC` en la carpeta de Drive, generado desde la hoja `1dpjt6zqPHNbNvLzUWwvIv0sDZNaljXxh9IUx_WiI7Y8` | resuelto, lo emite `Procesar semana` |
+| Renove ya tiene origen: los libros `Renove Global PC España` y `Renove Global PC Holding` en la carpeta de Drive | resuelto, lo emite `Procesar semana` |
+| Si los dos libros de Renove vuelven a publicar en `Dashboards Renoves SSCC`, ese tablero ya no lo lee nadie | resuelto por retirada; conviene que el equipo quite la publicación cruzada que duplicaba España |
 | Bloque `2.1.6 (Informe)` filas 45-49 (Teclado / Ratón / Desinstalar SW): a qué página del informe sale | pendiente, no bloquea |

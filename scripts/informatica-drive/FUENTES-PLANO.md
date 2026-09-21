@@ -14,15 +14,13 @@ reconoce las tablas por cabeceras y no por el nombre de fichero.
 | `WORKORDERS` | Template, `5-5 - Peticiones ON SITE SSCC` `A1:O24316` | `Submit Date`, ubicación y `Categorization Tier 2`; 2024-02-19–2026-08-22. | Agregar por semana y mes; las tablas `Hoja 14`/`Hoja 15` son contraste, no origen. |
 | `IMACS` | `Peticiones IMAC Onsite SSCC.xlsx`, pestaña `2026` `A1:I1555` | `Fecha limite`, `Edificio`, `nº trabajos`, `Solicitudes`; 2026-01-02–2026-08-19. | Primer día de mes y sede canónica; sumar Solicitudes e Intervenciones. |
 | `WASP` | Sin fuente identificada | Sección opcional. | No emitir hasta identificar documento origen; ausencia significa sin datos. |
-| `RENOVE` | `Dashboards Renoves SSCC.xlsx`, ocho pestañas: `{Holding\|España} - {Onboarding\|Renove} semanal` y `{Holding\|España} - Renovados {onboarding\|renove}` | `Estado`, `Ubicacion`, `Fecha Renovado` o `Fecha de Estado`, `Nº Peticion`. | Fuera del flujo de Drive: ese libro no llega a `Bruto`. Lo agrega `scripts/informatica-renove/exportar-renove.mjs`. No inferir desde productos de peticiones. |
+| `RENOVE` | `Renove Global PC España*.xlsx` y `Renove Global PC Holding*.xlsx`, cuatro pestañas de cada uno: `Onboarding semanal`, `Renovados onboarding`, `Renove semanal`, `Renovados renove` | `Estado`, `Ubicacion`, `Fecha Renovado` o `Fecha de Estado`, `Nº Peticion`. | Ámbito por nombre de fichero: dentro del libro no hay celda que lo declare. No leer las crudas `Renove` ni `Onboarding y averías`, que son el origen de esas cuatro. No inferir desde productos de peticiones. |
 
-`RENOVE` es la única sección que no produce `Codigo.gs`. Su libro lo mantienen
-los informáticos y se publica al panel de Renove, no a la carpeta `Bruto`, así
-que se agrega aparte y se pega detrás de las secciones del PLANO:
-
-```bash
-node scripts/informatica-renove/exportar-renove.mjs --xlsx "Dashboards Renoves SSCC.xlsx" --anexar PLANO.txt
-```
+`RENOVE` sale de los dos libros de Renove de la carpeta de Drive y lo emite
+`Procesar semana` como una sección más. Hasta el 21/09/2026 venía del tablero
+`Dashboards Renoves SSCC`, donde ambos libros publicaban sus pestañas; ese paso
+se retiró porque las cuatro pestañas `España - …` estaban publicadas desde el
+libro de Holding y el informe contaba Holding dos veces.
 
 El preámbulo del TXT siempre declara `asOfDate`, `semana` y `alcance completo`.
 Las filas conservan año dentro de `mes`, y las secciones semanales conservan

@@ -557,13 +557,14 @@ var REQUIRED = {
 };
 
 /**
- * Tabs of `Dashboards Renoves SSCC`, four per scope.
+ * The four summary tabs each Renove workbook derives from its own raw sheets.
  *
- * The scope is only in the tab name, so the name is what identifies the sheet
- * and the two columns above only confirm it. A workbook exported without
- * accents writes "Espana", and the file carries working copies such as
- * "Copia de Renove semanal": anything that is not one of these eight names is
- * left out, because a copy would count its rows twice.
+ * They are read, and the raw `Renove` and `Onboarding y averías` they come from
+ * are not: six or seven tabs of the workbook carry the two columns above, so
+ * the header signature alone would count the raw rows on top of their own
+ * summaries. The names are matched without accents, because a workbook exported
+ * to xlsx and back writes "averias", and a working copy named "Copia de Renove
+ * semanal" is left out for the same reason it always was.
  */
 var RENOVE_TABS = {
   'ONBOARDING SEMANAL': true,
@@ -575,24 +576,43 @@ var RENOVE_TABS = {
 /** Date column of a Renove tab, in order of preference. */
 var RENOVE_DATE_HEADERS = ['Fecha Renovado', 'Fecha de Estado', 'Fecha'];
 
-/** Scope a Renove tab reports, or an empty string when the tab is not one. */
-function renoveAmbito(sheetName) {
-  var match = /^(HOLDING|ESPANA) - (.+)$/.exec(normalize(sheetName));
+/**
+ * Which scope a Renove workbook reports, by file name, or null.
+ *
+ * The scope used to be read off the tab prefix of `Dashboards Renoves SSCC`,
+ * the board both workbooks published into. That board is gone from the routine:
+ * on 21/09/2026 its eight tabs held Holding twice, its four "España - " tabs
+ * having been published from the Holding workbook, so the report counted 789
+ * renewals where the two sources hold 858 and the whole España population never
+ * arrived. The workbooks are read directly and the scope is the file, which
+ * cannot come apart the way two publications could.
+ */
+function renoveKind(fileName) {
+  var upper = normalize(fileName);
 
-  if (!match || !RENOVE_TABS[match[2]]) return '';
+  if (upper.indexOf('RENOVE') < 0) return null;
+  if (upper.indexOf('HOLDING') >= 0) return 'renoveHolding';
+  if (upper.indexOf('ESPANA') >= 0) return 'renoveEspana';
 
-  return match[1] === 'HOLDING' ? 'Holding' : 'España';
+  return null;
 }
 
-/** The eight Renove tabs of a workbook, each with its scope resolved. */
-function renoveSheets(grids) {
+/** The two Renove workbook kinds, in the order they are reported. */
+var RENOVE_KINDS = ['renoveEspana', 'renoveHolding'];
+
+/** Scope written into the PLANO for each of the two workbook kinds. */
+var RENOVE_AMBITO = {
+  renoveEspana: 'España',
+  renoveHolding: 'Holding'
+};
+
+/** The four summary tabs of one Renove workbook, stamped with its scope. */
+function renoveSheets(grids, ambito) {
   var candidates = findDataSheets(grids, REQUIRED.renove);
   var sheets = [];
 
   for (var index = 0; index < candidates.length; index += 1) {
-    var ambito = renoveAmbito(candidates[index].name);
-
-    if (ambito === '') continue;
+    if (!RENOVE_TABS[normalize(candidates[index].name)]) continue;
 
     candidates[index].ambito = ambito;
     sheets.push(candidates[index]);
@@ -690,7 +710,8 @@ function classifyFolder(folderId) {
     workOrders: null,
     citas: null,
     imac: null,
-    renove: null
+    renoveEspana: null,
+    renoveHolding: null
   };
   var handles = [];
   var skipped = [];
@@ -769,11 +790,15 @@ function classifyFolder(folderId) {
         matched = true;
       }
 
-      var renove = renoveSheets(grids);
+      var renoveKindFound = renoveKind(file.getName());
 
-      if (renove.length > 0) {
-        keepNewest(found, duplicated, 'renove', file, renove, grids);
-        matched = true;
+      if (renoveKindFound !== null) {
+        var renove = renoveSheets(grids, RENOVE_AMBITO[renoveKindFound]);
+
+        if (renove.length > 0) {
+          keepNewest(found, duplicated, renoveKindFound, file, renove, grids);
+          matched = true;
+        }
       }
 
       if (!matched) {
@@ -3545,9 +3570,14 @@ function renoveFecha(row, columns) {
  * group the rows and never written out, the rule the whole PLANO follows.
  */
 function agregarRenove(found, renove) {
-  if (!found.renove || !found.renove.sheets) return;
+  var sheets = [];
+  var kinds = RENOVE_KINDS;
 
-  var sheets = found.renove.sheets;
+  for (var kindIndex = 0; kindIndex < kinds.length; kindIndex += 1) {
+    var entry = found[kinds[kindIndex]];
+
+    if (entry && entry.sheets) sheets = sheets.concat(entry.sheets);
+  }
 
   for (var sheetIndex = 0; sheetIndex < sheets.length; sheetIndex += 1) {
     var source = sheets[sheetIndex];
@@ -3809,7 +3839,7 @@ function sourceRecord(entry, rowsRead) {
   };
 }
 
-/** Data rows of the Renove workbook, over its eight tabs. */
+/** Data rows of one Renove workbook, over its four summary tabs. */
 function filasRenove(entry) {
   var total = 0;
 
@@ -3839,18 +3869,23 @@ function registrarArchivosLeidos(clasificacion, informe) {
     sourceRecord(found.imac, read[TAB.imacsDatos])
   ];
 
-  // Renove is optional and writes no tab of the book: it only feeds the RENOVE
-  // section of PLANO. Its absence is stated instead of left blank, because a
-  // week without the workbook publishes the two Renove pages empty and that is
-  // indistinguishable from a week with nothing to renew.
-  if (found.renove) {
-    informe.archivos.push(sourceRecord(found.renove, filasRenove(found.renove)));
-  } else {
-    informe.archivos.push({
-      name: 'Dashboards Renoves SSCC (ausente)',
-      modified: null,
-      rows: 0
-    });
+  // Both Renove workbooks are optional and write no tab of the book: they only
+  // feed the RENOVE section of PLANO. Each absence is stated on its own instead
+  // of left blank, because a week missing one of the two publishes that scope
+  // empty and that is indistinguishable from a scope with nothing to renew.
+  for (var renoveIndex = 0; renoveIndex < RENOVE_KINDS.length; renoveIndex += 1) {
+    var renoveKey = RENOVE_KINDS[renoveIndex];
+    var renoveEntry = found[renoveKey];
+
+    if (renoveEntry) {
+      informe.archivos.push(sourceRecord(renoveEntry, filasRenove(renoveEntry)));
+    } else {
+      informe.archivos.push({
+        name: 'Renove ' + RENOVE_AMBITO[renoveKey] + ' (ausente)',
+        modified: null,
+        rows: 0
+      });
+    }
   }
 
   // Acumuladas is optional the same way: a missing file keeps the annual grid

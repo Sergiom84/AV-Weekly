@@ -40,8 +40,11 @@ function loadCodigo() {
     toDate: (value: unknown) => Date | null;
     yearFromCell: (value: unknown) => number;
     fechaOperativa: (date: Date | null) => boolean;
-    renoveAmbito: (sheetName: string) => string;
-    renoveSheets: (grids: { name: string; grid: unknown[][] }[]) => { name: string }[];
+    renoveKind: (fileName: string) => string | null;
+    renoveSheets: (
+      grids: { name: string; grid: unknown[][] }[],
+      ambito: string
+    ) => { name: string }[];
     agregarRenove: (
       found: Record<string, unknown>,
       buckets: Record<string, number>
@@ -308,32 +311,47 @@ describe("Codigo.gs weekly safeguards", () => {
     expect(gs.yearFromCell(new Date(2026, 0, 1))).toBe(2026);
   });
 
-  it("reconoce las ocho pestañas de Renove y descarta las copias", () => {
-    expect(gs.renoveAmbito("Holding - Onboarding semanal")).toBe("Holding");
-    expect(gs.renoveAmbito("España - Renovados renove")).toBe("España");
-    expect(gs.renoveAmbito("Espana - Renove semanal")).toBe("España");
-    expect(gs.renoveAmbito("Copia de Renove semanal")).toBe("");
-    expect(gs.renoveAmbito("Holding - Renove semanal (2)")).toBe("");
+  it("resuelve el ámbito de Renove por el nombre del fichero", () => {
+    expect(gs.renoveKind("Renove Global PC Holding.xlsx")).toBe("renoveHolding");
+    expect(gs.renoveKind("Renove Global PC España 2026.xlsx")).toBe("renoveEspana");
+    expect(gs.renoveKind("renove global pc espana 2026.xlsx")).toBe("renoveEspana");
+    // Sin la palabra Renove no es uno de los dos libros, y sin ámbito tampoco:
+    // adivinarlo colocaría una población entera bajo la etiqueta equivocada.
+    expect(gs.renoveKind("Backlog20260914.xlsx")).toBeNull();
+    expect(gs.renoveKind("Renove Global PC.xlsx")).toBeNull();
+    expect(gs.renoveKind("Dashboards Renoves SSCC.xlsx")).toBeNull();
+  });
+
+  it("lee solo las cuatro pestañas derivadas, no las crudas de las que salen", () => {
+    const grids = [
+      { name: "Renove semanal", grid: [["Ubicación", "Estado"]] },
+      { name: "Renovados renove", grid: [["Ubicación", "Estado"]] },
+      { name: "Onboarding semanal", grid: [["Ubicación", "Estado"]] },
+      { name: "Renovados onboarding", grid: [["Ubicación", "Estado"]] },
+      // Las crudas comparten la firma de cabeceras y son el origen de las
+      // derivadas: contarlas sumaría cada equipo dos veces.
+      { name: "Renove", grid: [["Ubicación", "Estado"]] },
+      { name: "Onboarding y averías", grid: [["Ubicación", "Estado"]] },
+      { name: "Copia de Renove semanal", grid: [["Ubicación", "Estado"]] },
+    ];
+
+    expect(gs.renoveSheets(grids, "España").map(sheet => sheet.name)).toEqual([
+      "Renove semanal",
+      "Renovados renove",
+      "Onboarding semanal",
+      "Renovados onboarding",
+    ]);
   });
 
   it("agrupa Renove por día, ámbito y estado sin leer serial ni ubicación", () => {
-    const grids = [
+    const holding = [
       {
-        name: "Holding - Renove semanal",
+        name: "Renove semanal",
         grid: [
           ["Ubicación", "Estado", "Fecha de Estado", "Serial", "Nº Petición"],
           ["SEDE Principal", "PENDIENTE USUARIO", null, "PF5WQS8W", "G500744"],
           ["SEDE Principal", "PENDIENTE USUARIO", null, "PF63YRLT", "G500741"],
           ["SEDE Principal", "", null, "PF63XDTH", "G500737"],
-        ],
-      },
-      {
-        name: "España - Renovados renove",
-        grid: [
-          ["Ubicación", "Estado", "Fecha", "Nº Petición"],
-          ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), "G500287"],
-          ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), "G500292"],
-          ["Antoni Maura", "RECHAZADO", new Date(2026, 3, 20), "G500283"],
         ],
       },
       {
@@ -344,10 +362,32 @@ describe("Codigo.gs weekly safeguards", () => {
         ],
       },
     ];
+    const espana = [
+      {
+        name: "Renovados renove",
+        grid: [
+          ["Ubicación", "Estado", "Fecha", "Nº Petición"],
+          ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), "G500287"],
+          ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), "G500292"],
+          ["Antoni Maura", "RECHAZADO", new Date(2026, 3, 20), "G500283"],
+        ],
+      },
+      // Las crudas viajan en el mismo libro y no deben sumarse sobre su resumen.
+      {
+        name: "Renove",
+        grid: [
+          ["Ubicación", "Estado", "Fecha", "Nº Petición"],
+          ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), "G500287"],
+        ],
+      },
+    ];
     const buckets: Record<string, number> = {};
 
     gs.agregarRenove(
-      { renove: { sheets: gs.renoveSheets(grids) } },
+      {
+        renoveHolding: { sheets: gs.renoveSheets(holding, "Holding") },
+        renoveEspana: { sheets: gs.renoveSheets(espana, "España") },
+      },
       buckets
     );
 

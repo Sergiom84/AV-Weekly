@@ -34,9 +34,9 @@ por el equipo.
 
 1. Dejar en la carpeta un solo fichero de cada tipo: backlog, liberadas,
    gestionadas, **Acumuladas**, peticiones IMAC y el template semanal. El
-   template contiene encuestas, work orders y citas. Añadir también
-   `Dashboards Renoves SSCC`, que el equipo publica desde su hoja de Google y
-   alimenta las dos páginas de Renove. El nombre de Acumuladas tiene que
+   template contiene encuestas, work orders y citas. Añadir también los dos
+   libros de Renove, `Renove Global PC España` y `Renove Global PC Holding`,
+   que alimentan las dos páginas de Renove. El nombre de Acumuladas tiene que
    contener la palabra `Acumuladas`; el recuento mensual de posiciones
    (filas, no peticiones distintas) por `Fecha Gestionado` se escribe en
    `2.2.1 Volum de peticiones (Informe)`: agosto 2026 en `Q11`, septiembre
@@ -59,16 +59,28 @@ columna *Semana anterior* se conserva: no se vuelve a copiar `H4:H6` sobre
 los meses que ya quedaron atrás (agosto se congela al informar septiembre).
 `Cerrar mes` sigue en el menú para congelar el mes en curso a propósito.
 
-Los ficheros se reconocen por cabeceras. Solo backlog, liberadas, gestionadas
-y Acumuladas se distinguen por nombre porque comparten exactamente el mismo
-formato. Si falta un origen obligatorio, el proceso se detiene antes de
-escribir datos.
+Los ficheros se reconocen por cabeceras. Backlog, liberadas, gestionadas y
+Acumuladas se distinguen por nombre porque comparten exactamente el mismo
+formato, y los dos libros de Renove también: el ámbito está en el nombre del
+fichero y no dentro del libro. Si falta un origen obligatorio, el proceso se
+detiene antes de escribir datos.
 
-`Dashboards Renoves SSCC` y `Acumuladas` son opcionales: el proceso no se
-detiene sin ellos. Sin Renove, `Comprobación` escribe `Dashboards Renoves SSCC
-(ausente)` y el TXT sale sin sección `RENOVE`. Sin Acumuladas escribe
-`Acumuladas (ausente)` y la rejilla anual de 2.2.1 se queda como estaba, salvo
-la semilla de agosto 2026.
+Los dos libros de Renove y `Acumuladas` son opcionales: el proceso no se
+detiene sin ellos. De cada libro de Renove se leen solo sus cuatro pestañas
+derivadas (`Onboarding semanal`, `Renovados onboarding`, `Renove semanal`,
+`Renovados renove`), nunca las crudas `Renove` ni `Onboarding y averías` de las
+que salen, porque contarlas sumaría cada equipo dos veces. Si falta uno de los
+dos, `Comprobación` escribe `Renove España (ausente)` o `Renove Holding
+(ausente)` y ese ámbito sale vacío; si faltan los dos, el TXT sale sin sección
+`RENOVE`. Sin Acumuladas escribe `Acumuladas (ausente)` y la rejilla anual de
+2.2.1 se queda como estaba, salvo la semilla de agosto 2026.
+
+Hasta el 21/09/2026 el origen era `Dashboards Renoves SSCC`, el tablero donde
+ambos libros publicaban sus pestañas. Ese paso desaparece de la rutina: sus
+cuatro pestañas `España - …` estaban publicadas desde el libro de Holding, así
+que el informe contaba Holding dos veces (789 renovados) y la población de
+España no llegaba nunca. Leídos los dos libros, son 858 renovados, 431 de
+España y 427 de Holding, con dos peticiones en común de 978.
 
 Las citas del template `6-6 - Citas Smart Tech` alimentan la slide 2.3.3 y, a
 la vez, `2.3.1 (Informe)`: `AT` es agosto 2026, `AU` septiembre, y el script

@@ -216,7 +216,7 @@ function entry(file, grids, sheets) {
 }
 
 /** Read when present, never required: Renove feeds PLANO; Acumuladas feeds 2.2.1. */
-const OPTIONAL_KINDS = ["renove", "acumuladas"];
+const OPTIONAL_KINDS = ["renoveEspana", "renoveHolding", "acumuladas"];
 
 function classify(script, folder, cleanPath) {
   const found = Object.fromEntries(
@@ -246,9 +246,13 @@ function classify(script, folder, cleanPath) {
       }
     }
 
+    const renoveKind = script.renoveKind(name);
     const candidates = [
       ["encuestas", script.encuestasSheets(grids)],
-      ["renove", script.renoveSheets(grids)],
+      [
+        renoveKind ?? "renoveEspana",
+        renoveKind ? script.renoveSheets(grids, script.RENOVE_AMBITO[renoveKind]) : [],
+      ],
       ["workOrders", script.findDataSheets(grids, script.REQUIRED.workOrders)],
       ["citas", script.findDataSheets(grids, script.REQUIRED.citas)],
       ["imac", script.findDataSheets(grids, script.REQUIRED.imac)],
