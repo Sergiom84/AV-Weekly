@@ -361,7 +361,6 @@ export default function Oficinas() {
               onResetDeck={resetDeck}
               onSelectPage={scrollToPage}
               onPresent={() => setPresenting(true)}
-              pdfFilenamePrefix="Oficinas"
               pdfHref="/api/oficinas/pdf"
             />
           </ResizableSidebar>

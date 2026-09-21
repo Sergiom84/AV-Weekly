@@ -2,7 +2,6 @@ import type { Server } from "node:http";
 import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import { filenameFromDisposition } from "../shared/deck/pdf-download.ts";
-import { formatPdfPrintTitle } from "../client/src/lib/printDeck.ts";
 import {
   createDeckPdfSender,
   latestReportDate,
@@ -210,19 +209,6 @@ describe("PDF download filename", () => {
   it("uses Madrid's next day instead of the UTC date near midnight", () => {
     expect(reportPdfFilename("AGA", new Date("2026-08-21T22:30:00Z"))).toBe(
       "AGA_22-08-26_Informe.pdf"
-    );
-  });
-
-  it("names the download and the print title the same way", () => {
-    // Los dos botones exportan el mismo informe: si no coincidieran, el
-    // fichero se llamaría de una forma u otra según por dónde se haya sacado.
-    const date = new Date("2026-09-07T12:00:00Z");
-
-    expect(reportPdfFilename("AGA", date)).toBe(
-      `${formatPdfPrintTitle("AGA", date)}.pdf`
-    );
-    expect(reportPdfFilename("Informática", date)).toBe(
-      `${formatPdfPrintTitle("Informática", date)}.pdf`
     );
   });
 

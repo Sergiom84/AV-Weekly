@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Play, Printer, Trash2 } from "lucide-react";
+import { Download, Play, Trash2 } from "lucide-react";
 import { isPageVisible } from "@shared/deck/core";
 import type { DeckPage } from "@shared/deck/core";
 import { filenameFromDisposition } from "@shared/deck/pdf-download";
@@ -21,7 +21,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { printDeckAsPdf } from "@/lib/printDeck";
 
 /** One upload zone: the module resolves which file currently feeds the slot. */
 export interface SidebarUpload {
@@ -64,16 +63,13 @@ interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
   onPresent: () => void;
   /** Module-specific actions rendered inside the shared Exportar section. */
   exportActions?: SidebarExportAction[];
-  /** Module label used to suggest the PDF filename in the print dialog. */
-  pdfFilenamePrefix: string;
   /**
    * Endpoint that renders the deck server-side, e.g. `/api/aga/pdf`.
    *
-   * The two export buttons are not redundant. Printing keeps the preview and
-   * the page controls, but the name of the resulting file belongs to the
-   * browser and to the print driver: with "Microsoft Print to PDF" the Windows
-   * save dialog comes up empty however the document is titled. This one is a
-   * real download, so `Content-Disposition` names it, at the cost of a
+   * The only way out. `window.print()` used to sit next to it, but the paper
+   * belongs to the print driver: "Microsoft Print to PDF" imposes A4 portrait,
+   * rotates the 16:9 slide sideways and opens an unnamed save dialog. This one
+   * renders at 1600x900 and `Content-Disposition` names it, at the cost of a
    * server-side render that takes its time and admits one export at a time.
    */
   pdfHref: string;
@@ -508,7 +504,6 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   onSelectPage,
   onPresent,
   exportActions = [],
-  pdfFilenamePrefix,
   pdfHref,
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
@@ -774,17 +769,6 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
               {pdfError}
             </p>
           )}
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full justify-start gap-2"
-            onClick={() => printDeckAsPdf(pdfFilenamePrefix)}
-          >
-            <Printer className="h-4 w-4" />
-            Imprimir
-          </Button>
         </CardContent>
       </SidebarSection>
 

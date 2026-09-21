@@ -353,7 +353,6 @@ export default function Informe() {
               onSelectPage={scrollToPage}
               onPresent={() => setPresenting(true)}
               exportActions={exportActions}
-              pdfFilenamePrefix="AV"
               pdfHref="/api/informe/pdf"
             />
           </ResizableSidebar>
