@@ -361,6 +361,16 @@ concepto:
 | `IMACS` | mes, ciudad, métrica | total |
 | `RENOVE` | día, mes, semana, ámbito, estado | equipos |
 
+**Qué cuenta como un equipo.** Una línea con algo en la columna de petición
+(`Nº Petición` en las derivadas, `Petición GPS` en las crudas), sea lo que sea lo que
+ponga. Lo fijó el equipo de Informática el 22/09/2026: una misma petición puede cubrir
+varias posiciones, así que `G500391` repetido son dos máquinas y no una contada dos veces
+— comprobado en las pestañas crudas, donde cada repetición lleva un serial distinto, y
+`G501865` llega a tres. Por la misma regla cuentan los marcadores de texto: `Llamada Ivan`
+son quince equipos cuya petición no se ha creado todavía, y `VIP`, `pdte VIP` o
+`SOPORTE VIP` lo mismo. La línea con esa celda vacía no es un equipo; en los libros del
+21/09/2026 son cuatro, todas de España y todas sin serial tampoco.
+
 `RENOVE` sale de los dos libros de Renove que el equipo deja en la misma carpeta de
 Drive, `Renove Global PC España` y `Renove Global PC Holding`. Ambos son opcionales y se
 nombran por separado: si uno no está esa semana, `Comprobación` escribe

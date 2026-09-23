@@ -582,6 +582,24 @@ var RENOVE_TABS = {
 var RENOVE_DATE_HEADERS = ['Fecha Renovado', 'Fecha de Estado', 'Fecha'];
 
 /**
+ * Column that says a row is a unit of equipment. Named after the raw sheet it
+ * comes from (`Petición GPS`), summarised as `Nº Petición`.
+ */
+var RENOVE_PETICION_HEADERS = ['Nº Petición', 'Petición GPS'];
+
+/** True when the row carries a request reference, whatever is written in it. */
+function renoveTienePeticion(row, columns) {
+  for (var index = 0; index < RENOVE_PETICION_HEADERS.length; index += 1) {
+    var at = columns[normalize(RENOVE_PETICION_HEADERS[index])];
+
+    if (at === undefined) continue;
+    if (text(row[at]) !== '') return true;
+  }
+
+  return false;
+}
+
+/**
  * Which scope a Renove workbook reports, by file name, or null.
  *
  * The scope used to be read off the tab prefix of `Dashboards Renoves SSCC`,
@@ -3583,9 +3601,18 @@ function renoveFecha(row, columns) {
 /**
  * One row per unit of equipment, folded into counts by day, scope and status.
  *
+ * A row counts when its request column carries anything at all, which is the
+ * rule the team gave on 22/09/2026: one request number can cover several
+ * positions, so `G500391` twice is two machines and not one counted twice —
+ * verified on the raw sheets, where each repetition holds a different serial.
+ * By the same rule the text placeholders count too: `Llamada Ivan` stands for
+ * fifteen machines whose request has not been raised yet. A row with that cell
+ * empty is not a unit, and there are four, all in España and all also missing
+ * their serial.
+ *
  * Undated rows are kept with an empty day: they are equipment whose state is
  * decided but not yet dated at source, and dropping them would silently shrink
- * the totals of `2.7.1`. Serials, locations and petition numbers are read to
+ * the totals of `2.7.1`. Serials, locations and request numbers are read to
  * group the rows and never written out, the rule the whole PLANO follows.
  */
 function agregarRenove(found, renove) {
@@ -3607,6 +3634,7 @@ function agregarRenove(found, renove) {
       var estado = text(valueAt(row, source.columns, 'Estado'));
 
       if (estado === '') continue;
+      if (!renoveTienePeticion(row, source.columns)) continue;
 
       // An empty renewal date arrives as serial 0 on part of the rows, which
       // resolves to 1899-12-30. The unit is still counted, without a date, the

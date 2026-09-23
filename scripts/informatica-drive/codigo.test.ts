@@ -391,6 +391,9 @@ describe("Codigo.gs weekly safeguards", () => {
           ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), "G500287"],
           ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), "G500292"],
           ["Antoni Maura", "RECHAZADO", new Date(2026, 3, 20), "G500283"],
+          // Sin nada en la columna de petición no es un equipo. En los libros
+          // del 21/09/2026 son cuatro filas, y tampoco traen serial.
+          ["Antoni Maura", "RENOVADO", new Date(2026, 3, 22), ""],
         ],
       },
       // Las crudas viajan en el mismo libro y no deben sumarse sobre su resumen.
@@ -416,6 +419,39 @@ describe("Codigo.gs weekly safeguards", () => {
       ["", "", "0", "Holding", "PENDIENTE USUARIO", 2],
       ["2026-04-20", "2026/04", "17", "España", "RECHAZADO", 1],
       ["2026-04-22", "2026/04", "17", "España", "RENOVADO", 2],
+    ]);
+  });
+
+  it("cuenta una línea por equipo, aunque repita petición o no la tenga aún", () => {
+    // Regla del equipo de Informática, 22/09/2026: cada línea con algo en la
+    // columna de petición es un equipo. Una petición puede cubrir varias
+    // posiciones, así que G500391 dos veces son dos máquinas — comprobado en
+    // las pestañas crudas, donde cada repetición lleva un serial distinto.
+    const grids = [
+      {
+        name: "Renovados onboarding",
+        grid: [
+          ["Ubicación", "Estado", "Fecha", "Nº Petición"],
+          ["Tablas I", "RENOVADO", new Date(2026, 3, 22), "G500391"],
+          ["Tablas I", "RENOVADO", new Date(2026, 3, 22), "G500391"],
+          // Los marcadores de texto son equipos cuya petición no existe todavía.
+          ["Tablas I", "RENOVADO", new Date(2026, 3, 22), "Llamada Ivan"],
+          ["Tablas I", "RENOVADO", new Date(2026, 3, 22), "VIP"],
+          // Sin petición no cuenta.
+          ["Tablas I", "RENOVADO", new Date(2026, 3, 22), ""],
+          ["Tablas I", "RENOVADO", new Date(2026, 3, 22), null],
+        ],
+      },
+    ];
+    const buckets: Record<string, number> = {};
+
+    gs.agregarRenove(
+      { renoveEspana: { sheets: gs.renoveSheets(grids, "España") } },
+      buckets
+    );
+
+    expect(gs.rows(buckets)).toEqual([
+      ["2026-04-22", "2026/04", "17", "España", "RENOVADO", 4],
     ]);
   });
 
