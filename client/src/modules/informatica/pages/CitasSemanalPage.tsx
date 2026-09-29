@@ -3,6 +3,7 @@ import CategoryBarChart, {
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
 import MatrixTable from "@/components/deck/MatrixTable";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
   coverageEnd,
@@ -16,6 +17,7 @@ import {
   reportedWeek,
   uniqueSorted,
 } from "../aggregate";
+import { correctSeries, withOverride } from "../overrides";
 import { componentSeriesColor } from "../palette";
 import { reportedSmartTechRows, siteLabels, smartTechSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
@@ -76,17 +78,31 @@ export default function CitasSemanalPage({
     { columns, rowOrder }
   );
   const emptySite = { label: "", values: columns.map(() => 0) };
-  const siteRows = rowOrder.map(
-    site =>
-      matrix.rows.find(row => row.label === site) ?? { ...emptySite, label: site }
-  );
+  const weekId = window?.start ?? "semana";
+  const siteRows = rowOrder.map(site => {
+    const imported =
+      matrix.rows.find(row => row.label === site) ?? { ...emptySite, label: site };
+    const series = correctSeries(
+      page,
+      `semana:${site}`,
+      site,
+      columns.map(type => `${weekId}:${type}`),
+      imported.values
+    );
+
+    return { label: site, values: series.drawn, grid: series.row };
+  });
 
   const totalOf = (type: string) =>
-    current
-      .filter(row => row.tipo === type)
-      .reduce((sum, row) => sum + row.citas, 0);
+    siteRows.reduce(
+      (sum, row) => sum + (row.values[columns.indexOf(type)] ?? 0),
+      0
+    );
 
-  const total = current.reduce((sum, row) => sum + row.citas, 0);
+  const total = siteRows.reduce(
+    (sum, row) => sum + row.values.reduce((cellSum, value) => cellSum + value, 0),
+    0
+  );
 
   // The trend covers whole months, including the one in flight, which is what
   // the reference plots and what the weekly table sits next to.
@@ -97,22 +113,54 @@ export default function CitasSemanalPage({
     label: type,
     color: componentSeriesColor(index, columns.length),
   }));
-  const trend = months.map(month => {
+  const trendCorrected = columns.map((type, index) =>
+    correctSeries(
+      page,
+      `mes:${type}`,
+      type,
+      months,
+      months.map(month =>
+        rows
+          .filter(row => row.mes === month && row.tipo === type)
+          .reduce((sum, row) => sum + row.citas, 0)
+      ),
+      componentSeriesColor(index, columns.length)
+    )
+  );
+  const trend = months.map((month, index) => {
     const entry: Record<string, string | number> = {
       mes: monthLabel(month),
     };
 
-    for (const type of columns) {
-      entry[type] = rows
-        .filter(row => row.mes === month && row.tipo === type)
-        .reduce((sum, row) => sum + row.citas, 0);
-    }
+    columns.forEach((type, typeIndex) => {
+      entry[type] = trendCorrected[typeIndex]?.drawn[index] ?? 0;
+    });
 
     return entry;
   });
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            <ValueGrid
+              columns={columns}
+              rows={siteRows.map(row => row.grid)}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+            <ValueGrid
+              columns={months.map(monthLabel)}
+              rows={trendCorrected.map(series => series.row)}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
+        )
+      }
+    >
       <KpiRow
         items={[
           ...columns.map((type, index) => ({

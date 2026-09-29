@@ -1,6 +1,8 @@
 import MatrixTable from "@/components/deck/MatrixTable";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { monthLabel, pivot, reportMonth } from "../aggregate";
+import { correctSeries, withOverride } from "../overrides";
 import { workOrderTypeLabel } from "../palette";
 import { siteLabels, workOrdersWithFallbackSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
@@ -41,8 +43,23 @@ export default function WorkOrdersPage({
     row => row.ordenes,
     { rowOrder }
   );
+  const period = month ?? "sin-mes";
+  const corrected = matrix.rows.map(row => {
+    const series = correctSeries(
+      page,
+      row.label,
+      row.label,
+      matrix.columns.map(tipo => `${period}:${tipo}`),
+      row.values
+    );
 
-  const total = current.reduce((sum, row) => sum + row.ordenes, 0);
+    return { label: row.label, values: series.drawn, grid: series.row };
+  });
+
+  const total = corrected.reduce(
+    (sum, row) => sum + row.values.reduce((cellSum, value) => cellSum + value, 0),
+    0
+  );
   const weeks = Array.from(new Set(current.map(row => row.semana))).sort(
     (a, b) => a - b
   );
@@ -54,7 +71,20 @@ export default function WorkOrdersPage({
         : "";
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <ValueGrid
+            columns={matrix.columns.map(workOrderTypeLabel)}
+            rows={corrected.map(row => row.grid)}
+            onChange={(key, value) => onChange(withOverride(page, key, value))}
+          />
+        )
+      }
+    >
       <div className="flex shrink-0 items-end justify-between font-mono">
         <p className="text-[1.05cqi] uppercase tracking-wide text-muted-foreground">
           {weekLabel}
@@ -71,7 +101,7 @@ export default function WorkOrdersPage({
         <MatrixTable
           rowHeader="Edificio"
           columns={matrix.columns.map(workOrderTypeLabel)}
-          rows={matrix.rows}
+          rows={corrected}
           totalsLabel="Total"
           variant="report"
           nowrapHeaders

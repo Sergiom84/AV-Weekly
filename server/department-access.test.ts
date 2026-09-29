@@ -28,6 +28,9 @@ describe("department access", () => {
     app.use(createDepartmentAccessRouter());
     app.use(createDepartmentApiMiddleware());
     app.get("/api/oficinas", (_req, res) => res.json({ ok: true }));
+    for (const department of ["av", "informatica", "aga", "oficinas"]) {
+      app.put(`/api/${department}/deck`, (_req, res) => res.json({ ok: true }));
+    }
 
     await new Promise<void>(resolve => {
       server = app.listen(0, "127.0.0.1", () => resolve());
@@ -77,6 +80,44 @@ describe("department access", () => {
       headers: { cookie: cookie ?? "" },
     });
     expect(protectedResponse.status).toBe(200);
+  });
+
+  it("deja guardar el deck a cualquier sesión del departamento", async () => {
+    const open = async (pin: string, department: string) => {
+      const verified = await fetch(`${origin}/api/access/${department}/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin }),
+      });
+      return verified.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
+    };
+
+    const first = await open("202", "informatica");
+    const second = await open("202", "informatica");
+
+    for (const cookie of [first, second]) {
+      const saved = await fetch(`${origin}/api/informatica/deck`, {
+        method: "PUT",
+        headers: { cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ deck: { pages: [] } }),
+      });
+      expect(saved.status).toBe(200);
+    }
+
+    const anonymous = await fetch(`${origin}/api/informatica/deck`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deck: { pages: [] } }),
+    });
+    expect(anonymous.status).toBe(401);
+
+    const otherDepartment = await open("404", "oficinas");
+    const crossed = await fetch(`${origin}/api/informatica/deck`, {
+      method: "PUT",
+      headers: { cookie: otherDepartment, "Content-Type": "application/json" },
+      body: JSON.stringify({ deck: { pages: [] } }),
+    });
+    expect(crossed.status).toBe(401);
   });
 
   it("hands the PDF render only the cookie of the department it exports", () => {

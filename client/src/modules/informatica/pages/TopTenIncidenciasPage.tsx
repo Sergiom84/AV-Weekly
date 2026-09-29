@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { formatTableNumber } from "@/components/deck/emptyCell";
 import type { MatrixRow } from "@/components/deck/MatrixTable";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import { usePresentationAnimation } from "@/contexts/PresentationAnimationContext";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
@@ -17,6 +18,7 @@ import {
 } from "recharts";
 import KpiRow from "@/components/deck/KpiRow";
 import { topTenComparison } from "../aggregate";
+import { correctSeries, withOverride } from "../overrides";
 import { componentSeriesColor } from "../palette";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -268,11 +270,29 @@ export default function TopTenIncidenciasPage({
   dataset,
 }: TopTenIncidenciasPageProps) {
   const { columns, components, details } = topTenComparison(dataset);
-  const componentLabels = components?.rows.map(row => row.label) ?? [];
+  const correctRows = (
+    scope: string,
+    source: { label: string; values: number[] }[]
+  ) =>
+    source.map(row => {
+      const series = correctSeries(
+        page,
+        `${scope}:${row.label}`,
+        `${scope}: ${row.label}`,
+        columns,
+        row.values
+      );
+
+      return { label: row.label, values: series.drawn, grid: series.row };
+    });
+  const componentRows = components ? correctRows(components.label, components.rows) : [];
+  const detailTables = details.map(table => ({
+    ...table,
+    rows: correctRows(table.label, table.rows),
+  }));
+  const componentLabels = componentRows.map(row => row.label);
   const hiddenRows = page.hiddenRows ?? [];
-  const visibleRows = components
-    ? components.rows.filter(row => !hiddenRows.includes(row.label))
-    : [];
+  const visibleRows = componentRows.filter(row => !hiddenRows.includes(row.label));
   const monthTotals = columns.map((column, index) =>
     visibleRows.reduce((sum, row) => sum + (row.values[index] ?? 0), 0)
   );
@@ -284,13 +304,26 @@ export default function TopTenIncidenciasPage({
       onChange={onChange}
       editor={
         editing && (
-          <RowFilterPanel
-            labels={componentLabels}
-            hiddenRows={hiddenRows}
-            scope={page.id}
-            defaultHidden={[]}
-            onChange={hiddenRows => onChange({ hiddenRows })}
-          />
+          <>
+            <RowFilterPanel
+              labels={componentLabels}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+            {[
+              { label: components?.label ?? "Componentes", rows: componentRows },
+              ...detailTables,
+            ].map(table => (
+              <ValueGrid
+                key={table.label}
+                columns={columns}
+                rows={table.rows.map(row => row.grid)}
+                onChange={(key, value) => onChange(withOverride(page, key, value))}
+              />
+            ))}
+          </>
         )
       }
     >
@@ -311,7 +344,7 @@ export default function TopTenIncidenciasPage({
         </div>
 
         <div className="flex min-h-0 flex-col justify-start gap-[1.7cqi]">
-          {details.map(table => (
+          {detailTables.map(table => (
             <DetailTable
               key={table.view}
               label={table.label}

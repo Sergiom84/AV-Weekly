@@ -10,7 +10,9 @@ import {
   resolveMonthSelection,
 } from "@shared/deck/core";
 import KpiRow from "@/components/deck/KpiRow";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import { monthLabel, uniqueSorted } from "../aggregate";
+import { correctSeries, withOverride } from "../overrides";
 import { componentSeriesColor } from "../palette";
 import { HIC_ASSIGNED, HIC_RESOLVED } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
@@ -76,14 +78,25 @@ export default function HicCategoriasPage({
     color: componentSeriesColor(index, list.length),
   }));
 
-  const monthlyData = months.map(target => {
+  const seriesValues = HIC_METRICS.map(metric =>
+    correctSeries(
+      page,
+      metric,
+      metric,
+      months,
+      months.map(target =>
+        totals
+          .filter(row => row.mes === target && row.metrica === metric)
+          .reduce((sum, row) => sum + row.total, 0)
+      )
+    )
+  );
+  const monthlyData = months.map((target, index) => {
     const entry: Record<string, number | string> = { mes: monthLabel(target) };
 
-    for (const metric of HIC_METRICS) {
-      entry[metric] = totals
-        .filter(row => row.mes === target && row.metrica === metric)
-        .reduce((sum, row) => sum + row.total, 0);
-    }
+    HIC_METRICS.forEach((metric, metricIndex) => {
+      entry[metric] = seriesValues[metricIndex].drawn[index] ?? 0;
+    });
 
     return entry;
   });
@@ -119,6 +132,12 @@ export default function HicCategoriasPage({
               scope={page.id}
               defaultHidden={[]}
               onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+
+            <ValueGrid
+              columns={months.map(monthLabel)}
+              rows={seriesValues.map(series => series.row)}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
             />
           </>
         )

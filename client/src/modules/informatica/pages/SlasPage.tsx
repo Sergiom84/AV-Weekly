@@ -1,8 +1,10 @@
 import { EMPTY_TABLE_CELL } from "@/components/deck/emptyCell";
 import KpiRow from "@/components/deck/KpiRow";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import { useFitTableScale } from "@/hooks/useFitTableScale";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { monthLabel, percent, reportMonth } from "../aggregate";
+import { figureCell, gridRow, withOverride } from "../overrides";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface SlasPageProps extends InformaticaPageProps {
@@ -45,14 +47,25 @@ export default function SlasPage({
   const current = rows
     .filter((row) => row.mes === month)
     .map((row) => {
-      const measured = row.cumplido + row.incumplido;
+      const label = svtLabel(row.svt);
+      const period = month ?? "sin-mes";
+      const cumplido = figureCell(page, label, `${period}:cumplido`, row.cumplido);
+      const incumplido = figureCell(
+        page,
+        label,
+        `${period}:incumplido`,
+        row.incumplido
+      );
+      const measured = cumplido.drawn + incumplido.drawn;
 
       return {
         svt: row.svt,
-        cumplido: row.cumplido,
-        incumplido: row.incumplido,
+        label,
+        cumplido: cumplido.drawn,
+        incumplido: incumplido.drawn,
         total: row.total,
-        share: measured > 0 ? row.cumplido / measured : null,
+        share: measured > 0 ? cumplido.drawn / measured : null,
+        grid: gridRow(label, [cumplido, incumplido]),
       };
     })
     .sort((a, b) => a.svt.localeCompare(b.svt, "es"));
@@ -69,7 +82,20 @@ export default function SlasPage({
   const suffix = month ? ` ${monthLabel(month)}` : "";
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <ValueGrid
+            columns={["Cumplido", "Incumplido"]}
+            rows={current.map(row => row.grid)}
+            onChange={(key, value) => onChange(withOverride(page, key, value))}
+          />
+        )
+      }
+    >
       <KpiRow
         items={[
           {

@@ -4,6 +4,7 @@ import CategoryBarChart, {
 import KpiRow from "@/components/deck/KpiRow";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
   defaultMonthSelection,
@@ -14,6 +15,7 @@ import {
   lastClosedMonth,
   monthLabel,
 } from "../aggregate";
+import { correctSeries, withOverride } from "../overrides";
 import { componentSeriesColor } from "../palette";
 import { siteLabels } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
@@ -88,16 +90,39 @@ export default function ImacsChartPage({
     grouped.set(site, current);
   }
 
-  const allData = Array.from(grouped.entries())
-    .map(([edificio, totals]) => ({ edificio, ...totals }))
+  const period = month ?? "sin-mes";
+  const correctedSites = Array.from(grouped.entries())
+    .map(([edificio, totals]) => {
+      const series = correctSeries(
+        page,
+        edificio,
+        edificio,
+        [`${period}:solicitudes`, `${period}:intervenciones`],
+        [totals.solicitudes, totals.intervenciones]
+      );
+
+      return {
+        edificio,
+        solicitudes: series.drawn[0] ?? 0,
+        intervenciones: series.drawn[1] ?? 0,
+        grid: series.row,
+      };
+    })
     .sort(
       (a, b) =>
         b.intervenciones - a.intervenciones ||
         b.solicitudes - a.solicitudes ||
         a.edificio.localeCompare(b.edificio, "es")
     );
+  const allData = correctedSites;
   const hiddenRows = page.hiddenRows ?? [];
-  const data = allData.filter(row => !hiddenRows.includes(row.edificio));
+  const data = allData
+    .filter(row => !hiddenRows.includes(row.edificio))
+    .map(({ edificio, solicitudes, intervenciones }) => ({
+      edificio,
+      solicitudes,
+      intervenciones,
+    }));
   const totalRequests = data.reduce((sum, row) => sum + row.solicitudes, 0);
   const totalInterventions = data.reduce(
     (sum, row) => sum + row.intervenciones,
@@ -125,6 +150,12 @@ export default function ImacsChartPage({
               scope={page.id}
               defaultHidden={[]}
               onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+
+            <ValueGrid
+              columns={["Solicitudes", "Intervenciones"]}
+              rows={allData.map(row => row.grid)}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
             />
           </>
         )

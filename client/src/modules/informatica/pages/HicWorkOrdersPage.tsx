@@ -16,6 +16,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import KpiRow from "@/components/deck/KpiRow";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import {
   historicoByMonth,
   latestOf,
@@ -23,6 +24,7 @@ import {
   publishedTotal,
   uniqueSorted,
 } from "../aggregate";
+import { correctSeries, withOverride } from "../overrides";
 import { componentSeriesColor } from "../palette";
 import {
   HIC_RESOLVED,
@@ -88,24 +90,42 @@ export default function HicWorkOrdersPage({
     rows.filter(row => monthOf(row) === month).reduce((sum, row) => sum + totalOf(row), 0);
   const frozenIncidencias = historicoByMonth(dataset, "incidencias");
   const frozenWorkOrders = historicoByMonth(dataset, "workOrders");
-  const incidenciasOf = (month: string) =>
+  const incidenciasImported = (month: string) =>
     publishedTotal(
       "incidencias",
       month,
       frozenIncidencias,
       value(incidentRows, month, row => row.mes, row => row.total)
     );
-  const workOrdersOf = (month: string) =>
+  const workOrdersImported = (month: string) =>
     publishedTotal(
       "workOrders",
       month,
       frozenWorkOrders,
       value(workOrders, month, row => row.mes, row => row.ordenes)
     );
-  const data = months.map(month => ({
+  const incidenciasSeries = correctSeries(
+    page,
+    "Incidencias",
+    "Incidencias",
+    months,
+    months.map(incidenciasImported)
+  );
+  const workOrdersSeries = correctSeries(
+    page,
+    "Work Orders",
+    "Work Orders",
+    months,
+    months.map(workOrdersImported)
+  );
+  const incidenciasOf = (month: string) =>
+    incidenciasSeries.drawn[months.indexOf(month)] ?? 0;
+  const workOrdersOf = (month: string) =>
+    workOrdersSeries.drawn[months.indexOf(month)] ?? 0;
+  const data = months.map((month, index) => ({
     mes: monthLabel(month),
-    incidencias: incidenciasOf(month),
-    workOrders: workOrdersOf(month),
+    incidencias: incidenciasSeries.drawn[index] ?? 0,
+    workOrders: workOrdersSeries.drawn[index] ?? 0,
   }));
   const allSeries = [
     { key: "workOrders" as const, label: "Work Orders" },
@@ -148,6 +168,12 @@ export default function HicWorkOrdersPage({
               scope={page.id}
               defaultHidden={[]}
               onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+
+            <ValueGrid
+              columns={months.map(monthLabel)}
+              rows={[workOrdersSeries.row, incidenciasSeries.row]}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
             />
           </>
         )

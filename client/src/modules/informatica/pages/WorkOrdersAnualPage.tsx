@@ -3,9 +3,11 @@ import CategoryBarChart, {
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
 import YearSelector from "@/components/deck/YearSelector";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { monthIndexOf, reportMonth, yearlyComparison } from "../aggregate";
 import { yearSeriesColor } from "@/lib/yearSeries";
+import { correctYearChart, withOverride } from "../overrides";
 import { workOrdersWithFallbackSite } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -26,12 +28,13 @@ export default function WorkOrdersAnualPage({
   const rows = workOrdersWithFallbackSite(dataset.workOrders ?? []);
   const closed = reportMonth(dataset, rows, row => row.mes);
   const completeRows = closed === null ? [] : rows;
-  const { years, data, totals } = yearlyComparison(
+  const compared = yearlyComparison(
     completeRows,
     row => row.mes,
     row => row.ordenes,
     closed === null ? undefined : { throughMonth: monthIndexOf(closed) }
   );
+  const years = compared.years;
 
   const availableYears = years.filter(year => year >= 2024);
   // Sorted here and not only where the selector saves it: the chart draws one
@@ -41,6 +44,7 @@ export default function WorkOrdersAnualPage({
       ? page.years.filter(year => availableYears.includes(year))
       : availableYears
   ).toSorted((a, b) => a - b);
+  const chart = correctYearChart(page, compared.data, selectedYears);
   const series: CategorySeries[] = selectedYears.map(year => ({
     key: `y${year}`,
     label: String(year),
@@ -53,25 +57,37 @@ export default function WorkOrdersAnualPage({
       editing={editing}
       onChange={onChange}
       editor={
-        editing &&
-        availableYears.length > 0 && (
-          <YearSelector
-            selection={{
-              available: availableYears,
-              selected: selectedYears,
-              onChange: years =>
-                onChange({
-                  years: Array.from(new Set(years)).sort((a, b) => a - b),
-                }),
-            }}
-          />
+        editing && (
+          <>
+            {availableYears.length > 0 && (
+              <YearSelector
+                selection={{
+                  available: availableYears,
+                  selected: selectedYears,
+                  onChange: years =>
+                    onChange({
+                      years: Array.from(new Set(years)).sort((a, b) => a - b),
+                    }),
+                }}
+              />
+            )}
+
+            <ValueGrid
+              columns={chart.columns}
+              rows={chart.rows.map((row, index) => ({
+                ...row,
+                color: yearSeriesColor(selectedYears[index] ?? 0),
+              }))}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
         )
       }
     >
       <KpiRow
         items={selectedYears.map(year => ({
           label: String(year),
-          value: (totals.get(year) ?? 0).toLocaleString("es-ES"),
+          value: (chart.totals.get(year) ?? 0).toLocaleString("es-ES"),
           accent: yearSeriesColor(year),
         }))}
       />
@@ -80,7 +96,7 @@ export default function WorkOrdersAnualPage({
         <CategoryBarChart
           categoryKey="mes"
           series={series}
-          data={data}
+          data={chart.data}
           allCategories
         />
       </div>

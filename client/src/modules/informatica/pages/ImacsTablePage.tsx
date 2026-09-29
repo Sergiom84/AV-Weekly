@@ -1,6 +1,8 @@
 import MatrixTable from "@/components/deck/MatrixTable";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { latestOf, monthLabel, monthsEndingAt, pivot } from "../aggregate";
+import { correctSeries, withOverride } from "../overrides";
 import { siteLabels } from "../sources";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -48,17 +50,36 @@ export default function ImacsTablePage({
     row => row.total,
     { columns, rowOrder }
   );
+  const headers = columns.map(column => {
+    const [columnMonth, metric] = column.split("|");
+    return `${monthLabel(columnMonth)} ${metric === "Solicitudes" ? "Sol" : "Int"}`;
+  });
+  const corrected = matrix.rows.map(row => {
+    const series = correctSeries(page, row.label, row.label, columns, row.values);
+
+    return { label: row.label, values: series.drawn, grid: series.row };
+  });
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <ValueGrid
+            columns={headers}
+            rows={corrected.map(row => row.grid)}
+            onChange={(key, value) => onChange(withOverride(page, key, value))}
+          />
+        )
+      }
+    >
       <div className="min-h-0 flex-1 overflow-hidden">
         <MatrixTable
           rowHeader="Edificio"
-          columns={columns.map(column => {
-            const [month, metric] = column.split("|");
-            return `${monthLabel(month)} ${metric === "Solicitudes" ? "Sol" : "Int"}`;
-          })}
-          rows={matrix.rows}
+          columns={headers}
+          rows={corrected}
           rowTotals={false}
           groupEvery={2}
           variant="report"

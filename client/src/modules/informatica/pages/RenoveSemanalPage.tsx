@@ -3,6 +3,7 @@ import CategoryBarChart, {
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import WeekRangeSelector from "@/components/deck/WeekRangeSelector";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
@@ -10,6 +11,7 @@ import {
   resolveWeekSelection,
 } from "@shared/deck/core";
 import { coverageEnd, monthLabel } from "../aggregate";
+import { correctSeries, figureCell, gridRow, withOverride } from "../overrides";
 import { componentSeriesColor } from "../palette";
 import {
   RENOVE_AMBITOS,
@@ -59,11 +61,55 @@ export default function RenoveSemanalPage({
   const weekTotals = renoveTotals(renoveInWeek(rows, window));
   const monthTotals = renoveTotals(renoveInMonth(rows, month));
   const allData = renoveWeekSeries(rows, window);
+  const columnIds = allData.map((point, index) => {
+    const label = String(point.semana);
+    const earlier = allData
+      .slice(0, index)
+      .filter(item => item.semana === point.semana).length;
+
+    return earlier === 0 ? label : `${label}#${earlier + 1}`;
+  });
+  const correctedSeries = RENOVE_AMBITOS.map((ambito, index) =>
+    correctSeries(
+      page,
+      ambito,
+      ambito,
+      columnIds,
+      allData.map(point => Number(point[ambito] ?? 0)),
+      componentSeriesColor(index, RENOVE_AMBITOS.length)
+    )
+  );
+  const correctedData = allData.map((point, index) => {
+    const next = { ...point };
+
+    RENOVE_AMBITOS.forEach((ambito, ambitoIndex) => {
+      next[ambito] = correctedSeries[ambitoIndex]?.drawn[index] ?? 0;
+    });
+
+    return next;
+  });
+  const reported = correctedData.at(-1);
+  const reportedTotal = RENOVE_AMBITOS.reduce(
+    (sum, ambito) => sum + Number(reported?.[ambito] ?? 0),
+    0
+  );
+  const monthCell = figureCell(
+    page,
+    "indicador",
+    `mes:${month ?? "sin-mes"}`,
+    monthTotals.total
+  );
+  const pendingCell = figureCell(
+    page,
+    "indicador",
+    "pdte-usuario",
+    renovePendientesUsuario(rows)
+  );
   const weekSlots = allData.map((_, index) => index + 1);
   const weekSelection =
     page.weekSelection ?? defaultWeekSelection(weekSlots.at(-1) ?? 1);
   const visibleSlots = new Set(resolveWeekSelection(weekSelection, weekSlots));
-  const data = allData.filter((_, index) => visibleSlots.has(index + 1));
+  const data = correctedData.filter((_, index) => visibleSlots.has(index + 1));
   const hiddenRows = page.hiddenRows ?? [];
   const series = SERIES.filter(entry => !hiddenRows.includes(entry.label)).map(
     (entry, index, list) => ({
@@ -98,6 +144,17 @@ export default function RenoveSemanalPage({
               defaultHidden={[]}
               onChange={hiddenRows => onChange({ hiddenRows })}
             />
+
+            <ValueGrid
+              columns={columnIds}
+              rows={correctedSeries.map(series => series.row)}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+            <ValueGrid
+              columns={["Renovados del mes", "Pdte Usuario"]}
+              rows={[gridRow("Indicadores", [monthCell, pendingCell])]}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
           </>
         )
       }
@@ -109,25 +166,25 @@ export default function RenoveSemanalPage({
               weekNumber === null
                 ? "Renovados"
                 : `Renovados semana ${weekNumber}`,
-            value: String(weekTotals.total),
+            value: String(reportedTotal),
           },
           {
             label: "Holding",
-            value: String(weekTotals.porAmbito.Holding),
+            value: String(reported?.Holding ?? weekTotals.porAmbito.Holding),
             accent: colorOf("Holding"),
           },
           {
             label: "España",
-            value: String(weekTotals.porAmbito["España"]),
+            value: String(reported?.["España"] ?? weekTotals.porAmbito["España"]),
             accent: colorOf("España"),
           },
           {
             label: `Renovados ${month === null ? "" : monthLabel(month)}`.trim(),
-            value: String(monthTotals.total),
+            value: String(monthCell.drawn),
           },
           {
             label: "Pdte Usuario",
-            value: String(renovePendientesUsuario(rows)),
+            value: String(pendingCell.drawn),
           },
         ]}
       />

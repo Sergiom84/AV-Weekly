@@ -3,7 +3,9 @@ import CategoryBarChart, {
 } from "@/components/deck/CategoryBarChart";
 import KpiRow from "@/components/deck/KpiRow";
 import RowFilterPanel from "@/components/deck/RowFilterPanel";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
+import { correctSeries, figureCell, gridRow, withOverride } from "../overrides";
 import { componentSeriesColor } from "../palette";
 import {
   RENOVE_AMBITOS,
@@ -40,7 +42,46 @@ export default function RenoveAcumuladoPage({
 }: RenoveAcumuladoPageProps) {
   const rows = renoveReportedRows(dataset.renove ?? []);
   const totals = renoveTotals(rows);
-  const data = renoveMonthSeries(rows);
+  const imported = renoveMonthSeries(rows);
+  const columnIds = imported.map(point => String(point.mes));
+  const correctedSeries = RENOVE_AMBITOS.map((ambito, index) =>
+    correctSeries(
+      page,
+      ambito,
+      ambito,
+      columnIds,
+      imported.map(point => Number(point[ambito] ?? 0)),
+      componentSeriesColor(index, RENOVE_AMBITOS.length)
+    )
+  );
+  const data = imported.map((point, index) => {
+    const next = { ...point };
+
+    RENOVE_AMBITOS.forEach((ambito, ambitoIndex) => {
+      next[ambito] = correctedSeries[ambitoIndex]?.drawn[index] ?? 0;
+    });
+
+    return next;
+  });
+  const totalCell = figureCell(page, "indicador", "acumulado", totals.total);
+  const dismissedCell = figureCell(
+    page,
+    "indicador",
+    "desestimados",
+    totals.desestimados
+  );
+  const holdingCell = figureCell(
+    page,
+    "indicador",
+    "holding",
+    totals.porAmbito.Holding
+  );
+  const spainCell = figureCell(
+    page,
+    "indicador",
+    "espana",
+    totals.porAmbito["España"]
+  );
   const hiddenRows = page.hiddenRows ?? [];
   const series = SERIES.filter(entry => !hiddenRows.includes(entry.label)).map(
     (entry, index, list) => ({
@@ -52,7 +93,7 @@ export default function RenoveAcumuladoPage({
     series.find(entry => entry.label === ambito)?.color;
   // Only the national scope adds up to the KPI: Holding is a subset of España
   // and its column is drawn beside it, not on top of it.
-  const charted = data.reduce((sum, point) => sum + point["España"], 0);
+  const charted = data.reduce((sum, point) => sum + Number(point["España"] ?? 0), 0);
 
   return (
     <PageShell
@@ -61,32 +102,51 @@ export default function RenoveAcumuladoPage({
       onChange={onChange}
       editor={
         editing && (
-          <RowFilterPanel
-            labels={[...RENOVE_AMBITOS]}
-            hiddenRows={hiddenRows}
-            scope={page.id}
-            defaultHidden={[]}
-            onChange={hiddenRows => onChange({ hiddenRows })}
-          />
+          <>
+            <RowFilterPanel
+              labels={[...RENOVE_AMBITOS]}
+              hiddenRows={hiddenRows}
+              scope={page.id}
+              defaultHidden={[]}
+              onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+            <ValueGrid
+              columns={columnIds}
+              rows={correctedSeries.map(series => series.row)}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+            <ValueGrid
+              columns={["Acumulado", "Desestimados", "Holding", "España"]}
+              rows={[
+                gridRow("Indicadores", [
+                  totalCell,
+                  dismissedCell,
+                  holdingCell,
+                  spainCell,
+                ]),
+              ]}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
         )
       }
     >
       <KpiRow
         items={[
-          { label: "Renovado Acumulado", value: String(totals.total) },
-          { label: "Desestimados", value: String(totals.desestimados) },
+          { label: "Renovado Acumulado", value: String(totalCell.drawn) },
+          { label: "Desestimados", value: String(dismissedCell.drawn) },
           {
             label: "Holding",
-            value: String(totals.porAmbito.Holding),
+            value: String(holdingCell.drawn),
             accent: colorOf("Holding"),
           },
           {
             label: "España",
-            value: String(totals.porAmbito["España"]),
+            value: String(spainCell.drawn),
             accent: colorOf("España"),
           },
-          ...(charted < totals.total
-            ? [{ label: "Sin fecha", value: String(totals.total - charted) }]
+          ...(charted < totalCell.drawn
+            ? [{ label: "Sin fecha", value: String(totalCell.drawn - charted) }]
             : []),
         ]}
       />

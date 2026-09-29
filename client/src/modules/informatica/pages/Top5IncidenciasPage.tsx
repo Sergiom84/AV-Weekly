@@ -9,7 +9,9 @@ import {
   resolveMonthSelection,
 } from "@shared/deck/core";
 import KpiRow from "@/components/deck/KpiRow";
-import { monthLabel, sumBy, topEntries, uniqueSorted } from "../aggregate";
+import ValueGrid from "@/components/deck/EditorValueGrid";
+import { monthLabel, topEntries, uniqueSorted } from "../aggregate";
+import { correctSeries, figureCell, withOverride } from "../overrides";
 import { componentSeriesColor } from "../palette";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
@@ -54,29 +56,45 @@ export default function Top5IncidenciasPage({
   const months = resolveMonthSelection(monthSelection, availableMonths).slice(
     -WINDOW
   );
-  const drawn = new Set(months);
 
-  const byCategory = sumBy(
-    rows.filter(row => drawn.has(row.mes)),
-    row => row.categoria,
-    row => row.total
-  );
+  const categories = uniqueSorted(rows.map(row => row.categoria));
+  const importedAt = (month: string, category: string) =>
+    rows
+      .filter(row => row.mes === month && row.categoria === category)
+      .reduce((sum, row) => sum + row.total, 0);
+  const byCategory = new Map<string, number>();
+
+  for (const category of categories) {
+    byCategory.set(
+      category,
+      months.reduce(
+        (sum, month) =>
+          sum + figureCell(page, category, month, importedAt(month, category)).drawn,
+        0
+      )
+    );
+  }
+
   const allTop = topEntries(byCategory, TOP);
   const hiddenRows = page.hiddenRows ?? [];
   const top = allTop.filter(entry => !hiddenRows.includes(entry.label));
-
-  const data = months.map(target => {
-    const values = sumBy(
-      rows.filter(row => row.mes === target),
-      row => row.categoria,
-      row => row.total
-    );
-
-    return {
-      mes: monthLabel(target),
-      ...Object.fromEntries(top.map(entry => [entry.label, values.get(entry.label) ?? 0])),
-    };
-  });
+  const corrected = allTop.map(entry =>
+    correctSeries(
+      page,
+      entry.label,
+      entry.label,
+      months,
+      months.map(month => importedAt(month, entry.label))
+    )
+  );
+  const drawnOf = (category: string) =>
+    corrected.find(series => series.row.label === category)?.drawn ?? [];
+  const data = months.map((target, index) => ({
+    mes: monthLabel(target),
+    ...Object.fromEntries(
+      top.map(entry => [entry.label, drawnOf(entry.label)[index] ?? 0])
+    ),
+  }));
   const series: CategorySeries[] = top.map((entry, index) => ({
     key: entry.label,
     label: entry.label,
@@ -107,6 +125,12 @@ export default function Top5IncidenciasPage({
               scope={page.id}
               defaultHidden={[]}
               onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+
+            <ValueGrid
+              columns={months.map(monthLabel)}
+              rows={corrected.map(series => series.row)}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
             />
           </>
         )

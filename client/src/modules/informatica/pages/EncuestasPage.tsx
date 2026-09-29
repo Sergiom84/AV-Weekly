@@ -1,6 +1,7 @@
 import { EMPTY_TABLE_CELL } from "@/components/deck/emptyCell";
 import { KPI_CARD_HOVER } from "@/components/deck/KpiRow";
 import MonthRangeSelector from "@/components/deck/MonthRangeSelector";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
   defaultMonthWindow,
@@ -8,6 +9,7 @@ import {
 } from "@shared/deck/core";
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { decimal, monthLabel, percent, reportMonths, uniqueSorted } from "../aggregate";
+import { figureCell, gridRow, withOverride } from "../overrides";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface EncuestasPageProps extends InformaticaPageProps {
@@ -35,22 +37,35 @@ export default function EncuestasPage({
     page.monthSelection ? availableMonths : closedMonths.length > 0 ? closedMonths : availableMonths
   );
   const month = months[months.length - 1] ?? null;
-  const current = rows.filter(row => row.mes === month);
+  const importedAt = (target: string, score: number) =>
+    rows
+      .filter(row => row.mes === target && Number(row.valoracion) === score)
+      .reduce((sum, row) => sum + row.respuestas, 0);
+  const scoreRows = SCORES.map(score => {
+    const cells = months.map(target =>
+      figureCell(page, String(score), target, importedAt(target, score))
+    );
+
+    return { score, cells, row: gridRow(String(score), cells) };
+  });
+  const responsesAt = (target: string, score: number) =>
+    scoreRows[score - 1]?.cells[months.indexOf(target)]?.drawn ?? 0;
   const distribution = SCORES.map(score => ({
     score,
-    responses: current
-      .filter(row => Number(row.valoracion) === score)
-      .reduce((sum, row) => sum + row.respuestas, 0),
+    responses: month ? responsesAt(month, score) : 0,
   }));
   const total = distribution.reduce((sum, row) => sum + row.responses, 0);
   const average = total > 0
     ? distribution.reduce((sum, row) => sum + row.score * row.responses, 0) / total
     : null;
   const trend = months.map(target => {
-    const values = rows.filter(row => row.mes === target);
-    const responses = values.reduce((sum, row) => sum + row.respuestas, 0);
+    const parts = SCORES.map(score => ({
+      score,
+      responses: responsesAt(target, score),
+    }));
+    const responses = parts.reduce((sum, row) => sum + row.responses, 0);
     const satisfaction = responses > 0
-      ? values.reduce((sum, row) => sum + Number(row.valoracion) * row.respuestas, 0) / responses
+      ? parts.reduce((sum, row) => sum + row.score * row.responses, 0) / responses
       : 0;
 
     return { mes: monthLabel(target), satisfaction };
@@ -65,12 +80,20 @@ export default function EncuestasPage({
       onChange={onChange}
       editor={
         editing && (
-          <MonthRangeSelector
-            selection={monthSelection}
-            available={availableMonths}
-            format={monthLabel}
-            onChange={monthSelection => onChange({ monthSelection })}
-          />
+          <>
+            <MonthRangeSelector
+              selection={monthSelection}
+              available={availableMonths}
+              format={monthLabel}
+              onChange={monthSelection => onChange({ monthSelection })}
+            />
+
+            <ValueGrid
+              columns={months.map(monthLabel)}
+              rows={scoreRows.map(entry => entry.row)}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
         )
       }
     >

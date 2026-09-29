@@ -1,5 +1,6 @@
-import MatrixTable, { type MatrixRow } from "@/components/deck/MatrixTable";
+import MatrixTable from "@/components/deck/MatrixTable";
 import KpiRow from "@/components/deck/KpiRow";
+import ValueGrid from "@/components/deck/EditorValueGrid";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import {
   coverageEnd,
@@ -8,6 +9,7 @@ import {
   pivot,
   uniqueSorted,
 } from "../aggregate";
+import { correctSeries, withOverride } from "../overrides";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
 
 interface PeticionesPageProps extends InformaticaPageProps {
@@ -64,8 +66,13 @@ export default function PeticionesPage({
     STATES
   );
 
-  const matrixFor = (entity: string) =>
-    pivot(
+  const entities = orderColumns(uniqueSorted(current.map(row => row.entidad)), [
+    "Peticiones",
+    "Posiciones",
+  ]);
+  const period = cutoff ?? current[0]?.semana?.toString() ?? "actual";
+  const matrixFor = (entity: string) => {
+    const matrix = pivot(
       current.filter(row => row.entidad === entity),
       row => row.estado,
       row => row.origen,
@@ -73,13 +80,25 @@ export default function PeticionesPage({
       { columns, rowOrder }
     );
 
-  const entities = orderColumns(uniqueSorted(current.map(row => row.entidad)), [
-    "Peticiones",
-    "Posiciones",
-  ]);
+    return matrix.rows.map(row => {
+      const series = correctSeries(
+        page,
+        `${entity}:${row.label}`,
+        `${entity}: ${row.label}`,
+        columns.map(column => `${period}:${column}`),
+        row.values
+      );
+
+      return { label: row.label, values: series.drawn, grid: series.row };
+    });
+  };
+  const matrices = entities.map(entity => ({
+    entity,
+    rows: matrixFor(entity),
+  }));
 
   const productRows = dataset.peticionesProducto ?? [];
-  const topProducts: MatrixRow[] = Array.from(
+  const topProducts = Array.from(
     snapshotRows(productRows, row => row.fecha, cutoff)
       .reduce((totals, row) => {
         totals.set(row.producto, (totals.get(row.producto) ?? 0) + row.total);
@@ -92,7 +111,11 @@ export default function PeticionesPage({
     // slide reshuffles between runs that report the very same figures.
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"))
     .slice(0, TOP_PRODUCTS)
-    .map(([label, total]) => ({ label, values: [total] }));
+    .map(([label, total]) => {
+      const series = correctSeries(page, `producto:${label}`, label, ["total"], [total]);
+
+      return { label, values: series.drawn, grid: series.row };
+    });
 
   // Requests only. `Peticiones` and `Posiciones` are two counts of the same
   // week, so adding them together reports every request twice: the headline for
@@ -100,26 +123,51 @@ export default function PeticionesPage({
   const headlineEntity = entities.includes("Peticiones")
     ? "Peticiones"
     : entities[0];
+  const headlineRows =
+    matrices.find(entry => entry.entity === headlineEntity)?.rows ?? [];
   const totalsByState = STATES.map(state =>
-    current
-      .filter(row => row.estado === state && row.entidad === headlineEntity)
-      .reduce((sum, row) => sum + row.total, 0)
+    headlineRows
+      .find(row => row.label === state)
+      ?.values.reduce((sum, value) => sum + value, 0) ?? 0
   );
 
   return (
-    <PageShell page={page} editing={editing} onChange={onChange}>
+    <PageShell
+      page={page}
+      editing={editing}
+      onChange={onChange}
+      editor={
+        editing && (
+          <>
+            {matrices.map(entry => (
+              <ValueGrid
+                key={entry.entity}
+                columns={columns}
+                rows={entry.rows.map(row => row.grid)}
+                onChange={(key, value) => onChange(withOverride(page, key, value))}
+              />
+            ))}
+            <ValueGrid
+              columns={["Total"]}
+              rows={topProducts.map(row => row.grid)}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
+            />
+          </>
+        )
+      }
+    >
       <div className="grid min-h-0 flex-1 grid-cols-[57%_1fr] items-start gap-[1.8cqi]">
         <div className="flex min-h-0 flex-col gap-[1.2cqi]">
-          {entities.map(entity => (
-            <div key={entity} className="min-h-0">
+          {matrices.map(entry => (
+            <div key={entry.entity} className="min-h-0">
               <p className="mb-[0.5cqi] font-mono text-[1.2cqi] uppercase tracking-wide text-muted-foreground">
-                {entity}
+                {entry.entity}
               </p>
               <MatrixTable
                 fill={false}
                 rowHeader="Estado"
                 columns={columns}
-                rows={matrixFor(entity).rows}
+                rows={entry.rows}
                 // No column totals: the states are not parts of a whole. "En
                 // vuelo" is the backlog standing on the extraction day, while
                 // the other two count what moved during that week, so adding
