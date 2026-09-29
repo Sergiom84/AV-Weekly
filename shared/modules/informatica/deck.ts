@@ -146,6 +146,12 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
     title: "2.7.1 Renove",
     sections: ["renove"],
   },
+  {
+    id: "informe-mensual",
+    kind: "itInformeMensual",
+    title: "Informe mensual",
+    sections: ["hic"],
+  },
 ];
 
 /** Sections a page needs, by page id. Empty for the pages with no dataset. */

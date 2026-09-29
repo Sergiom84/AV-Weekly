@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState, type ReactElement } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import { nanoid } from "nanoid";
-import { Eye, EyeOff, Loader2, Plus } from "lucide-react";
+import { Copy, Eye, EyeOff, FileText, Loader2, Plus } from "lucide-react";
 import {
   createNotesPage,
   createSectionPage,
@@ -19,7 +19,10 @@ import HomeLink from "@/components/HomeLink";
 import ClosingPage from "@/components/deck/ClosingPage";
 import ComingSoonPage from "@/components/deck/ComingSoonPage";
 import CoverPage from "@/components/deck/CoverPage";
-import DeckSidebar, { type SidebarUpload } from "@/components/deck/DeckSidebar";
+import DeckSidebar, {
+  type SidebarExportAction,
+  type SidebarUpload,
+} from "@/components/deck/DeckSidebar";
 import ResizableSidebar from "@/components/deck/ResizableSidebar";
 import IndexPage from "@/components/deck/IndexPage";
 import NotesPage from "@/components/deck/NotesPage";
@@ -31,6 +34,7 @@ import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInformaticaDeck } from "@/modules/informatica/useInformaticaDeck";
 import { coverPeriodLabel } from "@/modules/informatica/aggregate";
+import { informeMensualView } from "@/modules/informatica/informeMensual";
 import CitasAnualPage from "@/modules/informatica/pages/CitasAnualPage";
 import CitasMensualPage from "@/modules/informatica/pages/CitasMensualPage";
 import CitasSemanalPage from "@/modules/informatica/pages/CitasSemanalPage";
@@ -45,11 +49,22 @@ import TopTenIncidenciasPage from "@/modules/informatica/pages/TopTenIncidencias
 import PeticionesAnualPage from "@/modules/informatica/pages/PeticionesAnualPage";
 import PeticionesPage from "@/modules/informatica/pages/PeticionesPage";
 import RenoveAcumuladoPage from "@/modules/informatica/pages/RenoveAcumuladoPage";
+import InformeMensualPage from "@/modules/informatica/pages/InformeMensualPage";
 import RenoveSemanalPage from "@/modules/informatica/pages/RenoveSemanalPage";
 import WorkOrdersAnualPage from "@/modules/informatica/pages/WorkOrdersAnualPage";
 import WorkOrdersPage from "@/modules/informatica/pages/WorkOrdersPage";
 import type { InformaticaPageProps } from "@/modules/informatica/pages/PageShell";
+import { informeMensualSpeech } from "@shared/modules/informatica/mensual";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const MODULE = getDeckModule("informatica");
 
@@ -79,6 +94,7 @@ const DATA_PAGES: Record<
   "citas-anual": CitasAnualPage,
   "imacs-tablas": ImacsTablePage,
   "imacs-grafico": ImacsChartPage,
+  "informe-mensual": InformeMensualPage,
   renove: RenoveSemanalPage,
   "renove-acumulado": RenoveAcumuladoPage,
 };
@@ -117,6 +133,29 @@ export default function Informatica() {
   } = useInformaticaDeck();
   const [editing, setEditing] = useState(false);
   const [presenting, setPresenting] = useState(false);
+  const [speechOpen, setSpeechOpen] = useState(false);
+  const [speechCopied, setSpeechCopied] = useState(false);
+  const speechRef = useRef<HTMLTextAreaElement>(null);
+  const mensualPage = deck?.pages.find((page) => page.id === "informe-mensual");
+  const speech = useMemo(() => {
+    if (!speechOpen || !dataset) {
+      return "";
+    }
+
+    const { informe } = informeMensualView(dataset, mensualPage);
+
+    return informeMensualSpeech(informe, mensualPage?.text.narracion ?? "");
+  }, [speechOpen, dataset, mensualPage]);
+
+  const copySpeech = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(speech);
+    } catch {
+      speechRef.current?.select();
+      document.execCommand("copy");
+    }
+    setSpeechCopied(true);
+  }, [speech]);
 
   // Pages that ship with the deck are never deletable: only the ones a user
   // added by hand carry a remove control.
@@ -129,6 +168,21 @@ export default function Informatica() {
     (pageId: string) => (patch: Partial<InformaticaDeckPage>) =>
       updatePage(pageId, patch),
     [updatePage]
+  );
+
+  const exportActions = useMemo<SidebarExportAction[]>(
+    () => [
+      {
+        id: "informe-mensual-speech",
+        label: "Speech mensual",
+        icon: <FileText className="h-4 w-4" />,
+        onClick: () => {
+          setSpeechCopied(false);
+          setSpeechOpen(true);
+        },
+      },
+    ],
+    []
   );
 
   const uploads = useMemo<SidebarUpload[]>(
@@ -331,6 +385,7 @@ export default function Informatica() {
               onResetDeck={resetDeck}
               onSelectPage={scrollToPage}
               onPresent={() => setPresenting(true)}
+              exportActions={exportActions}
               pdfHref="/api/informatica/pdf"
             />
           </ResizableSidebar>
@@ -453,6 +508,56 @@ export default function Informatica() {
           onClose={() => setPresenting(false)}
         />
       )}
+
+      <Dialog
+        open={speechOpen}
+        onOpenChange={(open) => {
+          setSpeechOpen(open);
+          if (!open) setSpeechCopied(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Speech mensual</DialogTitle>
+            <DialogDescription className="sr-only">
+              Speech del informe mensual de Informática
+            </DialogDescription>
+          </DialogHeader>
+          <label className="grid gap-2 font-mono text-sm">
+            <span>Casuística</span>
+            <textarea
+              value={mensualPage?.text.narracion ?? ""}
+              aria-label="Casuística del mes"
+              onChange={(event) => {
+                if (!mensualPage) return;
+                updatePage(mensualPage.id, {
+                  text: { ...mensualPage.text, narracion: event.target.value },
+                });
+              }}
+              className="min-h-28 w-full resize-y rounded-md border border-border bg-background p-3 text-sm leading-relaxed text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </label>
+          <textarea
+            ref={speechRef}
+            readOnly
+            value={speech}
+            aria-label="Speech mensual"
+            className="min-h-[40vh] w-full resize-y rounded-md border border-border bg-background p-4 font-mono text-sm leading-relaxed text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <DialogFooter className="items-center">
+            <span
+              className="mr-auto font-mono text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              {speechCopied ? "Copiado" : ""}
+            </span>
+            <Button type="button" onClick={() => void copySpeech()} className="gap-2">
+              <Copy className="h-4 w-4" />
+              Copiar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

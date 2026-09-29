@@ -129,6 +129,25 @@ export const INFORMATICA_SHEETS = {
     sheet: "Slas",
     columns: ["Mes", "SVT", "Cumplido", "Incumplido", "Total"],
   },
+  /**
+   * On-site incident snapshot from template tab 7-7.
+   *
+   * `Resueltas` and `Abiertas` are counted per month from the resolved and
+   * opened dates. `Backlog` is the pending stock of the extraction, stored
+   * against that month only.
+   */
+  incidenciasOnsite: {
+    sheet: "IncidenciasOnsite",
+    columns: ["Mes", "Metrica", "Total"],
+  },
+  /**
+   * Full-month request matrix. The weekly backlog, released and managed
+   * exports are a different snapshot and stay in `peticiones`.
+   */
+  peticionesMes: {
+    sheet: "PeticionesMes",
+    columns: ["Mes", "Origen", "Estado", "Total"],
+  },
 } as const;
 
 /** Key of a section inside the workbook, e.g. "peticionesProducto". */
@@ -314,6 +333,21 @@ export interface InformaticaSlaRow {
   total: number;
 }
 
+/** `IncidenciasOnsite`: opened, resolved and pending stock from tab 7-7. */
+export interface InformaticaIncidenciaOnsiteRow {
+  mes: InformaticaMonth;
+  metrica: string;
+  total: number;
+}
+
+/** `PeticionesMes`: one origin and status of the full-month request files. */
+export interface InformaticaPeticionMesRow {
+  mes: InformaticaMonth;
+  origen: string;
+  estado: string;
+  total: number;
+}
+
 /**
  * One published figure, for one series and one month.
  *
@@ -389,6 +423,8 @@ export interface InformaticaDataset {
   hic?: InformaticaHicRow[];
   comparativas?: InformaticaComparativaRow[];
   slas?: InformaticaSlaRow[];
+  incidenciasOnsite?: InformaticaIncidenciaOnsiteRow[];
+  peticionesMes?: InformaticaPeticionMesRow[];
   /**
    * Frozen series, merged in when the payload is built. It never arrives with an
    * upload, so a complete-scope import cannot wipe it.
@@ -422,7 +458,8 @@ export type InformaticaPageKind =
   | "itRenove"
   | "itHic"
   | "itComparativas"
-  | "itSlas";
+  | "itSlas"
+  | "itInformeMensual";
 
 /** Series a page can report on. Informatica pages are not typed by series. */
 export type InformaticaSeries = string;

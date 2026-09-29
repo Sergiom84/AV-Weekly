@@ -104,6 +104,21 @@ function loadCodigo() {
       citas: Record<string, number>,
       citasAnual: Record<string, number>
     ) => void;
+    agregarIncidenciasOnsite: (
+      found: Record<string, unknown>,
+      extraction: Date,
+      bucket: Record<string, number>
+    ) => void;
+    agregarPeticionesMes: (
+      found: Record<string, unknown>,
+      extraction: Date,
+      bucket: Record<string, number>
+    ) => void;
+    findDataSheets: (
+      grids: { name: string; grid: unknown[][] }[],
+      required: string[]
+    ) => { name: string; grid: unknown[][]; headerRow: number; columns: Record<string, number> }[];
+    REQUIRED: { peticiones: string[] };
   };
 }
 
@@ -732,5 +747,106 @@ describe("Codigo.gs citas mensuales 2.3.3", () => {
     expect(sheet.grid[10][53]).toBe(2);
     expect(sheet.grid[11][53]).toBe(1);
     expect(informe.citasMensualColumnas).toBe(2);
+  });
+});
+
+describe("Codigo.gs informe mensual", () => {
+  const gs = loadCodigo();
+
+  it("separa el volcado de mes del semanal por el nombre", () => {
+    expect(gs.requestKind("BacklogMes.xlsx")).toBe("backlogMes");
+    expect(gs.requestKind("Liberadas mes.xlsx")).toBe("liberadasMes");
+    expect(gs.requestKind("GestionadesMes.xlsx")).toBe("gestionadasMes");
+    expect(gs.requestKind("Backlog20260928.xlsx")).toBe("backlog");
+    expect(gs.requestKind("Gestionadas20260928.xlsx")).toBe("gestionadas");
+    expect(gs.requestKind("Acumuladas20260921.xlsx")).toBe("acumuladas");
+  });
+
+  it("cuenta abiertas y resueltas por la fecha Abierta y el backlog pendiente", () => {
+    const grid = [
+      ["Estado", "Abierta", "Resuelta"],
+      ["Cerrado", new Date(2026, 7, 15), new Date(2026, 7, 20)],
+      // Opened in August, resolved in September: an August resolution.
+      ["Cerrado", new Date(2026, 7, 30), new Date(2026, 8, 2)],
+      ["Resuelto", "09/02/2026", "09/03/2026"],
+      ["Pendiente", new Date(2026, 6, 1), null],
+      ["Asignado", new Date(2026, 8, 4), null],
+    ];
+    const bucket: Record<string, number> = {};
+
+    gs.agregarIncidenciasOnsite(
+      { encuestas: { grids: [{ name: "7-7 - DashBoard Onsite - Listad", grid }] } },
+      new Date(Date.UTC(2026, 8, 28)),
+      bucket
+    );
+
+    const rows = gs.rows(bucket);
+    const value = (month: string, metric: string) =>
+      rows.find((row) => row[0] === month && row[1] === metric)?.[2];
+
+    expect(value("2026/08", "Abiertas")).toBe(2);
+    expect(value("2026/08", "Resueltas")).toBe(2);
+    expect(value("2026/09", "Abiertas")).toBe(2);
+    expect(value("2026/09", "Resueltas")).toBe(1);
+    expect(value("2026/07", "Abiertas")).toBe(1);
+    expect(value("2026/09", "Backlog")).toBe(1);
+    expect(value("2026/07", "Backlog")).toBeUndefined();
+  });
+
+  it("cuenta una fila de GestionadasMes en su origen y no en la semana", () => {
+    const grid = [
+      ["Denominación Producto", "Estatus de la Posición", "Cantidad"],
+      ["PORTATIL ESTANDAR", "Gestionada", 3],
+      ["EQUIPAMIENTO APPLE DAAS", "Gestionada", 1],
+      ["BBVA TECHNOLOGY - PORTATIL", "Gestionada", 2],
+      ["TECLADO USB", "Gestionada", 4],
+    ];
+    const sheets = gs.findDataSheets([{ name: "Datos", grid }], gs.REQUIRED.peticiones);
+    const bucket: Record<string, number> = {};
+
+    gs.agregarPeticionesMes(
+      { gestionadasMes: { sheets } },
+      new Date(Date.UTC(2026, 8, 28)),
+      bucket
+    );
+
+    const rows = gs.rows(bucket);
+
+    // No Fecha Gestionado column: filed under the month before the extraction.
+    expect(rows).toEqual([
+      ["2026/08", "On Site", "Gestionadas", 1],
+      ["2026/08", "Renove Apple", "Gestionadas", 1],
+      ["2026/08", "Renove Windows", "Gestionadas", 1],
+      ["2026/08", "Technology", "Gestionadas", 1],
+    ]);
+  });
+
+  it("archiva el trio de mes en el mes que traen sus fechas, backlog incluido", () => {
+    const gestionadas = [
+      ["Denominación Producto", "Estatus de la Posición", "Fecha Gestionado"],
+      ["PORTATIL ESTANDAR", "Gestionada", new Date(Date.UTC(2026, 6, 10))],
+      ["TECLADO USB", "Gestionada", new Date(Date.UTC(2026, 6, 31))],
+      ["TECLADO USB", "Gestionada", new Date(Date.UTC(2026, 7, 1))],
+    ];
+    const backlog = [
+      ["Denominación Producto", "Estatus de la Posición"],
+      ["TECLADO USB", "En vuelo"],
+    ];
+    const bucket: Record<string, number> = {};
+
+    gs.agregarPeticionesMes(
+      {
+        gestionadasMes: { sheets: gs.findDataSheets([{ name: "Datos", grid: gestionadas }], gs.REQUIRED.peticiones) },
+        backlogMes: { sheets: gs.findDataSheets([{ name: "Datos", grid: backlog }], gs.REQUIRED.peticiones) },
+      },
+      new Date(Date.UTC(2026, 8, 3)),
+      bucket
+    );
+
+    expect(gs.rows(bucket)).toEqual([
+      ["2026/07", "On Site", "Backlog", 1],
+      ["2026/07", "On Site", "Gestionadas", 2],
+      ["2026/07", "Renove Windows", "Gestionadas", 1],
+    ]);
   });
 });

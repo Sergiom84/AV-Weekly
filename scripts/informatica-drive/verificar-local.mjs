@@ -216,7 +216,14 @@ function entry(file, grids, sheets) {
 }
 
 /** Read when present, never required: Renove feeds PLANO; Acumuladas feeds 2.2.1. */
-const OPTIONAL_KINDS = ["renoveEspana", "renoveHolding", "acumuladas"];
+const OPTIONAL_KINDS = [
+  "renoveEspana",
+  "renoveHolding",
+  "acumuladas",
+  "backlogMes",
+  "liberadasMes",
+  "gestionadasMes",
+];
 
 function classify(script, folder, cleanPath) {
   const found = Object.fromEntries(

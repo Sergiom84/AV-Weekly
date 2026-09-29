@@ -10,8 +10,10 @@ import {
   type InformaticaEncuestaRow,
   type InformaticaHicRow,
   type InformaticaImacRow,
+  type InformaticaIncidenciaOnsiteRow,
   type InformaticaIncidenciaRow,
   type InformaticaPeticionAnualRow,
+  type InformaticaPeticionMesRow,
   type InformaticaPeticionProductoRow,
   type InformaticaPeticionRow,
   type InformaticaRenoveRow,
@@ -889,6 +891,56 @@ const slas: SectionSpec<InformaticaSlaRow> = {
   sort: (a, b) => a.mes.localeCompare(b.mes) || compareText(a.svt, b.svt),
 };
 
+/** `IncidenciasOnsite`: opened, resolved and pending counts from tab 7-7. */
+const incidenciasOnsite: SectionSpec<InformaticaIncidenciaOnsiteRow> = {
+  key: "incidenciasOnsite",
+  parse: (row) => {
+    const mes = parseMonthCell(row.raw("Mes"));
+    const metrica = row.text("Metrica");
+    const total = row.count("Total");
+
+    if (!mes || metrica === "" || total === null) {
+      return null;
+    }
+
+    return {
+      key: `${mes}|${dim(metrica)}`,
+      value: { mes, metrica, total },
+    };
+  },
+  accumulate: (target, incoming) => {
+    target.total += incoming.total;
+  },
+  sort: (a, b) => a.mes.localeCompare(b.mes) || compareText(a.metrica, b.metrica),
+};
+
+/** `PeticionesMes`: full-month request matrix, one origin and status per row. */
+const peticionesMes: SectionSpec<InformaticaPeticionMesRow> = {
+  key: "peticionesMes",
+  parse: (row) => {
+    const mes = parseMonthCell(row.raw("Mes"));
+    const origen = row.text("Origen");
+    const estado = row.text("Estado");
+    const total = row.count("Total");
+
+    if (!mes || origen === "" || estado === "" || total === null) {
+      return null;
+    }
+
+    return {
+      key: `${mes}|${dim(origen)}|${dim(estado)}`,
+      value: { mes, origen, estado, total },
+    };
+  },
+  accumulate: (target, incoming) => {
+    target.total += incoming.total;
+  },
+  sort: (a, b) =>
+    a.mes.localeCompare(b.mes) ||
+    compareText(a.origen, b.origen) ||
+    compareText(a.estado, b.estado),
+};
+
 /* -------------------------------------------------------------------------- */
 /* Workbook merging                                                            */
 /* -------------------------------------------------------------------------- */
@@ -1108,6 +1160,8 @@ export function parseInformaticaPlanoWorkbook(
     hic: parseSection(workbook, hic),
     comparativas: parseSection(workbook, comparativas),
     slas: parseSection(workbook, slas),
+    incidenciasOnsite: parseSection(workbook, incidenciasOnsite),
+    peticionesMes: parseSection(workbook, peticionesMes),
   } as const;
 
   const byNormalizedName = new Map<string, InformaticaSectionKey>(
@@ -1146,6 +1200,8 @@ export function parseInformaticaPlanoWorkbook(
     hic: sections.hic.rows,
     comparativas: sections.comparativas.rows,
     slas: sections.slas.rows,
+    incidenciasOnsite: sections.incidenciasOnsite.rows,
+    peticionesMes: sections.peticionesMes.rows,
     source: { sourceFile: null, uploadedAt: null },
     sheetsFound,
   };
@@ -1201,6 +1257,8 @@ const SECTION_MONTH: Record<InformaticaSectionKey, ((row: never) => string) | nu
   hic: (row: InformaticaHicRow) => row.mes,
   comparativas: (row: InformaticaComparativaRow) => row.mes,
   slas: (row: InformaticaSlaRow) => row.mes,
+  incidenciasOnsite: (row: InformaticaIncidenciaOnsiteRow) => row.mes,
+  peticionesMes: (row: InformaticaPeticionMesRow) => row.mes,
 } as Record<InformaticaSectionKey, ((row: never) => string) | null>;
 
 /**

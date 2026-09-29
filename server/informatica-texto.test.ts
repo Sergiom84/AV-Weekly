@@ -359,7 +359,7 @@ describe("punto de entrada del deck", () => {
   });
 
   it("declara todas las secciones del contrato, incluso las opcionales", () => {
-    expect(Object.values(INFORMATICA_TEXTO_SECTIONS)).toHaveLength(15);
+    expect(Object.values(INFORMATICA_TEXTO_SECTIONS)).toHaveLength(17);
   });
 });
 

@@ -159,6 +159,16 @@ const SECTIONS: Record<
     cells: 5,
     build: (c) => ({ mes: c[0], svt: c[1], cumplido: num(c[2]), incumplido: num(c[3]), total: num(c[4]) }),
   },
+  [INFORMATICA_TEXTO_SECTIONS.incidenciasOnsite]: {
+    key: "incidenciasOnsite",
+    cells: 3,
+    build: (c) => ({ mes: c[0], metrica: c[1], total: num(c[2]) }),
+  },
+  [INFORMATICA_TEXTO_SECTIONS.peticionesMes]: {
+    key: "peticionesMes",
+    cells: 4,
+    build: (c) => ({ mes: c[0], origen: c[1], estado: c[2], total: num(c[3]) }),
+  },
 };
 
 /**

@@ -147,13 +147,19 @@ function yAxisWidthFor(labels: string[], chartWidth: number): number {
   return Math.min(Math.max(wanted, 108), Math.max(108, cap));
 }
 
-/** Components comparison as horizontal bars, with one series per month. */
-function ComponentsChart({
+/**
+ * Components comparison as horizontal bars, with one series per month.
+ * Also drawn by the monthly close, where the columns are wide enough for the
+ * category names only when they sit on the Y axis.
+ */
+export function ComponentsChart({
   rows,
   columns,
+  ariaLabel = "Comparativa mensual de componentes",
 }: {
   rows: MatrixRow[];
   columns: string[];
+  ariaLabel?: string;
 }) {
   const animate = usePresentationAnimation();
   const boxRef = useRef<HTMLDivElement>(null);
@@ -190,7 +196,7 @@ function ComponentsChart({
       ref={boxRef}
       className="min-h-0 flex-1"
       role="img"
-      aria-label="Comparativa mensual de componentes"
+      aria-label={ariaLabel}
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart

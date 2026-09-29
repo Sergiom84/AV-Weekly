@@ -164,6 +164,7 @@ export const DECK_MODULES: DeckModule[] = [
         itCitasAnual: "Citas anual",
         itImacs: "IMACS",
         itRenove: "Renove",
+        itInformeMensual: "Informe mensual",
       },
       storagePrefix: "av-weekly:informatica-sidebar-collapsed:",
     },

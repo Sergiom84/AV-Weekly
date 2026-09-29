@@ -56,6 +56,10 @@ export const INFORMATICA_TEXTO_SECTIONS = {
   comparativas: "COMPARATIVAS",
   /** `mes` `svt` `cumplido` `incumplido` `total` — monthly SLA results. */
   slas: "SLAS",
+  /** `mes` `metrica` `total` — opened, resolved and pending stock from tab 7-7. */
+  incidenciasOnsite: "INCIDENCIASONSITE",
+  /** `mes` `origen` `estado` `total` — full-month request files, separate from the weekly snapshot. */
+  peticionesMes: "PETICIONESMES",
 } as const;
 
 /** Metadata keys of the preamble, written as `clave<TAB>valor`. */
@@ -248,6 +252,16 @@ export function serializeInformaticaTexto(
       INFORMATICA_TEXTO_SECTIONS.slas,
       (dataset.slas ?? []).map((row) =>
         line(row.mes, row.svt, row.cumplido, row.incumplido, row.total)
+      )
+    ),
+    ...section(
+      INFORMATICA_TEXTO_SECTIONS.incidenciasOnsite,
+      (dataset.incidenciasOnsite ?? []).map((row) => line(row.mes, row.metrica, row.total))
+    ),
+    ...section(
+      INFORMATICA_TEXTO_SECTIONS.peticionesMes,
+      (dataset.peticionesMes ?? []).map((row) =>
+        line(row.mes, row.origen, row.estado, row.total)
       )
     ),
   ];

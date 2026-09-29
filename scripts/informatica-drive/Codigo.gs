@@ -18,8 +18,10 @@
  *   rule is not a precaution but a repair: the work-order export is called
  *   "Peticiones ON SITE SSCC", so its name says the opposite of what it holds.
  *   The single exception is telling the backlog, released, managed and
- *   acumuladas exports apart, since the four share one 19-column header;
- *   requestKind reads the file name for that and for nothing else.
+ *   acumuladas exports apart, since the four share one 19-column header.
+ *   A file named BacklogMes, LiberadasMes or GestionadasMes is the full
+ *   month and is kept out of the weekly snapshot. requestKind reads the
+ *   file name for that and for nothing else.
  * - The workbook keeps its shape. This script writes the data tabs, the period
  *   markers and the month close, and never the hand-kept masters listed under
  *   "Zonas intocables" in SPEC.md.
@@ -647,14 +649,23 @@ function renoveSheets(grids, ambito) {
 /** Fragment of the satisfaction question. Mirrors the server-side converter. */
 var ENCUESTAS_SCORE_HINT = 'Nivel de satis';
 
-/** Which of the four request exports a file is, by name. They share a header. */
+/**
+ * Which request export a file is, by name. They share a header.
+ *
+ * The monthly close uses a second trio, BacklogMes / LiberadasMes /
+ * GestionadasMes (GestionadesMes is the spelling that arrived in the brief).
+ * Those files are the whole month. The weekly names stay the week.
+ */
 function requestKind(fileName) {
-  var lower = String(fileName).toLowerCase();
+  var compact = String(fileName).toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  if (lower.indexOf('acumuladas') >= 0) return 'acumuladas';
-  if (lower.indexOf('backlog') >= 0) return 'backlog';
-  if (lower.indexOf('liberadas') >= 0) return 'liberadas';
-  if (lower.indexOf('gestionadas') >= 0) return 'gestionadas';
+  if (compact.indexOf('acumuladas') >= 0) return 'acumuladas';
+  if (compact.indexOf('backlogmes') >= 0) return 'backlogMes';
+  if (compact.indexOf('liberadasmes') >= 0 || compact.indexOf('liberadesmes') >= 0) return 'liberadasMes';
+  if (compact.indexOf('gestionadasmes') >= 0 || compact.indexOf('gestionadesmes') >= 0) return 'gestionadasMes';
+  if (compact.indexOf('backlog') >= 0) return 'backlog';
+  if (compact.indexOf('liberadas') >= 0) return 'liberadas';
+  if (compact.indexOf('gestionadas') >= 0) return 'gestionadas';
 
   return null;
 }
@@ -728,6 +739,9 @@ function classifyFolder(folderId) {
     backlog: null,
     liberadas: null,
     gestionadas: null,
+    backlogMes: null,
+    liberadasMes: null,
+    gestionadasMes: null,
     acumuladas: null,
     encuestas: null,
     workOrders: null,
@@ -2519,6 +2533,8 @@ var SECTION = {
   ,hic: 'HIC'
   ,comparativas: 'COMPARATIVAS'
   ,slas: 'SLAS'
+  ,incidenciasOnsite: 'INCIDENCIASONSITE'
+  ,peticionesMes: 'PETICIONESMES'
 };
 
 var SECTION_ORDER = [
@@ -2535,6 +2551,8 @@ var SECTION_ORDER = [
   'hic',
   'comparativas',
   'slas',
+  'incidenciasOnsite',
+  'peticionesMes',
   'imacs'
 ];
 
@@ -2691,6 +2709,173 @@ function agregarPeticiones(found, extraction, peticiones, productos) {
       }
     }
   }
+}
+
+/**
+ * Monthly matrix columns. Apple stays out of the Windows bucket: a product
+ * that says Apple DAAS is Renove Apple even when the rest of the name would
+ * also match a Windows portable.
+ */
+function peticionOrigenMensual(product) {
+  var value = normalize(product);
+
+  if (value.indexOf('APPLE DAAS') >= 0 || value.indexOf('DAAS APPLE') >= 0) return 'Renove Apple';
+  if (value.indexOf('BBVA TECHNOLOGY') >= 0) return 'Technology';
+  if (
+    value === 'PORTATIL' ||
+    value.indexOf('PORTATIL ESTANDAR') >= 0 ||
+    value.indexOf('PORTATIL WINDOWS ONBOARDING') >= 0 ||
+    value.indexOf('TECLADO Y RATON INALAMBRICOS') >= 0
+  ) {
+    return 'Renove Windows';
+  }
+
+  return 'On Site';
+}
+
+/**
+ * Full-month request files. One data row is one count, the same grain as the
+ * annual grid (August 2026 is 776 rows, not a sum of Cantidad). Missing files
+ * leave the section empty; the weekly snapshot is not a substitute.
+ *
+ * The trio is filed under the month it covers, not the day the script runs:
+ * the close is uploaded once the month is over. That month is the one most
+ * Fecha liberación (LiberadasMes) and Fecha Gestionado (GestionadasMes) dates
+ * fall in. BacklogMes is a stock with no such date and follows the other two;
+ * with neither, the month before the extraction.
+ */
+function peticionesMesMonth(found, extraction) {
+  var dated = [
+    ['liberadasMes', 'Liberadas', 'Fecha liberación'],
+    ['gestionadasMes', 'Gestionadas', 'Fecha Gestionado']
+  ];
+  var counts = {};
+  var best = null;
+
+  for (var index = 0; index < dated.length; index += 1) {
+    var entry = found[dated[index][0]];
+
+    if (!entry) continue;
+
+    var source = firstSource(entry, dated[index][1]);
+    var data = sourceRows(source);
+
+    for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+      var date = citaDate(valueAt(data[rowIndex] || [], source.columns, dated[index][2]));
+
+      if (!date || !fechaOperativa(date)) continue;
+
+      var label = monthLabel(monthStart(date));
+
+      counts[label] = (counts[label] || 0) + 1;
+
+      if (best === null || counts[label] > counts[best]) best = label;
+    }
+  }
+
+  if (best !== null) return best;
+
+  return shiftMonthLabel(monthLabel(monthStart(toDate(extraction))), -1);
+}
+
+function agregarPeticionesMes(found, extraction, peticionesMes) {
+  var specs = [
+    ['backlogMes', 'Backlog'],
+    ['liberadasMes', 'Liberadas'],
+    ['gestionadasMes', 'Gestionadas']
+  ];
+  var month = peticionesMesMonth(found, extraction);
+
+  for (var specIndex = 0; specIndex < specs.length; specIndex += 1) {
+    var entry = found[specs[specIndex][0]];
+
+    if (!entry) continue;
+
+    var source = firstSource(entry, specs[specIndex][1]);
+    var data = sourceRows(source);
+
+    for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+      var row = data[rowIndex] || [];
+      var product = text(valueAt(row, source.columns, 'Denominación Producto')) || 'Sin producto';
+
+      bump(peticionesMes, [month, peticionOrigenMensual(product), specs[specIndex][1]], 1);
+    }
+  }
+}
+
+/**
+ * Tab 7-7 of the weekly template: the on-site incident list.
+ *
+ * The service's rule, column by column: Abiertas is every row whose Abierta
+ * date (column C) falls in the month, whatever its Estado; Resueltas is the
+ * same filter narrowed to the resolved rows; Backlog is every Pendiente row of
+ * any month, the stock of this extract, written on the extraction month.
+ * Resolved means Resuelto or Cerrado: a ticket turns Cerrado a few days after
+ * it is resolved, so on 2026-09-28 August holds 413 Cerrado and 0 Resuelto.
+ * Incident numbers and descriptions stay in the sheet.
+ */
+function listadoOnsite(found) {
+  var grids = [];
+  var kinds = ['encuestas', 'workOrders', 'citas'];
+
+  for (var index = 0; index < kinds.length; index += 1) {
+    var entry = found[kinds[index]];
+
+    if (entry && entry.grids && entry.grids.length > grids.length) grids = entry.grids;
+  }
+
+  for (var gridIndex = 0; gridIndex < grids.length; gridIndex += 1) {
+    var name = normalize(grids[gridIndex].name);
+
+    if (name.indexOf('7-7') === 0 || name.indexOf('DASHBOARD ONSITE') >= 0) return grids[gridIndex];
+  }
+
+  return null;
+}
+
+function esIncidenciaResuelta(estado) {
+  var value = normalize(estado);
+
+  return value === 'RESUELTO' || value === 'CERRADO';
+}
+
+function agregarIncidenciasOnsite(found, extraction, incidenciasOnsite) {
+  var listed = listadoOnsite(found);
+
+  if (!listed) return;
+
+  var header = listed.grid[0] || [];
+  var columns = headerIndex(header);
+  var estadoAt = columns[normalize('Estado')];
+  var abiertaAt = columns[normalize('Abierta')];
+
+  if (estadoAt === undefined || abiertaAt === undefined) {
+    throw new Error('La pestaña 7-7 no trae Estado y Abierta.');
+  }
+
+  var pending = 0;
+
+  for (var rowIndex = 1; rowIndex < listed.grid.length; rowIndex += 1) {
+    var row = listed.grid[rowIndex] || [];
+    var estado = text(row[estadoAt]);
+    var abierta = citaDate(row[abiertaAt]);
+
+    if (abierta && fechaOperativa(abierta)) {
+      var mes = monthLabel(monthStart(abierta));
+
+      bump(incidenciasOnsite, [mes, 'Abiertas'], 1);
+
+      if (esIncidenciaResuelta(estado)) bump(incidenciasOnsite, [mes, 'Resueltas'], 1);
+    }
+
+    if (normalize(estado) === 'PENDIENTE') pending += 1;
+  }
+
+  var extractionDate = toDate(extraction);
+
+  if (!extractionDate) return;
+
+  bump(incidenciasOnsite, [monthLabel(monthStart(extractionDate)), 'Backlog'], pending);
 }
 
 function agregarIncidencias(found, incidencias) {
@@ -3763,10 +3948,14 @@ function agregar(clasificacion, extraction) {
     hic: {},
     comparativas: {},
     slas: {},
+    incidenciasOnsite: {},
+    peticionesMes: {},
     imacs: {}
   };
 
   agregarIncidencias(found, buckets.incidencias);
+  agregarIncidenciasOnsite(found, date, buckets.incidenciasOnsite);
+  agregarPeticionesMes(found, date, buckets.peticionesMes);
   agregarEncuestas(found, buckets.encuestas);
   agregarWorkOrders(found, buckets.workOrders);
   agregarPeticiones(found, date, buckets.peticiones, buckets.peticionesProducto);
@@ -3792,6 +3981,8 @@ function agregar(clasificacion, extraction) {
     hic: rows(buckets.hic),
     comparativas: rows(buckets.comparativas),
     slas: rows(buckets.slas),
+    incidenciasOnsite: rows(buckets.incidenciasOnsite),
+    peticionesMes: rows(buckets.peticionesMes),
     imacs: rows(buckets.imacs)
   };
 }
@@ -3944,6 +4135,26 @@ function registrarArchivosLeidos(clasificacion, informe) {
   } else {
     informe.archivos.push({
       name: 'Acumuladas (ausente)',
+      modified: null,
+      rows: 0
+    });
+  }
+
+  // The monthly request trio is optional and must not be filled from the
+  // weekly snapshot. One absence line when none of the three files is there.
+  var meses = ['backlogMes', 'liberadasMes', 'gestionadasMes'];
+  var algunMes = false;
+
+  for (var mesIndex = 0; mesIndex < meses.length; mesIndex += 1) {
+    if (found[meses[mesIndex]]) {
+      informe.archivos.push(sourceRecord(found[meses[mesIndex]], 0));
+      algunMes = true;
+    }
+  }
+
+  if (!algunMes) {
+    informe.archivos.push({
+      name: 'Peticiones de mes (ausente)',
       modified: null,
       rows: 0
     });
