@@ -7,7 +7,7 @@ import {
   edificioCode,
   expandEdificioCode,
 } from "../shared/modules/informatica/buildingCodes.ts";
-import { parseEdificioCatalogTsv } from "./informaticaEdificios.ts";
+import { mergeEdificioCatalog, parseEdificioCatalogTsv } from "./informaticaEdificios.ts";
 
 /**
  * The shipped catalogue against the building labels the report has seen.
@@ -55,6 +55,28 @@ describe("server/assets/informatica-edificios.tsv", () => {
 
   it("carries the catalogue the coded texts need", () => {
     expect(catalog.length).toBeGreaterThan(100);
+  });
+
+  it("does not load the column legend as a building, and keeps #N/A", () => {
+    const rows = parseEdificioCatalogTsv(readFileSync(CATALOG, "utf8"));
+    const names = rows.map(row => row.edificio);
+
+    expect(names.length).toBeGreaterThan(100);
+    expect(names.filter(name => name.startsWith("# "))).toEqual([]);
+    expect(names).toContain("#N/A");
+  });
+
+  it("drops a legend row an older seed already stored", () => {
+    const stored = parseEdificioCatalogTsv(readFileSync(CATALOG, "utf8"));
+    const legend = {
+      ...stored[0],
+      edificio: "# Celdas: edificio",
+      aliasSmartTech: "aliasSmartTech",
+    };
+    const merged = mergeEdificioCatalog([legend, ...stored], []);
+
+    expect(merged.some(row => row.edificio === legend.edificio)).toBe(false);
+    expect(merged).toHaveLength(stored.length);
   });
 
   it("was read against every section that codes a building", () => {

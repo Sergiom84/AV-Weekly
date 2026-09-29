@@ -114,6 +114,8 @@ describe("carga del texto plano con edificios codificados", () => {
     // it even though the text no longer does.
     expect(body.data.edificios).toHaveLength(1);
     expect(body.data.edificios[0].edificio).toBe("A. Maura");
+    // The cut declared in the text survives the round trip through the table.
+    expect(body.data.source.asOfDate).toBe("2026-09-15");
   });
 
   it("keeps the catalogue when a complete text replaces the dataset", async () => {

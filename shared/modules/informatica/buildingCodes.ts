@@ -44,12 +44,28 @@ export function isEdificioCode(value: string): boolean {
   return /^E\d+$/.test(value.trim());
 }
 
+/**
+ * True for a catalogue entry that is really a comment line of the seed asset.
+ *
+ * The asset documents its columns as `# Celdas: edificio<TAB>dt<TAB>…`, and
+ * that line carries tabs, so an older parser loaded it as a building and it
+ * showed up as a zero row on the SmartTech table. A comment is a `#` followed
+ * by blank or nothing; `#N/A` is a real label and stays.
+ */
+export function isEdificioCommentName(value: string): boolean {
+  return /^#(\s|$)/.test(String(value ?? "").trim());
+}
+
 export function catalogFromEdificios(
   edificios: InformaticaEdificioRow[] | undefined
 ): string[] {
   const names: string[] = [];
 
   for (const row of edificios ?? []) {
+    if (isEdificioCommentName(row.edificio)) {
+      continue;
+    }
+
     names.push(
       row.edificio,
       row.dt,

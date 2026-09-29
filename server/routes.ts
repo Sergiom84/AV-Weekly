@@ -747,6 +747,8 @@ async function readStoredInformaticaDataset(): Promise<InformaticaDataset | null
     return {
       ...dataset,
       source: {
+        // Spread first: asOfDate is the cut the deck and the monthly close read.
+        ...dataset.source,
         sourceFile: dataset.source?.sourceFile ?? ((result.rows[0].source_file as string) ?? null),
         uploadedAt: dataset.source?.uploadedAt ?? ((result.rows[0].uploaded_at as string) ?? null),
       },

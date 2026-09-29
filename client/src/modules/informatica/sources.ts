@@ -1,3 +1,4 @@
+import { isEdificioCommentName } from "@shared/modules/informatica/buildingCodes";
 import type {
   InformaticaComparativaRow,
   InformaticaEdificioRow,
@@ -197,7 +198,7 @@ export function buildingDirectory(
   for (const row of edificios) {
     const alias = aliasOf(row).trim();
 
-    if (alias === "" || !row.visible) {
+    if (alias === "" || !row.visible || isEdificioCommentName(row.edificio)) {
       continue;
     }
 
