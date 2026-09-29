@@ -22,6 +22,13 @@ import {
   weekNumber,
 } from "../aggregate";
 import { componentSeriesColor } from "@/lib/yearSeries";
+import ValueGrid from "@/components/deck/EditorValueGrid";
+import {
+  cellKey,
+  isOverridden,
+  overriddenValue,
+  withOverride,
+} from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
 
 interface TwoWeekCompareProps extends AgaPageProps {
@@ -85,26 +92,53 @@ export default function TwoWeekCompare({
     color: componentSeriesColor(index, selectedEntries.length),
   }));
 
+  const reading = (label: string, week: string, imported: number) =>
+    overriddenValue(page, cellKey(label, week), imported);
   const data = visibleLabels.map(label => {
     const row: Record<string, number | string> = { [categoryKey]: label };
 
-    breakdowns.forEach((breakdown, index) => {
-      row[`w${index}`] = countsByLabel(breakdown).get(label) ?? 0;
+    selectedEntries.forEach((entry, index) => {
+      const value = reading(
+        label,
+        entry.week,
+        countsByLabel(breakdowns[index] ?? []).get(label) ?? 0
+      );
+
+      if (value !== null) {
+        row[`w${index}`] = value;
+      }
     });
 
     return row;
   });
+  const gridRows = labels.map(label => ({
+    label,
+    cells: selectedEntries.map((entry, index) => {
+      const key = cellKey(label, entry.week);
+      const imported = countsByLabel(breakdowns[index] ?? []).get(label) ?? 0;
 
-  const sum = (counts: AgaCount[]) =>
-    counts.reduce((total, entry) => total + entry.count, 0);
+      return {
+        key,
+        value: overriddenValue(page, key, imported),
+        overridden: isOverridden(page, key),
+      };
+    }),
+  }));
+
+  const sum = (counts: AgaCount[], week: string) =>
+    counts.reduce((total, entry) => {
+      const value = reading(entry.label, week, entry.count);
+
+      return total + (value ?? 0);
+    }, 0);
 
   const previous = selectedEntries[selectedEntries.length - 2] ?? null;
   const current = selectedEntries[selectedEntries.length - 1] ?? null;
   const previousTotal = previous
-    ? sum(breakdowns[breakdowns.length - 2] ?? [])
+    ? sum(breakdowns[breakdowns.length - 2] ?? [], previous.week)
     : null;
   const currentTotal = current
-    ? sum(breakdowns[breakdowns.length - 1] ?? [])
+    ? sum(breakdowns[breakdowns.length - 1] ?? [], current.week)
     : null;
 
   const items = [
@@ -152,6 +186,14 @@ export default function TwoWeekCompare({
               scope={page.id}
               defaultHidden={[]}
               onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          )}
+
+          {editing && (
+            <ValueGrid
+              columns={series.map(entry => entry.label)}
+              rows={gridRows}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
             />
           )}
         </>

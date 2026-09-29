@@ -17,6 +17,13 @@ import {
   weekNumber,
   withoutSupport,
 } from "../aggregate";
+import ValueGrid from "@/components/deck/EditorValueGrid";
+import {
+  cellKey,
+  isOverridden,
+  overriddenValue,
+  withOverride,
+} from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
 
 interface EvolucionDepartamentoPageProps extends AgaPageProps {
@@ -70,6 +77,8 @@ export default function EvolucionDepartamentoPage({
     color: agaColor(index),
   }));
 
+  const reading = (label: string, week: string, imported: number) =>
+    overriddenValue(page, cellKey(label, week), imported);
   const data = selectedEntries.map((week, position) => {
     const counts = countsByLabel(breakdowns[position]);
     const entry: Record<string, number | string> = {
@@ -77,11 +86,28 @@ export default function EvolucionDepartamentoPage({
     };
 
     visibleLabels.forEach((label, index) => {
-      entry[`d${index}`] = counts.get(label) ?? 0;
+      const value = reading(label, week.week, counts.get(label) ?? 0);
+
+      if (value !== null) {
+        entry[`d${index}`] = value;
+      }
     });
 
     return entry;
   });
+  const gridRows = labels.map(label => ({
+    label,
+    cells: selectedEntries.map((week, position) => {
+      const key = cellKey(label, week.week);
+      const imported = countsByLabel(breakdowns[position]).get(label) ?? 0;
+
+      return {
+        key,
+        value: overriddenValue(page, key, imported),
+        overridden: isOverridden(page, key),
+      };
+    }),
+  }));
 
   return (
     <PageShell
@@ -105,6 +131,16 @@ export default function EvolucionDepartamentoPage({
               scope={page.id}
               defaultHidden={[]}
               onChange={hiddenRows => onChange({ hiddenRows })}
+            />
+          )}
+
+          {editing && (
+            <ValueGrid
+              columns={selectedEntries.map(week =>
+                weekLabel(week.week, week.reportWeek)
+              )}
+              rows={gridRows}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
             />
           )}
         </>

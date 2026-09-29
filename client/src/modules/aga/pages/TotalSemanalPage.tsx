@@ -17,6 +17,14 @@ import {
   weekNumber,
 } from "../aggregate";
 import { componentSeriesColor } from "@/lib/yearSeries";
+import ValueGrid from "@/components/deck/EditorValueGrid";
+import {
+  TOTAL_ROW,
+  cellKey,
+  isOverridden,
+  overriddenValue,
+  withOverride,
+} from "../overrides";
 import PageShell, { type AgaPageProps } from "./PageShell";
 
 interface TotalSemanalPageProps extends AgaPageProps {
@@ -52,15 +60,27 @@ export default function TotalSemanalPage({
     resolveWeekSelection(selection, availableWeeks)
   );
 
-  const data = weeks
-    .filter(week => {
-      const number = weekNumber(week.week, week.reportWeek);
-      return number !== null && selectedWeeks.has(number);
-    })
-    .map(week => ({
-      semana: weekLabel(week.week, week.reportWeek),
-      total: week.total,
-    }));
+  const entries = weeks.map(week => {
+    const key = cellKey(TOTAL_ROW, week.week);
+
+    return {
+      week: week.week,
+      reportWeek: week.reportWeek,
+      key,
+      value: overriddenValue(page, key, week.total),
+      overridden: isOverridden(page, key),
+    };
+  });
+  const charted = entries.filter(entry => {
+    const number = weekNumber(entry.week, entry.reportWeek);
+    return number !== null && selectedWeeks.has(number) && entry.value !== null;
+  });
+  const data = charted.map(entry => ({
+    semana: weekLabel(entry.week, entry.reportWeek),
+    total: entry.value ?? 0,
+  }));
+  const correctedTotal = (week: string | undefined) =>
+    entries.find(entry => entry.week === week)?.value ?? null;
 
   // Compared week in the 2025 cyan, current one in the 2026 navy, the pairing
   // the compared slides of the deck already use.
@@ -69,7 +89,7 @@ export default function TotalSemanalPage({
       ? [
           {
             label: weekHeadline(previous.week, previous.reportWeek),
-            value: previous.total.toLocaleString("es-ES"),
+            value: (correctedTotal(previous.week) ?? 0).toLocaleString("es-ES"),
             accent: componentSeriesColor(0, 2),
           },
         ]
@@ -78,14 +98,17 @@ export default function TotalSemanalPage({
       ? [
           {
             label: weekHeadline(current.week, current.reportWeek),
-            value: current.total.toLocaleString("es-ES"),
+            value: (correctedTotal(current.week) ?? 0).toLocaleString("es-ES"),
             accent: componentSeriesColor(1, 2),
           },
         ]
       : []),
     {
       label: "Variación",
-      value: variationLabel(previous?.total ?? null, current?.total ?? null),
+      value: variationLabel(
+        previous ? correctedTotal(previous.week) : null,
+        current ? correctedTotal(current.week) : null
+      ),
     },
   ];
 
@@ -101,6 +124,26 @@ export default function TotalSemanalPage({
               selection={selection}
               available={availableWeeks}
               onChange={weekSelection => onChange({ weekSelection })}
+            />
+          )}
+
+          {editing && (
+            <ValueGrid
+              columns={entries.map(entry =>
+                weekLabel(entry.week, entry.reportWeek)
+              )}
+              rows={[
+                {
+                  label: "Posiciones",
+                  color: componentSeriesColor(0, 1),
+                  cells: entries.map(entry => ({
+                    key: entry.key,
+                    value: entry.value,
+                    overridden: entry.overridden,
+                  })),
+                },
+              ]}
+              onChange={(key, value) => onChange(withOverride(page, key, value))}
             />
           )}
         </>
