@@ -98,11 +98,9 @@ export function agaWeekHeadline(
 /**
  * Human-readable period for the cover, derived from the latest dataset week.
  *
- * The span runs from the Monday that opens the reported week to the Monday the
- * files are pulled, not to the Sunday that closes it: the deck is read as
- * "what happened up to the cut", and a cover that stopped on the 6th read as
- * if the figures did too. The week number stays the completed AGA week, so
- * "Semana 36" and "31 agosto-7 septiembre" name the same report.
+ * Same Monday-to-Sunday span as the other reports. GPS extracts on the
+ * following Monday; that Monday names the snapshot but is not part of the
+ * completed week shown on the cover.
  */
 export function agaPeriodLabel(
   extractionDate: string,
@@ -114,6 +112,6 @@ export function agaPeriodLabel(
 
   return weekCoverLabel(period.week, period.year, {
     start: period.start,
-    end: dateOnly(extractionDate) ? extractionDate : period.end,
+    end: period.end,
   });
 }

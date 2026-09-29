@@ -62,18 +62,19 @@ describe("calendario AGA", () => {
     });
     expect(agaWeekLabel("2026-08-17")).toBe("S33");
     expect(agaPeriodLabel("2026-08-17")).toBe(
-      "Semana 33 de 2026 · 10-17 agosto"
+      "Semana 33 de 2026 · 10-16 agosto"
     );
   });
 
-  it("cierra el periodo de la portada en el lunes del corte", () => {
-    // La portada decía "31 agosto-6 septiembre" y se leía como si las cifras
-    // llegaran hasta el domingo: la foto de posiciones en gestión es del 7.
+  it("cierra el periodo de la portada en el domingo de la semana reportada", () => {
     expect(agaPeriodLabel("2026-09-07")).toBe(
-      "Semana 36 de 2026 · 31 agosto-7 septiembre"
+      "Semana 36 de 2026 · 31 agosto-6 septiembre"
     );
     expect(agaPeriodLabel("2026-09-14")).toBe(
-      "Semana 37 de 2026 · 7-14 septiembre"
+      "Semana 37 de 2026 · 7-13 septiembre"
+    );
+    expect(agaPeriodLabel("2026-09-28")).toBe(
+      "Semana 39 de 2026 · 21-27 septiembre"
     );
     expect(agaPeriodLabel("fecha-antigua")).toBe("");
   });
