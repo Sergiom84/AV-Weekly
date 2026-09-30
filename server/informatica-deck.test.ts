@@ -132,4 +132,26 @@ describe("mergeInformaticaDeckTemplate", () => {
     );
     expect(merged.pages.find(page => page.id === "index")?.text.item5).toBeUndefined();
   });
+
+  it("drops the retired monthly close and keeps its casuística for the speech", () => {
+    const stored = createDefaultInformaticaDeck();
+    stored.pages.push({
+      id: "informe-mensual",
+      // The kind no longer exists: a deck saved before the removal still has it.
+      kind: "itInformeMensual" as InformaticaDeckPage["kind"],
+      supportType: null,
+      text: { title: "Informe mensual", narracion: "Mes con la migración de Tablas." },
+      visible: true,
+      weekSelection: null,
+      years: null,
+      overrides: {},
+    });
+
+    const merged = mergeInformaticaDeckTemplate(stored);
+
+    expect(merged.pages.some(page => page.id === "informe-mensual")).toBe(false);
+    expect(merged.pages.find(page => page.id === "incidencias-onsite")?.text.narracion).toBe(
+      "Mes con la migración de Tablas."
+    );
+  });
 });

@@ -147,10 +147,16 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
     sections: ["renove"],
   },
   {
-    id: "informe-mensual",
-    kind: "itInformeMensual",
-    title: "Informe mensual",
-    sections: ["hic"],
+    id: "incidencias-onsite",
+    kind: "itIncidenciasOnsite",
+    title: "Incidencias On Site",
+    sections: ["incidenciasOnsite"],
+  },
+  {
+    id: "smarttech-mes",
+    kind: "itSmartTechMes",
+    title: "SmartTech mensual",
+    sections: ["citas"],
   },
 ];
 
@@ -245,6 +251,26 @@ export function createDefaultInformaticaDeck(): InformaticaDeckState {
   return { pages, updatedAt: null };
 }
 
+/** Page whose `narracion` holds the casuística of the monthly speech. */
+export const MONTHLY_NOTES_PAGE = "incidencias-onsite";
+
+/** The retired one-slide monthly close; its casuística moves to the page above. */
+const RETIRED_MONTHLY_PAGE = "informe-mensual";
+
+function carryMonthlyNotes(pages: InformaticaDeckPage[]): InformaticaDeckPage[] {
+  const narracion = pages.find(page => page.id === RETIRED_MONTHLY_PAGE)?.text.narracion;
+
+  if (!narracion) {
+    return pages;
+  }
+
+  return pages.map(page =>
+    page.id === MONTHLY_NOTES_PAGE && !page.text.narracion
+      ? { ...page, text: { ...page.text, narracion } }
+      : page
+  );
+}
+
 const OLD_WO_TITLE = "2.1.1 Volumetría de Incidencias";
 const NEW_WO_TITLE = "2.1.1 Volumetría de Incidencias y Work Orders";
 
@@ -286,6 +312,8 @@ export function mergeInformaticaDeckTemplate(
 
   return {
     ...merged,
-    pages: merged.pages.filter(page => page.id !== "wasp"),
+    pages: carryMonthlyNotes(merged.pages).filter(
+      page => page.id !== "wasp" && page.id !== RETIRED_MONTHLY_PAGE
+    ),
   };
 }

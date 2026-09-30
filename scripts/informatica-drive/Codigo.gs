@@ -2812,6 +2812,8 @@ function agregarPeticionesMes(found, extraction, peticionesMes) {
  * any month, the stock of this extract, written on the extraction month.
  * Resolved means Resuelto or Cerrado: a ticket turns Cerrado a few days after
  * it is resolved, so on 2026-09-28 August holds 413 Cerrado and 0 Resuelto.
+ * Resuelto is that same filter narrowed to the Resuelto state alone, the rule
+ * of the on-site slide of the extraction month.
  * Incident numbers and descriptions stay in the sheet.
  */
 function listadoOnsite(found) {
@@ -2866,6 +2868,8 @@ function agregarIncidenciasOnsite(found, extraction, incidenciasOnsite) {
       bump(incidenciasOnsite, [mes, 'Abiertas'], 1);
 
       if (esIncidenciaResuelta(estado)) bump(incidenciasOnsite, [mes, 'Resueltas'], 1);
+      // The on-site slide counts only the rows still in Resuelto.
+      if (normalize(estado) === 'RESUELTO') bump(incidenciasOnsite, [mes, 'Resuelto'], 1);
     }
 
     if (normalize(estado) === 'PENDIENTE') pending += 1;

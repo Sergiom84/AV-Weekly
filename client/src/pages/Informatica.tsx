@@ -9,6 +9,7 @@ import {
 import { getDeckModule } from "@shared/deck/registry";
 import {
   INFORMATICA_PAGE_SECTIONS,
+  MONTHLY_NOTES_PAGE,
   INFORMATICA_SERVICE,
   createDefaultInformaticaDeck,
   hasSectionData,
@@ -34,7 +35,7 @@ import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInformaticaDeck } from "@/modules/informatica/useInformaticaDeck";
 import { coverPeriodLabel } from "@/modules/informatica/aggregate";
-import { informeMensualView } from "@/modules/informatica/informeMensual";
+import { mensualSlides } from "@/modules/informatica/informeMensual";
 import CitasAnualPage from "@/modules/informatica/pages/CitasAnualPage";
 import CitasMensualPage from "@/modules/informatica/pages/CitasMensualPage";
 import CitasSemanalPage from "@/modules/informatica/pages/CitasSemanalPage";
@@ -49,7 +50,8 @@ import TopTenIncidenciasPage from "@/modules/informatica/pages/TopTenIncidencias
 import PeticionesAnualPage from "@/modules/informatica/pages/PeticionesAnualPage";
 import PeticionesPage from "@/modules/informatica/pages/PeticionesPage";
 import RenoveAcumuladoPage from "@/modules/informatica/pages/RenoveAcumuladoPage";
-import InformeMensualPage from "@/modules/informatica/pages/InformeMensualPage";
+import IncidenciasOnsitePage from "@/modules/informatica/pages/IncidenciasOnsitePage";
+import SmartTechMesPage from "@/modules/informatica/pages/SmartTechMesPage";
 import RenoveSemanalPage from "@/modules/informatica/pages/RenoveSemanalPage";
 import WorkOrdersAnualPage from "@/modules/informatica/pages/WorkOrdersAnualPage";
 import WorkOrdersPage from "@/modules/informatica/pages/WorkOrdersPage";
@@ -94,7 +96,8 @@ const DATA_PAGES: Record<
   "citas-anual": CitasAnualPage,
   "imacs-tablas": ImacsTablePage,
   "imacs-grafico": ImacsChartPage,
-  "informe-mensual": InformeMensualPage,
+  "incidencias-onsite": IncidenciasOnsitePage,
+  "smarttech-mes": SmartTechMesPage,
   renove: RenoveSemanalPage,
   "renove-acumulado": RenoveAcumuladoPage,
 };
@@ -136,15 +139,14 @@ export default function Informatica() {
   const [speechOpen, setSpeechOpen] = useState(false);
   const [speechCopied, setSpeechCopied] = useState(false);
   const speechRef = useRef<HTMLTextAreaElement>(null);
-  const mensualPage = deck?.pages.find((page) => page.id === "informe-mensual");
+  // The editor's casuística is kept on the first monthly slide.
+  const mensualPage = deck?.pages.find((page) => page.id === MONTHLY_NOTES_PAGE);
   const speech = useMemo(() => {
     if (!speechOpen || !dataset) {
       return "";
     }
 
-    const { informe } = informeMensualView(dataset, mensualPage);
-
-    return informeMensualSpeech(informe, mensualPage?.text.narracion ?? "");
+    return informeMensualSpeech(mensualSlides(dataset), mensualPage?.text.narracion ?? "");
   }, [speechOpen, dataset, mensualPage]);
 
   const copySpeech = useCallback(async () => {
@@ -173,7 +175,7 @@ export default function Informatica() {
   const exportActions = useMemo<SidebarExportAction[]>(
     () => [
       {
-        id: "informe-mensual-speech",
+        id: "speech-mensual",
         label: "Speech mensual",
         icon: <FileText className="h-4 w-4" />,
         onClick: () => {

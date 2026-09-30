@@ -459,7 +459,8 @@ export type InformaticaPageKind =
   | "itHic"
   | "itComparativas"
   | "itSlas"
-  | "itInformeMensual";
+  | "itIncidenciasOnsite"
+  | "itSmartTechMes";
 
 /** Series a page can report on. Informatica pages are not typed by series. */
 export type InformaticaSeries = string;

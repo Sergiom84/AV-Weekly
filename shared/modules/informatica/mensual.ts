@@ -70,36 +70,17 @@ export interface MensualCita {
 export interface MensualTop {
   categoria: string;
   total: number;
-  anterior: number | null;
 }
 
 export interface MensualSla {
   id: string;
   label: string;
   share: number | null;
-  anterior: number | null;
-}
-
-/** A site well above its own recent months, for the spoken close. */
-export interface MensualDestacado {
-  bloque: "workOrders" | "smartTech";
-  site: string;
-  total: number;
-  media: number;
 }
 
 export interface InformeMensual {
   month: string | null;
-  previousMonth: string | null;
-  incidencias: {
-    resueltas: number | null;
-    abiertas: number | null;
-    backlog: number | null;
-  };
-  encuestas: { numero: number | null; promedio: number | null };
   workOrders: MensualSite[];
-  workOrdersTotal: number;
-  peticionesDisponibles: boolean;
   peticiones: {
     origen: string;
     backlog: number | null;
@@ -108,15 +89,8 @@ export interface InformeMensual {
   }[];
   imacs: { solicitudes: number; trabajos: number };
   smartTech: MensualCita[];
-  smartTechConCita: number;
-  smartTechSinCita: number;
   topTen: MensualTop[];
   slas: MensualSla[];
-  renove: { espana: number; holding: number };
-  wasp: number | null;
-  /** Opened incidents of the six months before, averaged; null without history. */
-  incidenciasMedia: number | null;
-  destacados: MensualDestacado[];
 }
 
 export interface MensualLabels {
@@ -296,33 +270,6 @@ export function buildInformeMensual(
   month: string | null,
   labels: MensualLabels
 ): InformeMensual {
-  const previous = month ? previousMonth(month) : null;
-  const onsite = dataset.incidenciasOnsite ?? [];
-  const hasOnsite = month !== null && onsite.some((row) => row.mes === month);
-  // Backlog is the Pendiente stock of the extract, whatever month it opened
-  // in, so it lives on the extraction month. The close of August read from a
-  // September extract takes that stock; an older month's close never does.
-  const backlogRow =
-    month === null
-      ? undefined
-      : onsite
-          .filter((row) => fold(row.metrica) === "BACKLOG" && row.mes >= month)
-          .sort((left, right) => left.mes.localeCompare(right.mes))[0];
-
-  const surveys = (dataset.encuestas ?? []).filter((row) => row.mes === month);
-  let surveyCount = 0;
-  let surveyWeight = 0;
-
-  for (const row of surveys) {
-    const score = Number(String(row.valoracion).replace(",", "."));
-
-    surveyCount += row.respuestas;
-
-    if (Number.isFinite(score)) {
-      surveyWeight += score * row.respuestas;
-    }
-  }
-
   const workMap = new Map<string, { raw: string; total: number }>();
 
   for (const row of dataset.workOrders ?? []) {
@@ -381,7 +328,6 @@ export function buildInformeMensual(
   );
 
   const peticionRows = (dataset.peticionesMes ?? []).filter((row) => row.mes === month);
-  const peticionesDisponibles = peticionRows.length > 0;
 
   // A state with no row at all is a file that was not uploaded, not a zero.
   const cell = (origen: string, estado: string): number | null => {
@@ -414,7 +360,6 @@ export function buildInformeMensual(
   };
 
   const currentTop = topOf(month);
-  const previousTop = topOf(previous);
 
   const slaOf = (target: string | null) => {
     const totals = new Map<string, { cumplido: number; incumplido: number }>();
@@ -440,7 +385,6 @@ export function buildInformeMensual(
   };
 
   const currentSla = slaOf(month);
-  const previousSla = slaOf(previous);
   // A level with no ticket in a month that has results had nothing to
   // breach: the service publishes it as 100 %, as it did for P1 in August.
   const slaShare = (
@@ -455,32 +399,6 @@ export function buildInformeMensual(
 
     return found ? (shareOf(found.cumplido, found.incumplido) ?? 1) : 1;
   };
-
-  let espana = 0;
-  let holding = 0;
-  let wasp = 0;
-  let waspRows = 0;
-
-  for (const row of dataset.renove ?? []) {
-    if (row.mes !== month || fold(row.estado) !== "RENOVADO") {
-      continue;
-    }
-
-    if (fold(row.ambito) === "ESPANA") {
-      espana += row.equipos;
-    } else if (fold(row.ambito) === "HOLDING") {
-      holding += row.equipos;
-    }
-  }
-
-  for (const row of dataset.wasp ?? []) {
-    if (row.mes !== month) {
-      continue;
-    }
-
-    wasp += row.equipos;
-    waspRows += 1;
-  }
 
   let solicitudes = 0;
   let trabajos = 0;
@@ -501,20 +419,7 @@ export function buildInformeMensual(
 
   return {
     month,
-    previousMonth: previous,
-    incidencias: {
-      resueltas: hasOnsite ? metricOf(onsite, month!, "Resueltas") ?? 0 : null,
-      abiertas: hasOnsite ? metricOf(onsite, month!, "Abiertas") ?? 0 : null,
-      backlog: backlogRow ? backlogRow.total : null,
-    },
-    encuestas: {
-      numero: month === null || surveys.length === 0 ? null : surveyCount,
-      promedio:
-        surveyCount > 0 ? Math.round((surveyWeight / surveyCount) * 100) / 100 : null,
-    },
     workOrders: workSites.map((row) => ({ site: row.site, total: row.total })),
-    workOrdersTotal: workSites.reduce((sum, row) => sum + row.total, 0),
-    peticionesDisponibles,
     peticiones: PETICIONES_ORIGENES.map((origen) => ({
       origen,
       backlog: cell(origen, "Backlog"),
@@ -527,128 +432,16 @@ export function buildInformeMensual(
       conCita: row.conCita,
       sinCita: row.sinCita,
     })),
-    smartTechConCita: smartSites.reduce((sum, row) => sum + row.conCita, 0),
-    smartTechSinCita: smartSites.reduce((sum, row) => sum + row.sinCita, 0),
     topTen: TOP_TEN_MENSUAL.map((categoria) => ({
       categoria,
       total: currentTop.get(categoria) ?? 0,
-      anterior: previous === null ? null : previousTop.get(categoria) ?? 0,
     })),
     slas: SLA_SLOTS.map((slot) => ({
       id: slot.id,
       label: slot.label,
       share: slaShare(currentSla, slot.id),
-      // Only a measured level is compared: a filled 100 % would read as a drop.
-      anterior: previousSla.has(slot.id)
-        ? shareOf(previousSla.get(slot.id)!.cumplido, previousSla.get(slot.id)!.incumplido)
-        : null,
     })),
-    renove: { espana, holding },
-    wasp: waspRows > 0 ? wasp : null,
-    incidenciasMedia: month === null ? null : incidentAverage(onsite, month),
-    destacados:
-      month === null
-        ? []
-        : [
-            ...standouts(
-              "workOrders",
-              month,
-              (dataset.workOrders ?? []).map((row) => ({
-                mes: row.mes,
-                site: labels.workOrder(row.edificio),
-                total: row.ordenes,
-              }))
-            ),
-            ...standouts(
-              "smartTech",
-              month,
-              (dataset.citas ?? []).map((row) => ({
-                mes: row.mes,
-                site: labels.smartTech(row.edificio),
-                total: row.citas,
-              }))
-            ),
-          ],
   };
-}
-
-/** Months compared against: the six before the reported one. */
-const HISTORY_MONTHS = 6;
-
-function monthsBefore(month: string, count: number): string[] {
-  const months: string[] = [];
-  let cursor = month;
-
-  for (let index = 0; index < count; index += 1) {
-    cursor = previousMonth(cursor);
-    months.push(cursor);
-  }
-
-  return months;
-}
-
-function incidentAverage(
-  rows: { mes: string; metrica: string; total: number }[],
-  month: string
-): number | null {
-  const values = monthsBefore(month, HISTORY_MONTHS)
-    .map((target) => metricOf(rows, target, "Abiertas"))
-    .filter((value): value is number => value !== null);
-
-  if (values.length === 0) {
-    return null;
-  }
-
-  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
-}
-
-/**
- * Sites of the month at least a fifth above their own average of the six
- * months before, and by at least ten, largest excess first, two at most.
- * Only months the site had activity in count toward its average.
- */
-function standouts(
-  bloque: MensualDestacado["bloque"],
-  month: string,
-  rows: { mes: string; site: string; total: number }[]
-): MensualDestacado[] {
-  const history = new Set(monthsBefore(month, HISTORY_MONTHS));
-  const current = new Map<string, number>();
-  const past = new Map<string, Map<string, number>>();
-
-  for (const row of rows) {
-    if (row.site === "") {
-      continue;
-    }
-
-    if (row.mes === month) {
-      current.set(row.site, (current.get(row.site) ?? 0) + row.total);
-    } else if (history.has(row.mes)) {
-      const byMonth = past.get(row.site) ?? new Map<string, number>();
-      byMonth.set(row.mes, (byMonth.get(row.mes) ?? 0) + row.total);
-      past.set(row.site, byMonth);
-    }
-  }
-
-  const found: MensualDestacado[] = [];
-
-  for (const [site, total] of Array.from(current.entries())) {
-    const months = Array.from(past.get(site)?.values() ?? []);
-
-    if (months.length === 0) {
-      continue;
-    }
-
-    const media = Math.round(months.reduce((sum, value) => sum + value, 0) / months.length);
-
-    if (total >= media * 1.2 && total - media >= 10) {
-      found.push({ bloque, site, total, media });
-    }
-  }
-
-  return found
-    .sort((left, right) => right.total - right.media - (left.total - left.media))
-    .slice(0, 2);
 }
 
 function fmt(value: number | null): string {
@@ -678,57 +471,66 @@ function joinList(items: string[]): string {
 /** Share at or above which a level counts as met in the spoken close. */
 const SLA_TARGET = 0.95;
 
-/** Levels the close comments on: the ones that move month to month. */
-const SLA_SPOKEN = ["reaccion.p3", "resolucion.p3", "reaccion.p4", "resolucion.p4"];
-
+/** Judged on the published whole percent, so 94.8 % printed as 95 % is met. */
 function slaSentence(slas: MensualSla[]): string | null {
-  const spoken = SLA_SPOKEN.map((id) => slas.find((row) => row.id === id)).filter(
-    (row): row is MensualSla => row !== undefined && row.share !== null
-  );
+  const measured = slas.filter((row) => row.share !== null);
 
-  if (spoken.length === 0) {
+  if (measured.length === 0) {
     return null;
   }
 
-  const moved = (row: MensualSla) =>
-    row.anterior !== null && Math.round(row.anterior * 100) !== Math.round(row.share! * 100);
-  const down = spoken.filter((row) => moved(row) && row.share! < row.anterior!);
-  const up = spoken.filter((row) => moved(row) && row.share! > row.anterior!);
-  const clauses: string[] = [];
-
-  if (down.length > 0) {
-    clauses.push(`bajando ${joinList(down.map((row) => `${row.label} al ${pct(row.share!)}`))}`);
-  }
-
-  if (up.length > 0) {
-    clauses.push(`mejorando ${joinList(up.map((row) => `${row.label} al ${pct(row.share!)}`))}`);
-  }
-
-  // Judged on the published whole percent, so 94.8 % printed as 95 % is met.
-  const missed = slas.filter(
-    (row) => row.share !== null && Math.round(row.share * 100) < Math.round(SLA_TARGET * 100)
+  const missed = measured.filter(
+    (row) => Math.round(row.share! * 100) < Math.round(SLA_TARGET * 100)
   );
-  const detail = clauses.length > 0 ? ` ${clauses.join(" y ")}` : "";
 
   if (missed.length === 0) {
-    return `Se han cumplido los SLA's${detail}.`;
+    return "Se han cumplido los SLA's.";
   }
 
   return `En SLA's, quedan por debajo del ${pct(SLA_TARGET)} ${joinList(
     missed.map((row) => `${row.label} (${pct(row.share!)})`)
-  )}${clauses.length > 0 ? `,${detail}` : ""}.`;
+  )}.`;
+}
+
+/** The two monthly slides, as they are drawn and as the speech reads them. */
+export interface MensualSlides {
+  month: string | null;
+  incidencias: MesCerrado["incidencias"];
+  encuestas: MesCerrado["encuestas"];
+  peticiones: InformeMensual["peticiones"];
+  /** Null when the IMAC file has no row in the month. */
+  imacs: InformeMensual["imacs"] | null;
+  /** By SmartTech site, alphabetical, the unmapped Sede bucket last. */
+  workOrders: MensualSite[];
+  smartTech: MensualCita[];
+  /** Largest first; null when the HIC pivot has no column for the month. */
+  topTen: MensualTop[] | null;
+  slas: MensualSla[];
+}
+
+/** The largest entries, `name (value)`, two at most. */
+function leaders<T>(rows: T[], value: (row: T) => number, name: (row: T) => string): string[] {
+  return [...rows]
+    .filter((row) => value(row) > 0)
+    .sort((left, right) => value(right) - value(left))
+    .slice(0, 2)
+    .map((row) => `${name(row)} (${fmt(value(row))})`);
 }
 
 /**
- * Spoken close of the month, in the order of the service's own mail.
+ * Spoken close of the month, read from the two monthly slides in their order:
+ * Incidencias On Site, Encuestas, Peticiones, IMACS and Workorders, then
+ * SmartTech, the top ten and the SLAs.
  *
- * The numbers come from the extract. The casuística that is not in the files
- * (a migration, a bad software push, WASP) is the optional `narracion` the
- * editor writes; it is copied in as typed and never invented here.
+ * The casuística that is not in the files (a migration, a bad software push)
+ * is the optional `narracion` the editor writes; it is copied in as typed and
+ * never invented here.
  */
-export function informeMensualSpeech(informe: InformeMensual, narracion: string): string {
+export function informeMensualSpeech(slides: MensualSlides, narracion: string): string {
   const parts: string[] = [];
-  const name = informe.month ? capitalise(MONTH_NAMES[Number(informe.month.slice(5, 7)) - 1] ?? "") : "";
+  const name = slides.month
+    ? capitalise(MONTH_NAMES[Number(slides.month.slice(5, 7)) - 1] ?? "")
+    : "";
 
   parts.push(`Buenas tardes, os comparto el informe mensual${name ? ` de ${name}` : ""}.`);
 
@@ -738,99 +540,102 @@ export function informeMensualSpeech(informe: InformeMensual, narracion: string)
     parts.push(note);
   }
 
-  const { incidencias } = informe;
+  const { incidencias, encuestas } = slides;
+  const service: string[] = [];
 
-  if (incidencias.abiertas !== null && incidencias.resueltas !== null) {
-    let sentence = `En incidencias se han abierto ${fmt(incidencias.abiertas)} y resuelto ${fmt(incidencias.resueltas)}`;
+  if (incidencias.abiertas !== null) {
+    let sentence = `En incidencias On Site se han abierto ${fmt(incidencias.abiertas)}`;
+
+    if (incidencias.resueltas !== null) {
+      sentence += ` y resuelto ${fmt(incidencias.resueltas)}`;
+    }
 
     if (incidencias.backlog !== null) {
       sentence += `, con un backlog de ${fmt(incidencias.backlog)}`;
     }
 
-    if (informe.incidenciasMedia !== null && informe.incidenciasMedia > 0) {
-      const ratio = incidencias.abiertas / informe.incidenciasMedia;
-      const trend =
-        ratio >= 1.1 ? "por encima de" : ratio <= 0.9 ? "por debajo de" : "en línea con";
-      sentence += `; ${trend} la media de los seis meses anteriores (${fmt(informe.incidenciasMedia)})`;
-    }
-
-    parts.push(`${sentence}.`);
+    service.push(`${sentence}.`);
   }
 
-  const volume: string[] = [];
-
-  if (informe.encuestas.numero !== null && informe.encuestas.promedio !== null) {
-    volume.push(
-      `Las encuestas del mes son ${fmt(informe.encuestas.numero)}, con un promedio de ${informe.encuestas.promedio.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+  if (encuestas.numero !== null && encuestas.promedio !== null) {
+    service.push(
+      `Las encuestas del mes son ${fmt(encuestas.numero)}, con un promedio de ${encuestas.promedio.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
     );
   }
 
-  const citas = informe.smartTechConCita + informe.smartTechSinCita;
-
-  if (informe.workOrdersTotal > 0) {
-    volume.push(`Los work orders suman ${fmt(informe.workOrdersTotal)}.`);
+  if (service.length > 0) {
+    parts.push(service.join(" "));
   }
 
-  if (citas > 0) {
-    volume.push(
-      `Smart Tech suma ${fmt(citas)} citas, ${fmt(informe.smartTechConCita)} con cita y ${fmt(informe.smartTechSinCita)} sin cita.`
-    );
-  }
+  const requests: string[] = [];
+  const peticionTotal = (key: "backlog" | "liberadas" | "gestionadas") => {
+    const cells = slides.peticiones.map((row) => row[key]);
 
-  if (volume.length > 0) {
-    parts.push(volume.join(" "));
-  }
-
-  const standout = (bloque: MensualDestacado["bloque"], lead: string) => {
-    const rows = informe.destacados.filter((row) => row.bloque === bloque);
-
-    if (rows.length === 0) {
-      return;
-    }
-
-    parts.push(
-      `${lead} ${joinList(
-        rows.map((row) => `${row.site} con ${fmt(row.total)} (media ${fmt(row.media)})`)
-      )}, por encima de su media de los seis meses anteriores.`
-    );
+    return cells.every((cell) => cell === null)
+      ? null
+      : cells.reduce<number>((sum, cell) => sum + (cell ?? 0), 0);
   };
+  const peticionBits = (
+    [
+      ["backlog", (value: number) => `un backlog de ${fmt(value)}`],
+      ["liberadas", (value: number) => `${fmt(value)} liberadas`],
+      ["gestionadas", (value: number) => `${fmt(value)} gestionadas`],
+    ] as const
+  ).flatMap(([key, say]) => {
+    const value = peticionTotal(key);
 
-  standout("smartTech", "En Smart Tech destaca");
-  standout("workOrders", "En work orders destaca");
+    return value === null ? [] : [say(value)];
+  });
 
-  const rises = informe.topTen
-    .filter((row) => row.anterior !== null && row.total > row.anterior)
-    .sort((left, right) => right.total - (right.anterior ?? 0) - (left.total - (left.anterior ?? 0)))
-    .slice(0, 2);
+  if (peticionBits.length > 0) {
+    requests.push(`En peticiones hay ${joinList(peticionBits)}.`);
+  }
 
-  if (rises.length > 0) {
-    const bits = rises.map(
-      (row) => `${row.categoria} pasa de ${fmt(row.anterior)} a ${fmt(row.total)}`
+  if (slides.imacs !== null) {
+    requests.push(
+      `En IMACS se han gestionado ${fmt(slides.imacs.solicitudes)} solicitudes con ${fmt(slides.imacs.trabajos)} trabajos.`
     );
-    parts.push(`En el top de incidencias, ${joinList(bits)}.`);
-  } else {
-    const leader = [...informe.topTen].sort((left, right) => right.total - left.total)[0];
+  }
 
-    if (leader && leader.total > 0) {
-      parts.push(
-        `En el top de incidencias, ${leader.categoria} concentra ${fmt(leader.total)}.`
-      );
+  const workTotal = slides.workOrders.reduce((sum, row) => sum + row.total, 0);
+
+  if (workTotal > 0) {
+    const top = leaders(slides.workOrders, (row) => row.total, (row) => row.site);
+    requests.push(
+      `Los work orders suman ${fmt(workTotal)}${top.length > 0 ? `, con más volumen en ${joinList(top)}` : ""}.`
+    );
+  }
+
+  if (requests.length > 0) {
+    parts.push(requests.join(" "));
+  }
+
+  const conCita = slides.smartTech.reduce((sum, row) => sum + row.conCita, 0);
+  const sinCita = slides.smartTech.reduce((sum, row) => sum + row.sinCita, 0);
+
+  if (conCita + sinCita > 0) {
+    const top = leaders(
+      slides.smartTech,
+      (row) => row.conCita + row.sinCita,
+      (row) => row.site
+    );
+    parts.push(
+      `Smart Tech suma ${fmt(conCita + sinCita)} citas, ${fmt(conCita)} con cita y ${fmt(sinCita)} sin cita${top.length > 0 ? `, con más volumen en ${joinList(top)}` : ""}.`
+    );
+  }
+
+  if (slides.topTen !== null) {
+    const top = slides.topTen
+      .filter((row) => row.total > 0)
+      .slice(0, 3)
+      .map((row) => `${row.categoria} (${fmt(row.total)})`);
+
+    if (top.length > 0) {
+      parts.push(`El top de incidencias lo encabezan ${joinList(top)}.`);
     }
   }
 
-  const renovados = informe.renove.espana + informe.renove.holding;
-
-  if (renovados > 0) {
-    parts.push(
-      `Se han renovado ${fmt(renovados)} equipos, ${fmt(informe.renove.espana)} de España y ${fmt(informe.renove.holding)} de Holding.`
-    );
-  }
-
-  if (informe.wasp !== null && informe.wasp > 0) {
-    parts.push(`En WASP se han instalado ${fmt(informe.wasp)} equipos en el mes.`);
-  }
-
-  const sla = slaSentence(informe.slas);
+  const sla = slaSentence(slides.slas);
 
   if (sla) {
     parts.push(sla);
@@ -839,4 +644,86 @@ export function informeMensualSpeech(informe: InformeMensual, narracion: string)
   parts.push("Un saludo.");
 
   return parts.join("\n\n");
+}
+
+export interface MesCerrado {
+  month: string | null;
+  incidencias: {
+    /** Rows opened in the month and still in Resuelto. Null before the script emits it. */
+    resueltas: number | null;
+    /** Rows opened in the month, any state. */
+    abiertas: number | null;
+    /**
+     * Pendiente rows of any month, the stock of the extract. It is filed on the
+     * extraction month, so the closed month takes the first stock after it.
+     */
+    backlog: number | null;
+  };
+  encuestas: {
+    /** Every survey of the month (tab 1-1, column Fecha). */
+    numero: number | null;
+    /** Mean score weighted by responses, as the weekly survey slide reads it. */
+    promedio: number | null;
+  };
+}
+
+function backlogFrom(
+  rows: { mes: string; metrica: string; total: number }[],
+  month: string
+): number | null {
+  const stock = rows
+    .filter((row) => fold(row.metrica) === "BACKLOG" && row.mes >= month)
+    .sort((left, right) => left.mes.localeCompare(right.mes))[0];
+
+  return stock ? stock.total : null;
+}
+
+/**
+ * Tabs 7-7 and 1-1 for the month the monthly slides report: the month before
+ * the extraction, since they are built from the extract of the 1st, or the
+ * latest month of either section when the extract carries no date.
+ */
+export function mesCerrado(dataset: InformaticaDataset): MesCerrado {
+  const onsite = dataset.incidenciasOnsite ?? [];
+  const surveys = dataset.encuestas ?? [];
+  const latest = [...onsite, ...surveys].reduce<string | null>(
+    (last, row) => (last === null || row.mes > last ? row.mes : last),
+    null
+  );
+  const month = closedMonth(dataset.source?.asOfDate) ?? latest;
+  const hasOnsite = month !== null && onsite.some((row) => row.mes === month);
+  let numero = 0;
+  let weight = 0;
+
+  for (const row of surveys) {
+    if (row.mes !== month) {
+      continue;
+    }
+
+    const score = Number(String(row.valoracion).replace(",", "."));
+
+    numero += row.respuestas;
+
+    if (Number.isFinite(score)) {
+      weight += score * row.respuestas;
+    }
+  }
+
+  return {
+    month,
+    incidencias: {
+      // Null only while the extract predates the Resuelto metric; a month
+      // with none of its rows still in Resuelto counts zero.
+      resueltas:
+        hasOnsite && onsite.some((row) => fold(row.metrica) === "RESUELTO")
+          ? metricOf(onsite, month!, "Resuelto") ?? 0
+          : null,
+      abiertas: hasOnsite ? metricOf(onsite, month!, "Abiertas") ?? 0 : null,
+      backlog: hasOnsite ? backlogFrom(onsite, month!) : null,
+    },
+    encuestas: {
+      numero: numero > 0 ? numero : null,
+      promedio: numero > 0 ? weight / numero : null,
+    },
+  };
 }
