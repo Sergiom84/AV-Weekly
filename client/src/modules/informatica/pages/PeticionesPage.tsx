@@ -156,8 +156,9 @@ export default function PeticionesPage({
         )
       }
     >
-      <div className="grid min-h-0 flex-1 grid-cols-[57%_1fr] items-start gap-[1.8cqi]">
-        <div className="flex min-h-0 flex-col gap-[1.2cqi]">
+      {/* The last matrix ends level with the product list beside it. */}
+      <div className="grid min-h-0 flex-1 grid-cols-[57%_1fr] content-start items-stretch gap-[1.8cqi]">
+        <div className="flex min-h-0 flex-col justify-between gap-[1.2cqi]">
           {matrices.map(entry => (
             <div key={entry.entity} className="min-h-0">
               <p className="mb-[0.5cqi] font-mono text-[1.2cqi] uppercase tracking-wide text-muted-foreground">

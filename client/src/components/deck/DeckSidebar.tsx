@@ -368,7 +368,8 @@ function UploadZone({
         >
           {label}
         </Label>
-        <div className="flex shrink-0 flex-wrap gap-2">
+        {/* Wraps under a narrow sidebar instead of spilling past the card. */}
+        <div className="flex min-w-0 max-w-full flex-wrap gap-2">
           <Button
             type="button"
             variant="outline"

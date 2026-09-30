@@ -104,7 +104,7 @@ export default function WorkOrdersPage({
           rows={corrected}
           totalsLabel="Total"
           variant="report"
-          nowrapHeaders
+          wordWrapHeaders
         />
       </div>
     </PageShell>

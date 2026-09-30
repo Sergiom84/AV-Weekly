@@ -29,10 +29,18 @@ interface MatrixTableProps {
   /** Draws a stronger vertical rule after every N value columns. */
   groupEvery?: number;
   /**
-   * Column headers stay on one line. Used when a long Spanish type name would
-   * hyphenate mid-word (`Reinstalación`) or wrap a heading that has to fit.
+   * Column headers wrap between words only, never inside one, and each column
+   * is as wide as its longest word. For dense matrices whose Spanish type names
+   * (`Reinstalación`, `Acompañamiento`) would otherwise hyphenate or be cut.
    */
-  nowrapHeaders?: boolean;
+  wordWrapHeaders?: boolean;
+  /**
+   * Lets a `fill` table grow past its natural size up to this factor, so a
+   * short table fills the block it is given instead of leaving it empty.
+   */
+  maxScale?: number;
+  /** Fixed scale for a table that hugs its rows (`fill={false}`). */
+  scale?: number;
 }
 
 const defaultFormat = formatTableNumber;
@@ -73,7 +81,9 @@ export default function MatrixTable({
   variant = "plain",
   fill = true,
   groupEvery,
-  nowrapHeaders = false,
+  wordWrapHeaders = false,
+  maxScale = 1,
+  scale,
 }: MatrixTableProps) {
   const totalOfRow = (row: MatrixRow) =>
     row.values.reduce((sum, value) => sum + value, 0);
@@ -88,8 +98,9 @@ export default function MatrixTable({
     HTMLDivElement,
     HTMLTableElement
   >({
-    deps: [rows.length, columns.length, numericColumns],
-    minScale: dense ? 0.42 : 0.5,
+    deps: [rows.length, columns.length, numericColumns, maxScale, scale],
+    minScale: scale ?? (dense ? 0.42 : 0.5),
+    maxScale: scale ?? maxScale,
   });
 
   const groupRule = (index: number) =>
@@ -109,9 +120,11 @@ export default function MatrixTable({
     : "px-[0.12cqi] py-[calc(var(--fit-scale,1)*0.22cqi)]";
   const headerWidthShare = Number.parseFloat(headerWidth);
   const numericShare = 100 - headerWidthShare;
-  const headerWeights = nowrapHeaders
+  const longestWord = (label: string) =>
+    Math.max(...label.split(/\s+/).map(word => word.length));
+  const headerWeights = wordWrapHeaders
     ? [
-        ...columns.map(column => Math.max(column.length, 3)),
+        ...columns.map(column => Math.max(longestWord(column), 4)),
         ...(rowTotals ? [Math.max(totalsLabel.length, 6)] : []),
       ]
     : null;
@@ -122,132 +135,138 @@ export default function MatrixTable({
       : undefined;
 
   return (
+    // The outer box measures the space; the framed box hugs the rows, so a
+    // table shorter than its block leaves no empty card below the total.
     <div
       ref={containerRef}
-      className={`${fill ? "h-full max-h-full" : "h-auto"} w-full overflow-hidden ${variant === "report" ? "rounded-[0.4cqi] border border-border shadow-sm" : ""}`}
+      className={`${fill ? "h-full max-h-full" : "h-auto"} w-full overflow-hidden`}
     >
-      <table
-        ref={tableRef}
-        lang="es"
-        className={`w-full min-w-full table-fixed border-collapse font-mono leading-snug tabular-nums ${
-          dense
-            ? "text-[length:calc(var(--fit-scale,1)*0.95cqi)]"
-            : "text-[length:calc(var(--fit-scale,1)*1.15cqi)]"
-        }`}
+      <div
+        className={`w-full overflow-hidden ${variant === "report" ? "rounded-[0.4cqi] border border-border shadow-sm" : ""}`}
       >
-        <colgroup>
-          <col style={{ width: headerWidth }} />
-          {columns.map((column, index) => (
-            <col key={column} style={{ width: numericColWidth(index) }} />
-          ))}
-          {rowTotals && <col style={{ width: numericColWidth(columns.length) }} />}
-        </colgroup>
-        <thead>
-          <tr
-            className={
-              variant === "report"
-                ? "bg-primary text-primary-foreground"
-                : "border-b border-border text-muted-foreground"
-            }
-          >
-            <th
-              scope="col"
-              className={`${headerPad} ${LABEL_WRAP} text-left align-middle ${variant === "report" ? "font-semibold tracking-wide" : "font-normal"}`}
-            >
-              {rowHeader}
-            </th>
+        <table
+          ref={tableRef}
+          lang="es"
+          className={`w-full min-w-full table-fixed border-collapse font-mono leading-snug tabular-nums ${
+            dense
+              ? "text-[length:calc(var(--fit-scale,1)*0.95cqi)]"
+              : "text-[length:calc(var(--fit-scale,1)*1.15cqi)]"
+          }`}
+        >
+          <colgroup>
+            <col style={{ width: headerWidth }} />
             {columns.map((column, index) => (
-              <th
-                key={column}
-                scope="col"
-                title={column}
-                className={`${headerPad} ${
-                  nowrapHeaders
-                    ? "overflow-hidden whitespace-nowrap [hyphens:none]"
-                    : LABEL_WRAP
-                } text-center align-middle ${groupRule(index)} ${
-                  variant === "report"
-                    ? `font-semibold ${
-                        dense
-                          ? nowrapHeaders
-                            ? "text-[length:calc(var(--fit-scale,1)*0.62cqi)]"
-                            : "text-[length:calc(var(--fit-scale,1)*0.78cqi)]"
-                          : ""
-                      }`
-                    : "font-normal"
-                }`}
-              >
-                {column}
-              </th>
+              <col key={column} style={{ width: numericColWidth(index) }} />
             ))}
-            {rowTotals && (
-              <th
-                scope="col"
-                className={`${headerPad} text-center align-middle ${variant === "report" ? "font-semibold tracking-wide" : "font-normal"}`}
-              >
-                {totalsLabel}
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(row => (
-            <tr key={row.label} className="border-b border-border/60">
-              <th
-                scope="row"
-                className={`${cellPad} ${LABEL_WRAP} text-left align-middle ${variant === "report" ? "border-r border-border bg-muted/30 font-semibold text-muted-foreground" : "font-normal"}`}
-                title={row.label}
-              >
-                {row.label}
-              </th>
-              {columns.map((column, index) => (
-                <td
-                  key={column}
-                  className={`${cellPad} whitespace-nowrap text-center align-middle ${groupRule(index)}`}
-                >
-                  {formatValue(row.values[index] ?? 0)}
-                </td>
-              ))}
-              {rowTotals && (
-                <td
-                  className={`${cellPad} whitespace-nowrap text-center align-middle font-medium ${variant === "report" ? "bg-muted/40" : ""}`}
-                >
-                  {formatValue(totalOfRow(row))}
-                </td>
-              )}
-            </tr>
-          ))}
-
-          {columnTotals && (
+            {rowTotals && <col style={{ width: numericColWidth(columns.length) }} />}
+          </colgroup>
+          <thead>
             <tr
               className={
                 variant === "report"
-                  ? "bg-primary font-semibold text-primary-foreground"
-                  : "border-t border-border font-medium"
+                  ? "bg-primary text-primary-foreground"
+                  : "border-b border-border text-muted-foreground"
               }
             >
-              <th scope="row" className={`${cellPad} text-left align-middle`}>
-                {totalsLabel}
+              <th
+                scope="col"
+                className={`${headerPad} ${LABEL_WRAP} text-left align-middle ${variant === "report" ? "font-semibold tracking-wide" : "font-normal"}`}
+              >
+                {rowHeader}
               </th>
               {columns.map((column, index) => (
-                <td
+                <th
                   key={column}
-                  className={`${cellPad} whitespace-nowrap text-center align-middle ${groupRule(index)}`}
+                  scope="col"
+                  title={column}
+                  className={`${headerPad} ${
+                    wordWrapHeaders
+                      ? "whitespace-normal break-normal [hyphens:none]"
+                      : LABEL_WRAP
+                  } text-center align-middle ${groupRule(index)} ${
+                    variant === "report"
+                      ? `font-semibold ${
+                          dense
+                            ? wordWrapHeaders
+                              ? "text-[length:calc(var(--fit-scale,1)*0.7cqi)]"
+                              : "text-[length:calc(var(--fit-scale,1)*0.78cqi)]"
+                            : ""
+                        }`
+                      : "font-normal"
+                  }`}
                 >
-                  {formatValue(totalOfColumn(index))}
-                </td>
+                  {column}
+                </th>
               ))}
               {rowTotals && (
-                <td
-                  className={`${cellPad} whitespace-nowrap text-center align-middle`}
+                <th
+                  scope="col"
+                  className={`${headerPad} text-center align-middle ${variant === "report" ? "font-semibold tracking-wide" : "font-normal"}`}
                 >
-                  {formatValue(grandTotal)}
-                </td>
+                  {totalsLabel}
+                </th>
               )}
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={row.label} className="border-b border-border/60">
+                <th
+                  scope="row"
+                  className={`${cellPad} ${LABEL_WRAP} text-left align-middle ${variant === "report" ? "border-r border-border bg-muted/30 font-semibold text-muted-foreground" : "font-normal"}`}
+                  title={row.label}
+                >
+                  {row.label}
+                </th>
+                {columns.map((column, index) => (
+                  <td
+                    key={column}
+                    className={`${cellPad} whitespace-nowrap text-center align-middle ${groupRule(index)}`}
+                  >
+                    {formatValue(row.values[index] ?? 0)}
+                  </td>
+                ))}
+                {rowTotals && (
+                  <td
+                    className={`${cellPad} whitespace-nowrap text-center align-middle font-medium ${variant === "report" ? "bg-muted/40" : ""}`}
+                  >
+                    {formatValue(totalOfRow(row))}
+                  </td>
+                )}
+              </tr>
+            ))}
+
+            {columnTotals && (
+              <tr
+                className={
+                  variant === "report"
+                    ? "bg-primary font-semibold text-primary-foreground"
+                    : "border-t border-border font-medium"
+                }
+              >
+                <th scope="row" className={`${cellPad} text-left align-middle`}>
+                  {totalsLabel}
+                </th>
+                {columns.map((column, index) => (
+                  <td
+                    key={column}
+                    className={`${cellPad} whitespace-nowrap text-center align-middle ${groupRule(index)}`}
+                  >
+                    {formatValue(totalOfColumn(index))}
+                  </td>
+                ))}
+                {rowTotals && (
+                  <td
+                    className={`${cellPad} whitespace-nowrap text-center align-middle`}
+                  >
+                    {formatValue(grandTotal)}
+                  </td>
+                )}
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

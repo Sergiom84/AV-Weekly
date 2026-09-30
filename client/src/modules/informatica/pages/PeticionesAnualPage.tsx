@@ -94,6 +94,8 @@ export default function PeticionesAnualPage({
           series={series}
           data={chart.data}
           allCategories
+          fitGroupedValueLabels
+          centerGroupedValueLabels
         />
       </div>
     </PageShell>

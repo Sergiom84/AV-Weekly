@@ -110,19 +110,18 @@ export default function SlasPage({
         ]}
       />
 
-      <div
-        ref={containerRef}
-        className="min-h-0 w-full flex-1 overflow-auto"
-      >
+      {/* Framed like every other report table; the frame hugs the rows. */}
+      <div ref={containerRef} className="min-h-0 w-full flex-1 overflow-hidden">
+        <div className="w-full overflow-hidden rounded-[0.4cqi] border border-border shadow-sm">
         <table
           ref={tableRef}
-          className="w-full min-w-full table-fixed border-collapse font-mono text-[length:calc(var(--fit-scale,1)*1.15cqi)] leading-none tabular-nums"
+          className="w-full min-w-full table-fixed border-collapse font-mono text-[length:calc(var(--fit-scale,1)*1.15cqi)] leading-snug tabular-nums"
         >
           <thead>
-            <tr className="border-b border-border text-muted-foreground">
+            <tr className="bg-primary text-primary-foreground">
               <th
                 scope="col"
-                className="w-[40%] truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-normal"
+                className="w-[40%] px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-left font-semibold tracking-wide"
               >
                 SVT
               </th>
@@ -131,7 +130,7 @@ export default function SlasPage({
                   <th
                     key={column}
                     scope="col"
-                    className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-normal"
+                    className="px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center font-semibold"
                   >
                     {column}
                   </th>
@@ -144,49 +143,50 @@ export default function SlasPage({
               <tr key={row.svt} className="border-b border-border/60">
                 <th
                   scope="row"
-                  className="truncate py-[calc(var(--fit-scale,1)*0.25cqi)] text-left font-normal"
+                  className="border-r border-border bg-muted/30 px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-left font-semibold text-muted-foreground"
                 >
                   {svtLabel(row.svt)}
                 </th>
-                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                <td className="whitespace-nowrap px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
                   {row.cumplido.toLocaleString("es-ES")}
                 </td>
-                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                <td className="whitespace-nowrap px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
                   {row.incumplido.toLocaleString("es-ES")}
                 </td>
-                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
+                <td className="whitespace-nowrap px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center">
                   {row.total.toLocaleString("es-ES")}
                 </td>
-                <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center font-medium">
+                <td className="whitespace-nowrap bg-muted/40 px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.25cqi)] text-center font-medium">
                   {row.share === null ? EMPTY_TABLE_CELL : percent(row.share)}
                 </td>
               </tr>
             ))}
 
-            <tr className="border-t border-border font-medium">
+            <tr className="bg-primary font-semibold text-primary-foreground">
               <th
                 scope="row"
-                className="truncate py-[calc(var(--fit-scale,1)*0.3cqi)] text-left"
+                className="px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-left"
               >
                 Total
               </th>
-              <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+              <td className="whitespace-nowrap px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
                 {met.toLocaleString("es-ES")}
               </td>
-              <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+              <td className="whitespace-nowrap px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
                 {missed.toLocaleString("es-ES")}
               </td>
-              <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+              <td className="whitespace-nowrap px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
                 {current
                   .reduce((sum, row) => sum + row.total, 0)
                   .toLocaleString("es-ES")}
               </td>
-              <td className="truncate px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
+              <td className="whitespace-nowrap px-[0.2cqi] py-[calc(var(--fit-scale,1)*0.3cqi)] text-center">
                 {measured > 0 ? percent(met / measured) : EMPTY_TABLE_CELL}
               </td>
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
     </PageShell>
   );
