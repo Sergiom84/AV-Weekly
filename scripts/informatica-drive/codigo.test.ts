@@ -119,6 +119,18 @@ function loadCodigo() {
       required: string[]
     ) => { name: string; grid: unknown[][]; headerRow: number; columns: Record<string, number> }[];
     REQUIRED: { peticiones: string[]; citas: string[] };
+    agregarSlas: (
+      found: Record<string, unknown>,
+      slas: Record<string, number>,
+      extraction: Date
+    ) => void;
+    agregarComparativas: (
+      found: Record<string, unknown>,
+      comparativas: Record<string, number>,
+      extraction: Date
+    ) => void;
+    validarOrigenes: (found: Record<string, unknown>, extraction: Date) => void;
+    extraccionFutura: (extraction: Date | null, now?: Date) => boolean;
   };
 }
 
@@ -889,3 +901,142 @@ describe("Codigo.gs informe mensual", () => {
     ]);
   });
 });
+
+/**
+ * The small tabs of the template as exported on `latest`'s month: HIC series
+ * up to that month, the two-row category pivot, one comparison and both SLA
+ * tabs. `enCurso` is the "mes en curso" SLA tab, empty on the 1st.
+ */
+function templateFound(enCurso: unknown[][]) {
+  const grids = [
+    {
+      name: "2-2 - HIC (SSCC) Mensual - Inci",
+      grid: [
+        ["", "Fecha", "2026/08", "2026/09", "Total"],
+        ["Categorization Tier 1", "", "2026/08", "2026/09", "Total"],
+        ["EQUIPO", "", "178", "474", "652"],
+        ["Total", "", "178", "474", "652"],
+      ],
+    },
+    {
+      name: "3-3 - HIC (SSCC) - Incidencias ",
+      grid: [
+        ["Fecha", "Incidencias resueltas", "Asignadas", "Asignaciones"],
+        ["2026/08", "408", "401", "442"],
+        ["2026/09", "873", "864", "910"],
+      ],
+    },
+    {
+      name: "4-4 - HIC (SSCC) - Incidencias ",
+      grid: [
+        ["Fecha", "Incidencias resueltas", "Asignadas", "Asignaciones"],
+        ["2026/09", "41", "44", "50"],
+      ],
+    },
+    {
+      name: "9-9 - Comparativa Comonente_ EQ",
+      grid: [
+        ["Modulo", "Mes Actual", "Mes Anterior", "Hace dos meses"],
+        ["AVERIA", "N/A", "77", "18"],
+      ],
+    },
+    { name: "12-11 - SLAs finalizados mes en", grid: enCurso },
+    {
+      name: "13-12 - SLAs finalizados mes an",
+      grid: [
+        ["", "MeasurementStatus", "Cumplido", "Incumplido", "Total"],
+        ["SVTTitle", "", "Cumplido", "Incumplido", "Total"],
+        ["WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "", "465 (90%)", "51 (10%)", "516"],
+        ["Total", "", "465", "51", "516"],
+      ],
+    },
+  ];
+
+  return { encuestas: { grids } };
+}
+
+const EMPTY_EN_CURSO = [
+  ["", "MeasurementStatus", "Total"],
+  ["SVTTitle", "", "Total"],
+  ["Total", "", "0"],
+];
+
+describe("Codigo.gs template del día 1", () => {
+  const gs = loadCodigo();
+  const firstOfOctober = new Date(Date.UTC(2026, 9, 1));
+
+  it("salta la pestaña de SLAs en curso vacía y fecha la del mes anterior en el mes cerrado", () => {
+    const slas: Record<string, number> = {};
+
+    gs.agregarSlas(templateFound(EMPTY_EN_CURSO), slas, firstOfOctober);
+
+    expect(gs.rows(slas)).toEqual([
+      ["2026/09", "WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "465", "51", 516],
+    ]);
+  });
+
+  it("en una semana normal mantiene el mes del HIC como mes en curso", () => {
+    const slas: Record<string, number> = {};
+    const enCurso = [
+      ["", "MeasurementStatus", "Cumplido", "Incumplido", "Total"],
+      ["SVTTitle", "", "Cumplido", "Incumplido", "Total"],
+      ["WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "", "409 (91%)", "40 (9%)", "449"],
+    ];
+
+    gs.agregarSlas(templateFound(enCurso), slas, new Date(Date.UTC(2026, 8, 28)));
+
+    expect(gs.rows(slas).map((row: unknown[]) => [row[0], row[4]])).toEqual([
+      ["2026/08", 516],
+      ["2026/09", 449],
+    ]);
+  });
+
+  it("sigue fallando si una pestaña de SLAs con filas pierde sus columnas", () => {
+    const sinColumnas = [
+      ["", "MeasurementStatus", "Total"],
+      ["SVTTitle", "", "Total"],
+      ["WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "", "449"],
+    ];
+
+    expect(() => gs.agregarSlas(templateFound(sinColumnas), {}, firstOfOctober)).toThrow(
+      "no expone Cumplido e Incumplido"
+    );
+  });
+
+  it("ancla las comparativas en el mes de la extracción", () => {
+    const comparativas: Record<string, number> = {};
+
+    gs.agregarComparativas(templateFound(EMPTY_EN_CURSO), comparativas, firstOfOctober);
+
+    expect(gs.rows(comparativas).map((row: unknown[]) => row.slice(1))).toEqual([
+      ["AVERIA", "2026/08", 18],
+      ["AVERIA", "2026/09", 77],
+    ]);
+  });
+
+  it("valida el template antes de escribir y exige Estado en citas", () => {
+    const found = {
+      ...templateFound(EMPTY_EN_CURSO),
+      citas: {
+        sheets: gs.findDataSheets(
+          [{ name: "Citas", grid: [["Incidencia", "Walkup", "Cita_Previa", "Smart_Tech"]] }],
+          gs.REQUIRED.citas
+        ),
+      },
+    };
+
+    expect(() => gs.validarOrigenes(found, firstOfOctober)).toThrow("no trae Estado");
+    expect(() =>
+      gs.validarOrigenes({ ...templateFound(EMPTY_EN_CURSO) }, firstOfOctober)
+    ).not.toThrow();
+  });
+
+  it("rechaza una fecha de extracción posterior a hoy", () => {
+    const today = new Date(2026, 8, 30, 7, 48);
+
+    expect(gs.extraccionFutura(new Date(Date.UTC(2026, 9, 4)), today)).toBe(true);
+    expect(gs.extraccionFutura(new Date(Date.UTC(2026, 8, 30)), today)).toBe(false);
+    expect(gs.extraccionFutura(new Date(Date.UTC(2026, 8, 28)), today)).toBe(false);
+  });
+});
+

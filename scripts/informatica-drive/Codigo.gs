@@ -1142,6 +1142,42 @@ function debeRodarSemanaAnterior(extraction, lastProcessed) {
  * rolling, which is invisible on the sheet and wrong on the report. The run
  * stops on it instead of repeating the work.
  */
+/** Today as `yyyy-mm-dd` in the script's time zone, local time outside Apps Script. */
+function hoyIso(now) {
+  var date = now || new Date();
+
+  if (typeof Utilities !== 'undefined' && typeof Session !== 'undefined') {
+    return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+
+  return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate());
+}
+
+/**
+ * True when the extraction date is later than today.
+ *
+ * The date drives the month close: a future date freezes the month still in
+ * progress with partial data and opens months that have not begun, and the
+ * book cannot undo that by itself. No export can come from the future.
+ */
+function extraccionFutura(extraction, now) {
+  if (!extraction) return false;
+
+  return isoDate(extraction) > hoyIso(now);
+}
+
+function comprobarExtraccionNoFutura(extraction, now) {
+  if (!extraccionFutura(extraction, now)) return;
+
+  var today = hoyIso(now).split('-');
+
+  throw new Error(
+    'La fecha de extracción (' + fechaCorta(extraction) + ') es posterior a hoy (' +
+      today[2] + '/' + today[1] + '/' + today[0] + '). Escribe en "' + CONFIG_KEYS.extraction +
+      '" el día en que se sacaron los ficheros.'
+  );
+}
+
 function extraccionYaProcesada(extraction, lastProcessed) {
   if (!extraction || !lastProcessed) return false;
 
@@ -2627,6 +2663,21 @@ function templateReferenceMonth(grids) {
   return latest;
 }
 
+/**
+ * Month the template's relative tables ("Mes Actual", "SLAs finalizados mes
+ * en curso") describe. Usually the latest HIC month, but the export of the
+ * 1st has no row yet for the month that just began: its "mes en curso" is
+ * already that month and "mes anterior" is the one just closed. The
+ * extraction date settles it, so the later of the two wins.
+ */
+function templateCurrentMonth(grids, extraction) {
+  var latest = templateReferenceMonth(grids);
+  var date = toDate(extraction);
+  var current = date ? monthLabel(date) : '';
+
+  return current > latest ? current : latest;
+}
+
 function periodCells(date) {
   return [isoDate(date), monthLabel(date), isoWeekNumber(date)];
 }
@@ -3019,6 +3070,27 @@ function citaAtendida(row, columns) {
   return esEstadoResuelto(valueAt(row, columns, 'Estado'));
 }
 
+/**
+ * Runs, on throwaway buckets, the template reads that stop on a malformed
+ * source, so procesarSemana fails before touching the book instead of after
+ * the dumps. They only read the small HIC, comparison and SLA tabs.
+ */
+function validarOrigenes(found, extraction) {
+  agregarHic(found, {});
+  agregarComparativas(found, {}, extraction);
+  agregarSlas(found, {}, extraction);
+
+  var citas = found.citas && found.citas.sheets ? found.citas.sheets : [];
+
+  for (var index = 0; index < citas.length; index += 1) {
+    var columns = citas[index].columns || headerIndex(citas[index].grid[citas[index].headerRow] || []);
+
+    if (columns[normalize('Estado')] === undefined) {
+      throw new Error('La pestaña de citas no trae Estado.');
+    }
+  }
+}
+
 function agregarCitas(found, extraction, citas, citasAnual) {
   if (!found.citas) return;
 
@@ -3095,9 +3167,9 @@ function agregarHic(found, hic) {
   }
 }
 
-function agregarComparativas(found, comparativas) {
+function agregarComparativas(found, comparativas, extraction) {
   var grids = templateGrids(found);
-  var reference = templateReferenceMonth(grids);
+  var reference = templateCurrentMonth(grids, extraction);
 
   if (reference === '') return;
 
@@ -3133,9 +3205,20 @@ function agregarComparativas(found, comparativas) {
   }
 }
 
-function agregarSlas(found, slas) {
+/** Whether an SLA tab has any SVTTitle row besides the Total line. */
+function slaTieneFilas(grid, headerAt) {
+  for (var rowIndex = headerAt + 1; rowIndex < grid.length; rowIndex += 1) {
+    var svt = text((grid[rowIndex] || [])[0]);
+
+    if (svt !== '' && normalize(svt) !== 'TOTAL') return true;
+  }
+
+  return false;
+}
+
+function agregarSlas(found, slas, extraction) {
   var grids = templateGrids(found);
-  var reference = templateReferenceMonth(grids);
+  var reference = templateCurrentMonth(grids, extraction);
 
   if (reference === '') return;
 
@@ -3156,9 +3239,13 @@ function agregarSlas(found, slas) {
     var missed = headers[normalize('Incumplido')];
     var total = headers[normalize('Total')];
 
-    // The tab named itself as an SLA block, so missing columns are a defect of
-    // this reader and not an absent section. Failing here is what stops the
-    // PLANO from silently shipping without SLAs.
+    // On the 1st the month in progress has no finished ticket yet: the tab
+    // carries only the Total line and no Cumplido / Incumplido columns.
+    if ((met === undefined || missed === undefined) && !slaTieneFilas(grid, headerAt)) continue;
+
+    // The tab named itself as an SLA block and has rows, so missing columns
+    // are a defect of this reader and not an absent section. Failing here is
+    // what stops the PLANO from silently shipping without SLAs.
     if (met === undefined || missed === undefined) {
       throw new Error(
         'La pestaña ' + grids[gridIndex].name + ' declara SVTTitle pero no expone Cumplido e Incumplido.'
@@ -3981,8 +4068,8 @@ function agregar(clasificacion, extraction) {
   agregarCitas(found, date, buckets.citas, buckets.citasAnual);
   agregarRenove(found, buckets.renove);
   agregarHic(found, buckets.hic);
-  agregarComparativas(found, buckets.comparativas);
-  agregarSlas(found, buckets.slas);
+  agregarComparativas(found, buckets.comparativas, date);
+  agregarSlas(found, buckets.slas, date);
   agregarImacs(found, buckets.imacs);
 
   return {
@@ -4389,6 +4476,8 @@ function procesarSemana() {
       );
     }
 
+    comprobarExtraccionNoFutura(config.extraction);
+
     clasificacion = classifyFolder(config.folderId);
 
     var informe = {
@@ -4421,6 +4510,10 @@ function procesarSemana() {
       informe.cierreStatus = 'No ejecutado';
       informe.cierre = 'Sin meses pendientes detrás de la extracción.';
     }
+    // Every source check that can fail runs here, before the first write: a
+    // run that stops halfway has already rolled the week and stored the date,
+    // and repeating it is then blocked.
+    validarOrigenes(clasificacion.found, config.extraction);
 
     informe.semanaRodada = rodarSemanaAnterior(config.extraction, config.lastProcessed);
     writeConfigValue(CONFIG_KEYS.lastProcessed, config.extraction);
