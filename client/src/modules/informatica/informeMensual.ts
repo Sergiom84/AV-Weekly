@@ -1,7 +1,10 @@
 import {
   buildInformeMensual,
   mesCerrado,
+  previousMonth,
   type InformeMensual,
+  type MensualComparativa,
+  type MensualEvolucion,
   type MensualLabels,
   type MensualSlides,
 } from "@shared/modules/informatica/mensual";
@@ -16,6 +19,7 @@ import {
   WORK_ORDER_FALLBACK_SITE,
   workOrdersWithFallbackSite,
 } from "./sources";
+import { workOrderTypeLabel } from "./palette";
 
 /**
  * Site of a raw label, matched the way the weekly text codes buildings.
@@ -84,20 +88,18 @@ function informeDelMes(dataset: InformaticaDataset, month: string | null): Infor
 /**
  * Work-order site renamed to the SmartTech site of the same building, the way
  * the service names cities on the monthly slides. Zelandia reports under
- * Seguros, and the two Barcelona sites under Barcelona. A site missing here
+ * Seguros. A site missing here
  * keeps its city, the text before the comma, so two addresses in one city fold
  * into one row.
  */
 const WORK_ORDER_SMARTTECH_SITE: Record<string, string> = {
   "Alicante, Méndez Nuñez": "Alicante",
-  "Antoni Maura": "Barcelona",
   "Asia Planta 3 Ciudad BBVA": "Sede - Asia",
   "Baleares, Plaza del Olivar": "Mallorca",
   "Las Palmas, Albareda": "Canarias",
   "Principal América del Norte Ciudad BBVA": "Sede - Principal",
   "Tenerife La Marina": "Tenerife",
   "Tenerife, La Marina": "Tenerife",
-  Terrasa: "Barcelona",
   Zelandia: "Seguros",
 };
 
@@ -156,5 +158,166 @@ export function mensualSlides(dataset: InformaticaDataset): MensualSlides {
     smartTech: informe.smartTech,
     topTen: hasHic ? [...informe.topTen].sort((left, right) => right.total - left.total) : null,
     slas: informe.slas,
+  };
+}
+
+/** Months compared against: the six before the reported one. */
+const HISTORY_MONTHS = 6;
+
+function monthsBefore(month: string, count: number): string[] {
+  const months: string[] = [];
+  let cursor = month;
+
+  for (let index = 0; index < count; index += 1) {
+    cursor = previousMonth(cursor);
+    months.push(cursor);
+  }
+
+  return months;
+}
+
+function average(values: number[]): number | null {
+  return values.length === 0
+    ? null
+    : Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+/** Work orders of a month by final site and type, `site -> type -> total`. */
+function workOrderTypes(dataset: InformaticaDataset, month: string): Map<string, Map<string, number>> {
+  const { labels } = monthlyInputs(dataset);
+  const bySite = new Map<string, Map<string, number>>();
+
+  for (const row of workOrdersWithFallbackSite(dataset.workOrders ?? [])) {
+    if (row.mes !== month) {
+      continue;
+    }
+
+    const raw = labels.workOrder(row.edificio);
+    const site = raw === WORK_ORDER_FALLBACK_SITE ? raw : smartTechSiteOf(raw);
+    const types = bySite.get(site) ?? new Map<string, number>();
+    const tipo = workOrderTypeLabel(row.tipo).toLowerCase();
+
+    types.set(tipo, (types.get(tipo) ?? 0) + row.ordenes);
+    bySite.set(site, types);
+  }
+
+  return bySite;
+}
+
+/**
+ * The closed month against the one before and the six before, for the
+ * speech: incidents opened, the top ten, and every work-order and SmartTech
+ * site with what its figure is made of.
+ */
+export function mensualComparativa(
+  dataset: InformaticaDataset,
+  slides: MensualSlides
+): MensualComparativa {
+  const month = slides.month;
+
+  if (month === null) {
+    return {
+      previousMonth: null,
+      incidencias: { anterior: null, media: null },
+      topTenAnterior: null,
+      workOrders: [],
+      workOrdersAnterior: null,
+      smartTech: [],
+      smartTechAnterior: null,
+    };
+  }
+
+  const previous = previousMonth(month);
+  const history = monthsBefore(month, HISTORY_MONTHS);
+  const monthsWith = (rows: { mes: string }[] | undefined) =>
+    new Set((rows ?? []).map((row) => row.mes));
+  const workMonths = monthsWith(dataset.workOrders);
+  const citaMonths = monthsWith(dataset.citas);
+  const perMonth = new Map(
+    [previous, ...history].map((target) => [target, informeDelMes(dataset, target)])
+  );
+  const sitesOf = (target: string) => {
+    const informe = perMonth.get(target)!;
+
+    return {
+      work: new Map(
+        workOrdersPorSede(informe.workOrders, informe.smartTech.map((row) => row.site)).map(
+          (row) => [row.site, row.total]
+        )
+      ),
+      citas: new Map(informe.smartTech.map((row) => [row.site, row])),
+    };
+  };
+  const before = sitesOf(previous);
+  const past = history.map((target) => ({ target, ...sitesOf(target) }));
+
+  const opened = (target: string) =>
+    (dataset.incidenciasOnsite ?? [])
+      .filter((row) => row.mes === target && row.metrica.trim().toUpperCase() === "ABIERTAS")
+      .reduce<number | null>((sum, row) => (sum ?? 0) + row.total, null);
+
+  const typesNow = workOrderTypes(dataset, month);
+  const typesBefore = workOrderTypes(dataset, previous);
+  const workOrders: MensualEvolucion[] = slides.workOrders.map((row) => {
+    const now = typesNow.get(row.site) ?? new Map<string, number>();
+    const then = typesBefore.get(row.site) ?? new Map<string, number>();
+    const tipos = new Set([...Array.from(now.keys()), ...Array.from(then.keys())]);
+
+    return {
+      site: row.site,
+      total: row.total,
+      anterior: before.work.get(row.site) ?? 0,
+      media: average(
+        past
+          .filter((entry) => workMonths.has(entry.target))
+          .map((entry) => entry.work.get(row.site) ?? 0)
+      ),
+      desglose: Array.from(tipos).map((nombre) => ({
+        nombre,
+        total: now.get(nombre) ?? 0,
+        anterior: then.get(nombre) ?? 0,
+      })),
+    };
+  });
+  const smartTech: MensualEvolucion[] = slides.smartTech.map((row) => {
+    const then = before.citas.get(row.site);
+
+    return {
+      site: row.site,
+      total: row.conCita + row.sinCita,
+      anterior: then ? then.conCita + then.sinCita : 0,
+      media: average(
+        past
+          .filter((entry) => citaMonths.has(entry.target))
+          .map((entry) => {
+            const cita = entry.citas.get(row.site);
+            return cita ? cita.conCita + cita.sinCita : 0;
+          })
+      ),
+      desglose: [
+        { nombre: "las citas con cita previa", total: row.conCita, anterior: then?.conCita ?? 0 },
+        { nombre: "las visitas sin cita", total: row.sinCita, anterior: then?.sinCita ?? 0 },
+      ],
+    };
+  });
+  const hasHicBefore = (dataset.hic ?? []).some((row) => row.mes === previous);
+
+  return {
+    previousMonth: previous,
+    incidencias: {
+      anterior: opened(previous),
+      media: average(
+        history.map(opened).filter((value): value is number => value !== null)
+      ),
+    },
+    topTenAnterior: hasHicBefore ? perMonth.get(previous)!.topTen : null,
+    workOrders,
+    workOrdersAnterior: workMonths.has(previous)
+      ? Array.from(before.work.values()).reduce((sum, value) => sum + value, 0)
+      : null,
+    smartTech,
+    smartTechAnterior: citaMonths.has(previous)
+      ? Array.from(before.citas.values()).reduce((sum, row) => sum + row.conCita + row.sinCita, 0)
+      : null,
   };
 }

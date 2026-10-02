@@ -449,15 +449,12 @@ function fmt(value: number | null): string {
     return "0";
   }
 
-  return value.toLocaleString("es-ES");
+  // Spoken figures group thousands even with four digits: 1.303, not 1303.
+  return value.toLocaleString("es-ES", { useGrouping: "always" });
 }
 
 function pct(share: number): string {
   return `${Math.round(share * 100)} %`;
-}
-
-function capitalise(value: string): string {
-  return value.length === 0 ? value : value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function joinList(items: string[]): string {
@@ -508,29 +505,173 @@ export interface MensualSlides {
   slas: MensualSla[];
 }
 
-/** The largest entries, `name (value)`, two at most. */
-function leaders<T>(rows: T[], value: (row: T) => number, name: (row: T) => string): string[] {
-  return [...rows]
-    .filter((row) => value(row) > 0)
-    .sort((left, right) => value(right) - value(left))
-    .slice(0, 2)
-    .map((row) => `${name(row)} (${fmt(value(row))})`);
+/** One site against its own previous month and recent average. */
+export interface MensualEvolucion {
+  site: string;
+  total: number;
+  anterior: number;
+  /** Average of the six months before; null without history. */
+  media: number | null;
+  /** What the site's figure is made of: work-order types, or con / sin cita. */
+  desglose: { nombre: string; total: number; anterior: number }[];
+}
+
+/** What the speech compares the month against. The slides do not draw it. */
+export interface MensualComparativa {
+  previousMonth: string | null;
+  incidencias: { anterior: number | null; media: number | null };
+  /** The top ten of the previous month; null without that HIC column. */
+  topTenAnterior: MensualTop[] | null;
+  workOrders: MensualEvolucion[];
+  /** Null when the previous month has no work order at all. */
+  workOrdersAnterior: number | null;
+  smartTech: MensualEvolucion[];
+  smartTechAnterior: number | null;
+}
+
+/** A move worth saying in a meeting: at least ten, and a sixth of the base. */
+function relevante(delta: number, base: number): boolean {
+  return Math.abs(delta) >= 10 && (base === 0 || Math.abs(delta) >= base * 0.15);
+}
+
+function signedPct(delta: number, base: number): string {
+  const value = Math.round((delta / base) * 100);
+
+  return `${value > 0 ? "+" : ""}${value} %`;
+}
+
+/** Month name as it reads mid-sentence in Spanish: `agosto`. */
+function monthWord(month: string | null): string {
+  return month ? (MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? "") : "";
+}
+
+/** `416, 342 menos que en Julio (−45 %)`, or nothing without a base. */
+function versus(total: number, anterior: number | null, previous: string | null): string {
+  if (anterior === null || anterior === 0 || previous === null) {
+    return "";
+  }
+
+  const delta = total - anterior;
+
+  if (delta === 0) {
+    return `, igual que en ${monthWord(previous)}`;
+  }
+
+  return `, ${fmt(Math.abs(delta))} ${delta > 0 ? "más" : "menos"} que en ${monthWord(previous)} (${fmt(anterior)}, ${signedPct(delta, anterior)})`;
+}
+
+function trendAgainst(total: number, media: number | null): string | null {
+  if (media === null || media === 0) {
+    return null;
+  }
+
+  const ratio = total / media;
+  const where =
+    ratio >= 1.1 ? "por encima de" : ratio <= 0.9 ? "por debajo de" : "en línea con";
+
+  return `${where} la media de los seis meses anteriores (${fmt(media)})`;
+}
+
+/** The part that moved most in the same direction as the whole. */
+function mainDriver(
+  desglose: MensualEvolucion["desglose"],
+  direction: number
+): { nombre: string; delta: number } | null {
+  const moved = desglose
+    .map((part) => ({ nombre: part.nombre, delta: part.total - part.anterior }))
+    .filter((part) => Math.sign(part.delta) === Math.sign(direction) && part.delta !== 0)
+    .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta));
+
+  return moved[0] ?? null;
 }
 
 /**
- * Spoken close of the month, read from the two monthly slides in their order:
- * Incidencias On Site, Encuestas, Peticiones, IMACS and Workorders, then
- * SmartTech, the top ten and the SLAs.
+ * Sentences on the sites of one block: who carries the volume, where it grew
+ * most and why, where it fell most, and a site far above its own average.
+ */
+function siteAnalysis(
+  rows: MensualEvolucion[],
+  unit: string,
+  hasPrevious: boolean
+): string[] {
+  const sentences: string[] = [];
+  const leader = [...rows].sort((left, right) => right.total - left.total)[0];
+
+  if (leader && leader.total > 0) {
+    sentences.push(`${leader.site} concentra el mayor volumen, con ${fmt(leader.total)} ${unit}.`);
+  }
+
+  if (!hasPrevious) {
+    return sentences;
+  }
+
+  const moves = rows
+    .map((row) => ({ row, delta: row.total - row.anterior }))
+    .filter(({ row, delta }) => relevante(delta, row.anterior));
+  const rise = moves.filter((move) => move.delta > 0).sort((l, r) => r.delta - l.delta)[0];
+  const fall = moves.filter((move) => move.delta < 0).sort((l, r) => l.delta - r.delta)[0];
+  const because = (row: MensualEvolucion, delta: number) => {
+    const driver = mainDriver(row.desglose, delta);
+
+    return driver && relevante(driver.delta, 0)
+      ? `, sobre todo por ${driver.nombre} (${driver.delta > 0 ? "+" : ""}${fmt(driver.delta)})`
+      : "";
+  };
+
+  if (rise) {
+    sentences.push(
+      `${rise.row.site === leader?.site ? "Es también donde más crecen" : `Donde más crecen es en ${rise.row.site}`}, de ${fmt(rise.row.anterior)} a ${fmt(rise.row.total)}${because(rise.row, rise.delta)}.`
+    );
+  }
+
+  if (fall) {
+    const where =
+      fall.row.site === leader?.site
+        ? "Es también donde más baja"
+        : `La mayor bajada es en ${fall.row.site}`;
+
+    sentences.push(
+      `${where}, de ${fmt(fall.row.anterior)} a ${fmt(fall.row.total)}${because(fall.row, fall.delta)}.`
+    );
+  }
+
+  const named = new Set([rise?.row.site, fall?.row.site, leader?.site]);
+  const standout = rows
+    .filter(
+      (row) =>
+        !named.has(row.site) &&
+        row.media !== null &&
+        row.total >= row.media * 1.3 &&
+        row.total - row.media >= 10
+    )
+    .sort((left, right) => right.total - right.media! - (left.total - left.media!))[0];
+
+  if (standout) {
+    sentences.push(
+      `${standout.site} queda muy por encima de su media de seis meses, ${fmt(standout.total)} frente a ${fmt(standout.media)}.`
+    );
+  }
+
+  return sentences;
+}
+
+/**
+ * Spoken close of the month, as someone presenting the two monthly slides in a
+ * meeting: the figures they show, what moved against the previous month and
+ * the six before, where it moved and why, as far as the data tells.
  *
  * The casuística that is not in the files (a migration, a bad software push)
  * is the optional `narracion` the editor writes; it is copied in as typed and
  * never invented here.
  */
-export function informeMensualSpeech(slides: MensualSlides, narracion: string): string {
+export function informeMensualSpeech(
+  slides: MensualSlides,
+  comparativa: MensualComparativa,
+  narracion: string
+): string {
   const parts: string[] = [];
-  const name = slides.month
-    ? capitalise(MONTH_NAMES[Number(slides.month.slice(5, 7)) - 1] ?? "")
-    : "";
+  const name = monthWord(slides.month);
+  const previous = comparativa.previousMonth;
 
   parts.push(`Buenas tardes, os comparto el informe mensual${name ? ` de ${name}` : ""}.`);
 
@@ -555,6 +696,56 @@ export function informeMensualSpeech(slides: MensualSlides, narracion: string): 
     }
 
     service.push(`${sentence}.`);
+
+    const change = versus(
+      incidencias.abiertas,
+      comparativa.incidencias.anterior,
+      previous
+    ).replace(/^, /, "");
+    const trend = trendAgainst(incidencias.abiertas, comparativa.incidencias.media);
+
+    if (change && trend) {
+      service.push(`Son ${change} y quedan ${trend}.`);
+    } else if (change) {
+      service.push(`Son ${change}.`);
+    } else if (trend) {
+      service.push(`Quedan ${trend}.`);
+    }
+
+    const direction =
+      comparativa.incidencias.anterior === null
+        ? 0
+        : incidencias.abiertas - comparativa.incidencias.anterior;
+
+    if (slides.topTen !== null && comparativa.topTenAnterior !== null && direction !== 0) {
+      const before = new Map(comparativa.topTenAnterior.map((row) => [row.categoria, row.total]));
+      const driver = mainDriver(
+        slides.topTen.map((row) => ({
+          nombre: row.categoria,
+          total: row.total,
+          anterior: before.get(row.categoria) ?? 0,
+        })),
+        direction
+      );
+
+      if (driver && relevante(driver.delta, 0)) {
+        const from = before.get(driver.nombre) ?? 0;
+        service.push(
+          `${direction > 0 ? "El aumento" : "El descenso"} viene sobre todo de ${driver.nombre}, que pasa de ${fmt(from)} a ${fmt(from + driver.delta)}.`
+        );
+      }
+    }
+  }
+
+  if (slides.topTen !== null) {
+    const top = slides.topTen
+      .filter((row) => row.total > 0)
+      .slice(0, 3)
+      .map((row) => `${row.categoria} (${fmt(row.total)})`);
+
+    if (top.length > 0) {
+      service.push(`Por categorías, lideran ${joinList(top)}.`);
+    }
   }
 
   if (encuestas.numero !== null && encuestas.promedio !== null) {
@@ -565,6 +756,29 @@ export function informeMensualSpeech(slides: MensualSlides, narracion: string): 
 
   if (service.length > 0) {
     parts.push(service.join(" "));
+  }
+
+  const workTotal = slides.workOrders.reduce((sum, row) => sum + row.total, 0);
+
+  if (workTotal > 0) {
+    parts.push(
+      [
+        `Los work orders suman ${fmt(workTotal)}${versus(workTotal, comparativa.workOrdersAnterior, previous)}.`,
+        ...siteAnalysis(comparativa.workOrders, "work orders", comparativa.workOrdersAnterior !== null),
+      ].join(" ")
+    );
+  }
+
+  const conCita = slides.smartTech.reduce((sum, row) => sum + row.conCita, 0);
+  const sinCita = slides.smartTech.reduce((sum, row) => sum + row.sinCita, 0);
+
+  if (conCita + sinCita > 0) {
+    parts.push(
+      [
+        `Smart Tech suma ${fmt(conCita + sinCita)} citas, ${fmt(conCita)} con cita y ${fmt(sinCita)} sin cita${versus(conCita + sinCita, comparativa.smartTechAnterior, previous)}.`,
+        ...siteAnalysis(comparativa.smartTech, "citas", comparativa.smartTechAnterior !== null),
+      ].join(" ")
+    );
   }
 
   const requests: string[] = [];
@@ -597,42 +811,8 @@ export function informeMensualSpeech(slides: MensualSlides, narracion: string): 
     );
   }
 
-  const workTotal = slides.workOrders.reduce((sum, row) => sum + row.total, 0);
-
-  if (workTotal > 0) {
-    const top = leaders(slides.workOrders, (row) => row.total, (row) => row.site);
-    requests.push(
-      `Los work orders suman ${fmt(workTotal)}${top.length > 0 ? `, con más volumen en ${joinList(top)}` : ""}.`
-    );
-  }
-
   if (requests.length > 0) {
     parts.push(requests.join(" "));
-  }
-
-  const conCita = slides.smartTech.reduce((sum, row) => sum + row.conCita, 0);
-  const sinCita = slides.smartTech.reduce((sum, row) => sum + row.sinCita, 0);
-
-  if (conCita + sinCita > 0) {
-    const top = leaders(
-      slides.smartTech,
-      (row) => row.conCita + row.sinCita,
-      (row) => row.site
-    );
-    parts.push(
-      `Smart Tech suma ${fmt(conCita + sinCita)} citas, ${fmt(conCita)} con cita y ${fmt(sinCita)} sin cita${top.length > 0 ? `, con más volumen en ${joinList(top)}` : ""}.`
-    );
-  }
-
-  if (slides.topTen !== null) {
-    const top = slides.topTen
-      .filter((row) => row.total > 0)
-      .slice(0, 3)
-      .map((row) => `${row.categoria} (${fmt(row.total)})`);
-
-    if (top.length > 0) {
-      parts.push(`El top de incidencias lo encabezan ${joinList(top)}.`);
-    }
   }
 
   const sla = slaSentence(slides.slas);

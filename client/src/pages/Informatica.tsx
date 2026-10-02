@@ -35,7 +35,7 @@ import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInformaticaDeck } from "@/modules/informatica/useInformaticaDeck";
 import { coverPeriodLabel } from "@/modules/informatica/aggregate";
-import { mensualSlides } from "@/modules/informatica/informeMensual";
+import { mensualComparativa, mensualSlides } from "@/modules/informatica/informeMensual";
 import CitasAnualPage from "@/modules/informatica/pages/CitasAnualPage";
 import CitasMensualPage from "@/modules/informatica/pages/CitasMensualPage";
 import CitasSemanalPage from "@/modules/informatica/pages/CitasSemanalPage";
@@ -146,7 +146,13 @@ export default function Informatica() {
       return "";
     }
 
-    return informeMensualSpeech(mensualSlides(dataset), mensualPage?.text.narracion ?? "");
+    const slides = mensualSlides(dataset);
+
+    return informeMensualSpeech(
+      slides,
+      mensualComparativa(dataset, slides),
+      mensualPage?.text.narracion ?? ""
+    );
   }, [speechOpen, dataset, mensualPage]);
 
   const copySpeech = useCallback(async () => {
