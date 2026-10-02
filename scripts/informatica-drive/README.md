@@ -61,14 +61,21 @@ proceso se detiene antes de leer nada y avisa:
 > procesó.
 
 El corte ocurre antes de abrir los ficheros de la carpeta, así que no cuesta
-tiempo ni deja nada a medias. Para rehacer una semana a propósito, basta con
+tiempo ni deja nada a medias.
+
+Tampoco se acepta una fecha de extracción posterior a hoy: la fecha decide qué
+meses se cierran, y una fecha futura cerraría el mes en curso con datos
+parciales. Antes de la primera escritura se validan además las pestañas del
+template que pueden fallar (HIC, comparativas, SLAs y la columna `Estado` de
+citas), para que un origen mal formado detenga el proceso sin dejar el libro a
+medias. Para rehacer una semana a propósito, basta con
 vaciar `Última extracción procesada` en `Configuración`; en ese caso la columna
 *Semana anterior* sí se vuelve a copiar, que es lo que antes pasaba en silencio
 cada vez que se repetía la ejecución.
 
-Cuando la extracción pasa a un mes nuevo, el proceso cierra solo
-los meses que ya quedaron atrás (agosto se congela al informar septiembre).
-`Cerrar mes` sigue en el menú para congelar el mes en curso a propósito.
+Cuando la extracción pasa a un mes nuevo, el proceso cierra solo el mes que
+quedó atrás (agosto se cierra al informar septiembre). Ya no hay paso manual de
+cierre: ver *Cierre de mes*.
 
 Los ficheros se reconocen por cabeceras. Backlog, liberadas, gestionadas y
 Acumuladas se distinguen por nombre porque comparten exactamente el mismo
@@ -103,19 +110,39 @@ copia de trabajo con otro nombre se ignora para no contar equipos dos veces.
 
 ## Cierre de mes
 
-El cierre automático ocurre dentro de `Procesar semana` cuando la fecha de
-extracción ya pertenece a un mes posterior al que sigue vivo en encuestas.
+Las tablas mensuales del libro (`2.1.1`, `Hoja 13`, `Hoja 14`, `Hoja 15` y el
+histórico de `2.1.5. Encuestas (Informe)`) se escriben como valores dentro de
+`Procesar semana`, después de volcar los datos:
 
-Para congelar el mes en curso sin esperar (última semana de agosto, extracción
-todavía en agosto):
+| Mes | Qué pasa |
+| --- | --- |
+| El de la extracción | Vivo: se reescribe en cada ejecución. |
+| Los anteriores aún sin cerrar | Se escriben una vez con este export y quedan cerrados. Normalmente es solo el mes anterior. |
+| Los posteriores a la extracción | Se vacían. |
 
-1. Procesar primero esa semana y comprobarla.
-2. Ejecutar `⭐ Informática Weekly > Cerrar mes` una sola vez.
-3. Confirmar en `Comprobación` las celdas cerradas y el mes nuevo abierto.
+El mes cerrado no vuelve a cambiar aunque llegue una encuesta tardía o una
+corrección. Por eso conviene que la primera ejecución del mes sea el export del
+día 1, que trae el mes anterior completo. `Configuración > Último mes cerrado`
+guarda hasta dónde llega lo cerrado; vaciarlo o poner un mes anterior obliga a
+reescribir los meses siguientes en la próxima ejecución.
 
-El cierre es idempotente: repetirlo para un mes ya cerrado no debe duplicar
-columnas ni filas. La distribución histórica de encuestas sale de las
-respuestas anonimizadas del template, no se reconstruye a partir de una media.
+De dónde sale cada cifra:
+
+- Incidencias (`2.1.1`, `Hoja 13`, `Hoja 15!B`): pestañas `3-3` y `4-4` del
+  template, mes a mes.
+- Encuestas: pestaña `1-1`, respuestas valoradas de 1 a 5 y su media.
+- Work orders (`Hoja 14`, `Hoja 15!C`): la tabla Edificio × tipo de
+  `2.1.6 Work Orders (Informe)`, con sus marcadores `H1:I1` puestos en cada mes.
+  Cuenta por territorial y tipo, como el informe; los técnicos sin territorial
+  de `Comprobación` quedan fuera.
+
+`Hoja 19` (IMACS) no se congela: cada par de columnas lleva sus propias fechas.
+El script añade los pares hasta el mes vivo y vacía los posteriores.
+
+Una ejecución con fecha equivocada se corrige con la siguiente ejecución con la
+fecha buena: lo que abrió de más se vacía. Lo único que no se deshace solo es un
+mes que llegó a cerrarse; para reescribirlo hay que retroceder `Último mes
+cerrado`.
 
 ## Decisiones de datos
 

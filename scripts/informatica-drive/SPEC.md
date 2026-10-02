@@ -68,8 +68,6 @@ Menú `⭐ Informática Weekly` en la hoja:
 
 - **Inicializar hoja** — crea `Configuración`, `Comprobación` y `PLANO` si no existen.
 - **Procesar semana** — el paso semanal.
-- **Cerrar mes** — el paso mensual del apartado 6. Se ofrece por separado porque no se
-  hace todas las semanas y conviene que sea una decisión consciente.
 - **Guardar PLANO como .txt en la carpeta** — alternativa a copiar y pegar.
 
 Pestaña `Configuración`:
@@ -287,6 +285,13 @@ de `H4:H6` a `I4:I6`. Ese orden importa: `H` se recalcula en cuanto se pegan los
 nuevos y el valor viejo se pierde.
 
 ### Al cerrar el mes
+
+> Sustituido el 02/10/2026. El script ya no congela celdas vivas ni copia fórmulas al mes
+> siguiente: la copia desplazaba sus referencias relativas una fila o columna por cierre
+> (`Hoja 13` acabó en `#N/A` y `Hoja 15` agosto en 11.382). Ahora escribe valores mes a
+> mes desde el template, cierra cada mes una sola vez y vacía los meses posteriores a la
+> extracción. El detalle vigente está en `README.md`, *Cierre de mes*. La tabla siguiente
+> queda como referencia de las celdas que cubre.
 
 Cuatro pestañas guardan histórico congelando la celda viva y abriendo una fila o columna
 nueva. Hoy se hace a mano; pasa a hacerlo el script.

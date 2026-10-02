@@ -131,6 +131,13 @@ function loadCodigo() {
     ) => void;
     validarOrigenes: (found: Record<string, unknown>, extraction: Date) => void;
     extraccionFutura: (extraction: Date | null, now?: Date) => boolean;
+    actualizarMeses: (
+      found: Record<string, unknown>,
+      extraction: Date,
+      lastClosed: string,
+      windowMonths: number
+    ) => { cerrados: string[]; vivo: string; limpiados: string[]; ultimoCerrado: string };
+    readConfig: () => { lastClosed: string };
   };
 }
 
@@ -1040,3 +1047,332 @@ describe("Codigo.gs template del día 1", () => {
   });
 });
 
+/**
+ * A sheet with what the monthly tables use: values, formulas, clears, format
+ * copies (ignored) and inserted rows or columns. `computed` returns a live
+ * value for a cell, the way a formula reads its markers.
+ */
+function bookSheet(grid: unknown[][], computed: Record<string, () => unknown> = {}) {
+  const formulas: Record<string, string> = {};
+  const key = (row: number, column: number) => `${row}:${column}`;
+  const cell = (row: number, column: number) =>
+    computed[key(row, column)]?.() ?? (grid[row - 1] || [])[column - 1] ?? null;
+  const setCell = (row: number, column: number, value: unknown) => {
+    while (grid.length < row) grid.push([]);
+    const line = grid[row - 1];
+    while (line.length < column) line.push(null);
+    line[column - 1] = value;
+    delete formulas[key(row, column)];
+  };
+  const width = () => grid.reduce((max, row) => Math.max(max, row.length), 0) + 4;
+
+  const sheet = {
+    grid,
+    formulas,
+    getMaxRows: () => grid.length + 4,
+    getMaxColumns: width,
+    getLastRow: () => grid.length,
+    insertRowsAfter() {},
+    insertColumnsAfter() {},
+    insertColumnBefore(column: number) {
+      for (const row of grid) if (row.length >= column) row.splice(column - 1, 0, null);
+    },
+    insertColumnsBefore(column: number, count: number) {
+      for (let index = 0; index < count; index += 1) sheet.insertColumnBefore(column);
+    },
+    getRange(row: number, column: number, rows = 1, columns = 1) {
+      const each = (fn: (r: number, c: number, i: number, j: number) => void) => {
+        for (let i = 0; i < rows; i += 1) for (let j = 0; j < columns; j += 1) fn(row + i, column + j, i, j);
+      };
+      const range = {
+        getValue: () => cell(row, column),
+        getValues: () => {
+          const out: unknown[][] = [];
+          for (let i = 0; i < rows; i += 1) {
+            const line: unknown[] = [];
+            for (let j = 0; j < columns; j += 1) line.push(cell(row + i, column + j));
+            out.push(line);
+          }
+          return out;
+        },
+        getFormula: () => formulas[key(row, column)] ?? "",
+        getFormulas: () => {
+          const out: string[][] = [];
+          for (let i = 0; i < rows; i += 1) {
+            const line: string[] = [];
+            for (let j = 0; j < columns; j += 1) line.push(formulas[key(row + i, column + j)] ?? "");
+            out.push(line);
+          }
+          return out;
+        },
+        getFormulaR1C1: () => formulas[key(row, column)] ?? "",
+        setValue(value: unknown) {
+          setCell(row, column, value);
+          return range;
+        },
+        setValues(values: unknown[][]) {
+          each((r, c, i, j) => setCell(r, c, values[i][j]));
+          return range;
+        },
+        setFormula(formula: string) {
+          setCell(row, column, formula);
+          formulas[key(row, column)] = formula;
+          return range;
+        },
+        setFormulaR1C1: (formula: string) => range.setFormula(formula),
+        setFormulas(values: string[][]) {
+          each((r, c, i, j) => {
+            setCell(r, c, values[i][j]);
+            formulas[key(r, c)] = values[i][j];
+          });
+          return range;
+        },
+        clearContent() {
+          each((r, c) => setCell(r, c, null));
+          return range;
+        },
+        copyTo(target: { copyFrom: (values: unknown[][], f: string[][]) => void }, options?: { formatOnly?: boolean }) {
+          if (!options?.formatOnly) target.copyFrom(range.getValues(), range.getFormulas());
+          return range;
+        },
+        copyFrom(values: unknown[][], copied: string[][]) {
+          each((r, c, i, j) => {
+            setCell(r, c, values[i]?.[j] ?? null);
+            if (copied[i]?.[j]) formulas[key(r, c)] = copied[i][j];
+          });
+        },
+        setNumberFormat: () => range,
+        setFontWeight: () => range,
+      };
+      return range;
+    },
+  };
+
+  return sheet;
+}
+
+const month = (label: string) => new Date(Date.UTC(Number(label.slice(0, 4)), Number(label.slice(5, 7)) - 1, 1));
+const MONTHS_TO_NOV = ["2026/07", "2026/08", "2026/09", "2026/10", "2026/11"];
+
+/**
+ * The book as the 30/09 test run left it: September frozen with partial data,
+ * October frozen at zero and November open with drifted formulas.
+ */
+function libroAdelantado() {
+  const volumetria = bookSheet([
+    ["BBVA"], ["TEMPLATE 3-3"], ["Fecha", "Resueltas", "Asignadas", "Asignaciones", "", "Fecha"],
+    [month("2026/07"), 722, 709, 759, "", month("2026/07"), 44, 43, 49],
+    [month("2026/08"), 379, 355, 381, "", month("2026/08"), 21, 23, 26],
+    [month("2026/09"), 701, 704, 742, "", month("2026/09"), 35, 39, 45],
+    [month("2026/10"), null, null, null, "", month("2026/10")],
+    [month("2026/11"), null, null, null, "", month("2026/11")],
+  ]);
+  const historico = bookSheet([
+    [],
+    ["", "", ...MONTHS_TO_NOV.map(month), "", "Historico"],
+    ["", "", 766, "#N/A", "#N/A", "#N/A", "=SUM(G6+G9)"],
+    ...Array.from({ length: 8 }, () => ["", "", 1, "#N/A", "#N/A", "#N/A", "=VLOOKUP"]),
+  ]);
+  const anual: unknown[][] = [[], [], ["", "", 2025, 2026]];
+  for (let index = 0; index < 12; index += 1) anual.push(["", "Mes", 1000 + index, index < 7 ? 900 : null]);
+  anual[10][3] = 702;
+  anual[13][3] = "='2.1.6 Work Orders (Informe)'!N46";
+  const total = bookSheet([
+    ["Mes", "Incidencias", "WO", "Total"],
+    [month("2026/07"), 766, 1095, "=SUM(B2:C2)"],
+    [month("2026/08"), 11382, 702, "=SUM(B3:C3)"],
+    [month("2026/09"), 317, null, "=SUM(B4:C4)"],
+    [month("2026/10"), null, null, "=SUM(B5:C5)"],
+    [month("2026/11"), "='Top 5'!R30", "='WO'!N46", "=SUM(B6:C6)"],
+  ]);
+  const encuestas = bookSheet([
+    [], [], ["", "Fecha", "Encuestas", "Media", "Histórico"],
+    ["", month("2026/07"), 173, 4.86, "Histórico"],
+  ]);
+  encuestas.grid.push(["", month("2026/08"), 117, 4.92, "Histórico"]);
+  encuestas.grid.push(["", month("2026/09"), 73, 4.9, "Histórico"]);
+  encuestas.grid.push(["", month("2026/10"), 0, "#DIV/0!", "Histórico"]);
+  encuestas.grid.push(["", month("2026/11"), "=C31", "=J33", "Vivo (C31 y J33)"]);
+
+  const imacs: unknown[][] = [[], [], [], [], ["", ""]];
+  MONTHS_TO_NOV.forEach((label) => {
+    const first = month(label);
+    const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0));
+    imacs[4].push(first, last);
+  });
+  for (let row = 5; row < 50; row += 1) imacs.push([]);
+
+  // Work orders the report table counts per month, read through its markers.
+  const woByMonth: Record<string, number> = { "2026/08": 749, "2026/09": 858, "2026/10": 3 };
+  const woGrid: unknown[][] = [[]];
+  for (let row = 1; row < 45; row += 1) woGrid.push([]);
+  woGrid[23] = ["", "Edificio", "Acompañamiento", "", "", "", "", "", "", "", "", "", "", "Total"];
+  woGrid[24] = ["Alicante", "Alicante"];
+  woGrid[44] = ["", "", 2026];
+  const wo = bookSheet(woGrid, {
+    "26:14": () => {
+      const marker = woGrid[0][7] as Date | undefined;
+      return marker ? woByMonth[`${marker.getUTCFullYear()}/${String(marker.getUTCMonth() + 1).padStart(2, "0")}`] ?? 0 : 0;
+    },
+  });
+  wo.grid[0][7] = month("2026/10");
+  wo.grid[0][8] = new Date(Date.UTC(2026, 9, 31));
+
+  const config = bookSheet([
+    ["Carpeta Drive", "x"],
+    ["Fecha de extracción", new Date(Date.UTC(2026, 9, 1))],
+  ]);
+
+  return {
+    volumetria,
+    historico,
+    anual: bookSheet(anual),
+    total,
+    encuestas,
+    imacs: bookSheet(imacs),
+    wo,
+    config,
+  };
+}
+
+function loadWithBook(book: ReturnType<typeof libroAdelantado>) {
+  return loadCodigoWithSheets({
+    "2.1.1 Volumetria de Incidencias": book.volumetria,
+    "Hoja 13": book.historico,
+    "Hoja 14": book.anual,
+    "Hoja 15": book.total,
+    "2.1.5. Encuestas (Informe)": book.encuestas,
+    "Hoja 19": book.imacs,
+    "2.1.6 Work Orders (Informe)": book.wo,
+    "Configuración": book.config,
+  } as unknown as Record<string, ReturnType<typeof memorySheet>>);
+}
+
+/** The export of 01/10: HIC and surveys up to September, nothing of October yet. */
+function exportDelDiaUno(gs: ReturnType<typeof loadCodigo>) {
+  const template = templateFound(EMPTY_EN_CURSO).encuestas.grids;
+  template[1].grid = [
+    ["Fecha", "Incidencias resueltas", "Asignadas", "Asignaciones"],
+    ["2026/07", "722", "709", "759"],
+    ["2026/08", "408", "401", "442"],
+    ["2026/09", "873", "864", "910"],
+  ];
+  template[2].grid = [
+    ["Fecha", "Incidencias resueltas", "Asignadas", "Asignaciones"],
+    ["2026/08", "21", "24", "27"],
+    ["2026/09", "41", "44", "50"],
+  ];
+  const surveys = [
+    ["Incident Number", "Fecha", "¿Cuál es tu nivel de satisfación en general con esta solicitud?"],
+    ["1", "2026/08", "5"],
+    ["2", "2026/08", "4"],
+    ["3", "2026/09", "5"],
+    ["4", "2026/09", "5"],
+    ["5", "2026/09", "2"],
+    ["6", "2026/09", ""],
+  ];
+
+  return {
+    encuestas: {
+      grids: template,
+      sheets: gs.findDataSheets([{ name: "1-1", grid: surveys }], ["Incident Number", "Fecha"]),
+    },
+  };
+}
+
+describe("Codigo.gs tablas mensuales en valores", () => {
+  it("repara el libro adelantado: cierra agosto y septiembre, deja octubre vivo y vacía noviembre", () => {
+    const book = libroAdelantado();
+    const gs = loadWithBook(book);
+    const result = gs.actualizarMeses(exportDelDiaUno(gs), new Date(Date.UTC(2026, 9, 1)), "2026/07", 19);
+
+    expect(result).toMatchObject({ cerrados: ["2026/08", "2026/09"], vivo: "2026/10", ultimoCerrado: "2026/09" });
+    expect(result.limpiados).toEqual(["2026/11"]);
+
+    // 2.1.1: September from the export of the 1st, October without data yet, November gone.
+    expect(book.volumetria.grid[5].slice(1, 4)).toEqual([873, 864, 910]);
+    expect(book.volumetria.grid[5].slice(6, 9)).toEqual([41, 44, 50]);
+    expect(book.volumetria.grid[6].slice(1, 4)).toEqual(["", "", ""]);
+    expect(book.volumetria.grid[7].slice(0, 4)).toEqual([null, null, null, null]);
+
+    // Hoja 13: values instead of drifted formulas; November emptied, July untouched.
+    expect(book.historico.grid.slice(2, 11).map((row) => row[4])).toEqual([914, 908, 960, 873, 864, 910, 41, 44, 50]);
+    expect(book.historico.grid.slice(2, 11).map((row) => row[2])).toEqual([766, 1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(book.historico.grid[1][6]).toBeNull();
+    expect(book.historico.formulas["3:7"]).toBeUndefined();
+    expect(book.historico.grid[1][8]).toBe("Historico");
+
+    // Hoja 14 and 15: work orders read through the markers of each month.
+    expect(book.anual.grid.slice(10, 14).map((row) => row[3])).toEqual([749, 858, 3, null]);
+    expect(book.total.grid.slice(2, 6)).toEqual([
+      [month("2026/08"), 429, 749, "=SUM(B3:C3)"],
+      [month("2026/09"), 914, 858, "=SUM(B4:C4)"],
+      [month("2026/10"), "", 3, "=SUM(B5:C5)"],
+      [null, null, null, null],
+    ]);
+    expect(book.wo.grid[0][7]).toEqual(month("2026/10"));
+
+    // Surveys: 1 to 5 only; October live with none yet.
+    expect(book.encuestas.grid.slice(4, 8).map((row) => row.slice(1, 5))).toEqual([
+      [month("2026/08"), 2, 4.5, "Histórico"],
+      [month("2026/09"), 3, 4, "Histórico"],
+      [month("2026/10"), 0, "", "Vivo"],
+      [null, null, null, null],
+    ]);
+    expect(book.encuestas.grid[1].slice(6, 8)).toEqual(["=B4", "=B5"]);
+    expect(book.encuestas.grid[1][9]).toBe("=B7");
+
+    // Hoja 19: the November pair is emptied, October stays.
+    expect(book.imacs.grid[4].slice(8, 10)).toEqual([month("2026/10"), new Date(Date.UTC(2026, 9, 31))]);
+    expect(book.imacs.grid[4].slice(10, 12)).toEqual([null, null]);
+
+    expect(book.config.grid[2]).toEqual(["Último mes cerrado", "2026/09"]);
+    expect(gs.readConfig().lastClosed).toBe("2026/09");
+  });
+
+  it("no vuelve a tocar un mes cerrado y reescribe el vivo", () => {
+    const book = libroAdelantado();
+    const gs = loadWithBook(book);
+    const found = exportDelDiaUno(gs);
+
+    gs.actualizarMeses(found, new Date(Date.UTC(2026, 9, 1)), "2026/07", 19);
+
+    // A later export with a late survey of September and October started.
+    found.encuestas.sheets[0].grid.push(["7", "2026/09", "1"], ["8", "2026/10", "5"]);
+    const result = gs.actualizarMeses(found, new Date(Date.UTC(2026, 9, 5)), "2026/09", 19);
+
+    expect(result.cerrados).toEqual([]);
+    expect(book.encuestas.grid[5].slice(2, 4)).toEqual([3, 4]);
+    expect(book.encuestas.grid[6].slice(2, 5)).toEqual([1, 5, "Vivo"]);
+  });
+
+  it("deshace en la siguiente ejecución lo que abrió una fecha equivocada", () => {
+    const book = libroAdelantado();
+    const gs = loadWithBook(book);
+    const found = exportDelDiaUno(gs);
+
+    // Normal close of September on the 1st, then October processed by mistake as December.
+    gs.actualizarMeses(found, new Date(Date.UTC(2026, 9, 1)), "2026/07", 19);
+    gs.actualizarMeses(found, new Date(Date.UTC(2026, 11, 7)), "2026/09", 19);
+    expect(book.total.grid.slice(4, 7).map((row) => row[0])).toEqual([
+      month("2026/10"),
+      month("2026/11"),
+      month("2026/12"),
+    ]);
+
+    // The right date: November and December are emptied, October is live again.
+    gs.actualizarMeses(found, new Date(Date.UTC(2026, 9, 8)), "2026/09", 19);
+    expect(book.total.grid.slice(4, 7).map((row) => row[0])).toEqual([month("2026/10"), null, null]);
+    expect(book.encuestas.grid[6][4]).toBe("Vivo");
+  });
+
+  it("no escribe nada si la extracción cae en un mes ya cerrado", () => {
+    const book = libroAdelantado();
+    const gs = loadWithBook(book);
+    const before = JSON.stringify(book.total.grid);
+    const result = gs.actualizarMeses(exportDelDiaUno(gs), new Date(Date.UTC(2026, 8, 28)), "2026/09", 19);
+
+    expect(result.vivo).toBe("");
+    expect(JSON.stringify(book.total.grid)).toBe(before);
+  });
+});

@@ -109,7 +109,8 @@ var CONFIG_KEYS = {
   outputFolder: 'Carpeta salida PLANO',
   extraction: 'Fecha de extracción',
   lastProcessed: 'Última extracción procesada',
-  windowMonths: 'Meses en la ventana de encuestas'
+  windowMonths: 'Meses en la ventana de encuestas',
+  lastClosed: 'Último mes cerrado'
 };
 
 /**
@@ -143,7 +144,6 @@ function onOpen() {
     .createMenu('⭐ Informática Weekly')
     .addItem('Inicializar hoja', 'inicializarHoja')
     .addItem('Procesar semana', 'procesarSemana')
-    .addItem('Cerrar mes', 'cerrarMes')
     .addItem('Guardar PLANO como .txt en la carpeta', 'guardarPlanoTxt')
     .addToUi();
 }
@@ -913,6 +913,7 @@ function readConfig() {
     outputFolderId: outputFolderId,
     extraction: extraction,
     lastProcessed: configDate(config[CONFIG_KEYS.lastProcessed]),
+    lastClosed: mesDeCelda(config[CONFIG_KEYS.lastClosed]) || MES_CERRADO_INICIAL,
     windowMonths: isFinite(windowMonths) && windowMonths > 0 ? Math.round(windowMonths) : DEFAULT_WINDOW_MONTHS
   };
 }
@@ -935,6 +936,9 @@ function writeConfigValue(key, value) {
     row = last + 1;
     sheet.getRange(row, 1).setValue(key).setFontWeight('bold');
   }
+
+  // `2026/09` would otherwise become a date that reads like a day.
+  if (key === CONFIG_KEYS.lastClosed) sheet.getRange(row, 2).setNumberFormat('@');
 
   sheet.getRange(row, 2).setValue(value);
 
@@ -1224,7 +1228,7 @@ function escribirMarcadores(extraction) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Monthly close                                                               */
+/* Month helpers                                                               */
 /* -------------------------------------------------------------------------- */
 
 /** First day of the month after `month`, at UTC midnight. */
@@ -1303,116 +1307,6 @@ function rangoTieneContenido(range) {
   return false;
 }
 
-/** The survey live row is also the durable close marker. */
-function mesYaCerrado(month) {
-  var sheet = sheetByName(TAB.encuestasInforme, false);
-  var liveRow = ultimaFilaFecha(sheet, 2, 4);
-
-  if (liveRow === 0) return false;
-
-  var date = toDate(sheet.getRange(liveRow, 2).getValue());
-
-  return date ? date.getTime() >= month.getTime() : false;
-}
-
-/** First day of the live survey-history month, or null. */
-function mesVivoEncuestas() {
-  var sheet = sheetByName(TAB.encuestasInforme, false);
-  var liveRow = ultimaFilaFecha(sheet, 2, 4);
-
-  if (liveRow === 0) return null;
-
-  var date = toDate(sheet.getRange(liveRow, 2).getValue());
-
-  return date ? monthStart(date) : null;
-}
-
-/**
- * Freezes the current live month and opens `month`. Returns the frozen cells,
- * or null when that month is already open.
- */
-function abrirMesNuevo(month, windowMonths) {
-  if (mesYaCerrado(month)) return null;
-
-  var frozenCells = describirCeldasCierre(month);
-
-  cerrarVolumetria(month);
-  cerrarHistoricoIncidencias(month);
-  cerrarSeriesMensuales(month);
-  cerrarImacs(month);
-  cerrarBloqueTeclado(month);
-
-  // This is deliberately last: its new live row is the idempotency marker.
-  cerrarEncuestas(month, windowMonths);
-
-  return frozenCells;
-}
-
-/**
- * Closes the extraction month and opens the following month exactly once.
- *
- * The guard compares the survey history with the NEW month. Closing August,
- * for example, opens 01/09/2026; comparing with August would skip the first
- * legitimate close because the live row already represents August.
- *
- * Weekly processing does not call this: it only catches up months that are
- * already behind the extraction date, so August stays live while August is
- * still being reported.
- */
-function cerrarMes() {
-  var config = readConfig();
-  var nextMonth = mesSiguiente(monthBounds(config.extraction).first);
-  var frozenCells = abrirMesNuevo(nextMonth, config.windowMonths);
-
-  if (!frozenCells) {
-    actualizarComprobacionCierre('Sin cambios', 'El mes ' + fechaLegible(nextMonth) + ' ya estaba abierto.');
-    return false;
-  }
-
-  actualizarComprobacionCierre('OK', frozenCells.join('; '));
-
-  return true;
-}
-
-/**
- * When extraction has moved into a later month, freeze every live month that
- * is now in the past. August stays live while extraction is still in August.
- */
-function cerrarMesesPendientes(extraction, windowMonths) {
-  var target = monthBounds(extraction).first;
-  var details = [];
-  var live = mesVivoEncuestas();
-  var guard = 0;
-
-  if (!live || !fechaOperativa(live) || live.getTime() >= target.getTime()) return details;
-
-  while (!mesYaCerrado(target) && guard < 24) {
-    live = mesVivoEncuestas();
-
-    if (!live || !fechaOperativa(live)) break;
-
-    var next = mesSiguiente(live);
-
-    if (next.getTime() > target.getTime() || !fechaOperativa(next)) break;
-
-    var frozenCells = abrirMesNuevo(next, windowMonths);
-
-    if (!frozenCells) break;
-
-    details.push('Abierto ' + fechaLegible(next) + ' (' + frozenCells.join('; ') + ')');
-    guard += 1;
-  }
-
-  if (guard >= 24 && !mesYaCerrado(target)) {
-    throw new Error(
-      'No se pudieron cerrar los meses pendientes hasta ' + fechaLegible(target) +
-        '. No se escriben los volcados de esta semana.'
-    );
-  }
-
-  return details;
-}
-
 function columnLetters(column) {
   var value = column;
   var out = '';
@@ -1424,105 +1318,6 @@ function columnLetters(column) {
   }
 
   return out;
-}
-
-/** Exact live cells that the close turns into values before opening the new month. */
-function describirCeldasCierre(month) {
-  var incidenceSheet = sheetByName(TAB.volumetriaHistorico, false);
-  var incidenceColumn = ultimaColumnaFecha(incidenceSheet, 2, 3);
-  var closedMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1));
-  var workSheet = sheetByName(TAB.workOrdersMensual, false);
-  var workColumn = columnaAnual(workSheet, closedMonth.getUTCFullYear());
-  var workRow = 4 + closedMonth.getUTCMonth();
-  var totalSheet = sheetByName(TAB.totalMensual, false);
-  var totalRow = ultimaFilaFecha(totalSheet, 1, 2);
-  var surveySheet = sheetByName(TAB.encuestasInforme, false);
-  var surveyRow = ultimaFilaFecha(surveySheet, 2, 4);
-  var cells = [];
-
-  if (incidenceColumn > 0) {
-    cells.push(
-      physicalSheetName(TAB.volumetriaHistorico) + '!' + columnLetters(incidenceColumn) + '3:' +
-        columnLetters(incidenceColumn) + '11'
-    );
-  }
-  if (workColumn > 0) {
-    cells.push(physicalSheetName(TAB.workOrdersMensual) + '!' + columnLetters(workColumn) + workRow);
-  }
-  if (totalRow > 0) {
-    cells.push(physicalSheetName(TAB.totalMensual) + '!B' + totalRow + ':C' + totalRow);
-  }
-  if (surveyRow > 0) {
-    cells.push(physicalSheetName(TAB.encuestasInforme) + '!C' + surveyRow + ':D' + surveyRow);
-  }
-
-  return cells;
-}
-
-/** Opens one empty dated row while preserving the preceding row's formatting. */
-function abrirFilaVolumetria(sheet, month, firstColumn) {
-  var liveRow = ultimaFilaFecha(sheet, firstColumn, 4);
-
-  if (liveRow === 0) {
-    throw new Error('La volumetría no trae ninguna fecha válida en la columna ' + firstColumn + '.');
-  }
-
-  var liveDate = toDate(sheet.getRange(liveRow, firstColumn).getValue());
-
-  if (liveDate.getTime() >= month.getTime()) return false;
-  if (!mismoMes(liveDate, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1)))) {
-    throw new Error('La volumetría no termina en el mes que se intenta cerrar.');
-  }
-
-  var newRow = liveRow + 1;
-
-  asegurarFila(sheet, newRow);
-  sheet.getRange(liveRow, firstColumn, 1, 4).copyTo(sheet.getRange(newRow, firstColumn, 1, 4));
-  sheet.getRange(newRow, firstColumn, 1, 4).clearContent();
-  sheet.getRange(newRow, firstColumn).setValue(month).setNumberFormat('dd/mm/yyyy');
-
-  return true;
-}
-
-/** Adds the new month to both independent blocks of 2.1.1. */
-function cerrarVolumetria(month) {
-  var sheet = sheetByName(TAB.volumetria, false);
-
-  abrirFilaVolumetria(sheet, month, 1);
-  abrirFilaVolumetria(sheet, month, 6);
-}
-
-/** Freezes Hoja 13's live column and opens the next column from its real pattern. */
-function cerrarHistoricoIncidencias(month) {
-  var sheet = sheetByName(TAB.volumetriaHistorico, false);
-  var liveColumn = ultimaColumnaFecha(sheet, 2, 3);
-
-  if (liveColumn === 0) throw new Error('Hoja 13 no trae ninguna cabecera mensual válida.');
-
-  var liveDate = toDate(sheet.getRange(2, liveColumn).getValue());
-
-  if (liveDate.getTime() >= month.getTime()) return false;
-  if (!mismoMes(liveDate, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1)))) {
-    throw new Error('Hoja 13 no termina en el mes que se intenta cerrar.');
-  }
-
-  var newColumn = liveColumn + 1;
-
-  asegurarColumna(sheet, newColumn);
-
-  // A side table may eventually reach the next history column. Move it instead
-  // of overwriting it; formulas elsewhere follow the inserted column.
-  if (rangoTieneContenido(sheet.getRange(2, newColumn, 10, 1))) {
-    sheet.insertColumnBefore(newColumn);
-  }
-
-  sheet.getRange(2, liveColumn, 10, 1).copyTo(sheet.getRange(2, newColumn, 10, 1));
-  sheet.getRange(2, newColumn).setValue(month).setNumberFormat('dd/mm/yyyy');
-
-  var frozen = sheet.getRange(3, liveColumn, 9, 1).getValues();
-  sheet.getRange(3, liveColumn, 9, 1).setValues(frozen);
-
-  return true;
 }
 
 function columnaAnual(sheet, year) {
@@ -1560,65 +1355,6 @@ function asegurarColumnaAnual(sheet, year, sourceColumn) {
   if (annualFormula !== '') sheet.getRange(16, targetColumn).setFormulaR1C1(annualFormula);
 
   return targetColumn;
-}
-
-/** Freezes Hoja 14's current cell and opens the following month. */
-function cerrarWorkOrdersMensual(month) {
-  var sheet = sheetByName(TAB.workOrdersMensual, false);
-  var closedMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1));
-  var sourceColumn = columnaAnual(sheet, closedMonth.getUTCFullYear());
-
-  if (sourceColumn === 0) throw new Error('Hoja 14 no trae la columna del año que se cierra.');
-
-  var targetColumn = asegurarColumnaAnual(sheet, month.getUTCFullYear(), sourceColumn);
-  var sourceRow = 4 + closedMonth.getUTCMonth();
-  var targetRow = 4 + month.getUTCMonth();
-  var target = sheet.getRange(targetRow, targetColumn);
-
-  if (text(target.getFormula()) !== '') return false;
-
-  var source = sheet.getRange(sourceRow, sourceColumn);
-  var formula = source.getFormulaR1C1();
-
-  if (formula === '') throw new Error('Hoja 14 no trae fórmula viva para abrir el mes siguiente.');
-
-  target.setFormulaR1C1(formula);
-  source.setValue(source.getValue());
-
-  return true;
-}
-
-/** Freezes Hoja 15's live sources and copies its exact formula pattern below. */
-function cerrarTotalMensual(month) {
-  var sheet = sheetByName(TAB.totalMensual, false);
-  var liveRow = ultimaFilaFecha(sheet, 1, 2);
-
-  if (liveRow === 0) throw new Error('Hoja 15 no trae ninguna fecha mensual válida.');
-
-  var liveDate = toDate(sheet.getRange(liveRow, 1).getValue());
-
-  if (liveDate.getTime() >= month.getTime()) return false;
-  if (!mismoMes(liveDate, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1)))) {
-    throw new Error('Hoja 15 no termina en el mes que se intenta cerrar.');
-  }
-
-  var source = sheet.getRange(liveRow, 1, 1, 4);
-  var newRow = liveRow + 1;
-
-  asegurarFila(sheet, newRow);
-  source.copyTo(sheet.getRange(newRow, 1, 1, 4));
-  sheet.getRange(newRow, 1).setValue(month).setNumberFormat('dd/mm/yyyy');
-
-  var frozen = sheet.getRange(liveRow, 2, 1, 2).getValues();
-  sheet.getRange(liveRow, 2, 1, 2).setValues(frozen);
-
-  return true;
-}
-
-/** Monthly series kept in rows: Hoja 14 and Hoja 15. */
-function cerrarSeriesMensuales(month) {
-  cerrarWorkOrdersMensual(month);
-  cerrarTotalMensual(month);
 }
 
 /** Last complete two-column month in Hoja 19, based only on its date bounds. */
@@ -1791,60 +1527,523 @@ function cerrarBloqueTeclado(month) {
   }
 }
 
-/** Freezes the live survey row, opens the next one and slides the configured window. */
-function cerrarEncuestas(month, windowMonths) {
-  var sheet = sheetByName(TAB.encuestasInforme, false);
-  var liveRow = ultimaFilaFecha(sheet, 2, 4);
+/* -------------------------------------------------------------------------- */
+/* Monthly tables                                                              */
+/* -------------------------------------------------------------------------- */
 
-  if (liveRow === 0) throw new Error('El histórico de encuestas no trae ninguna fecha válida.');
+/**
+ * First month the script writes in the monthly tables (2.1.1, Hoja 13, 14,
+ * 15 and the survey history). July 2026 and earlier were closed by hand and
+ * are never touched.
+ */
+var MES_GESTION_INICIAL = '2026/08';
 
-  var liveDate = toDate(sheet.getRange(liveRow, 2).getValue());
+/** Last closed month while Configuración does not say: the last one closed by hand. */
+var MES_CERRADO_INICIAL = '2026/07';
 
-  if (liveDate.getTime() >= month.getTime()) return false;
-  if (!mismoMes(liveDate, new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() - 1, 1)))) {
-    throw new Error('El histórico de encuestas no termina en el mes que se intenta cerrar.');
+/** First day of a `yyyy/mm` month, at UTC midnight. */
+function fechaDeMes(month) {
+  var match = MONTH_TEXT.exec(month);
+
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+}
+
+/** `yyyy/mm` of a cell that holds a month (a date or `2026/08`), or ''. */
+function mesDeCelda(value) {
+  var date = toDate(value);
+
+  return date && fechaOperativa(date) ? monthLabel(date) : '';
+}
+
+/** Months from `from` to `to`, both included. */
+function mesesEntre(from, to) {
+  var months = [];
+
+  for (var month = from; month !== '' && month <= to && months.length < 240; month = shiftMonthLabel(month, 1)) {
+    months.push(month);
   }
 
+  return months;
+}
+
+function pestanaMensual(name) {
+  var sheet = sheetByName(name, false);
+
+  if (!sheet) throw new Error('Falta la pestaña ' + name + '.');
+
+  return sheet;
+}
+
+function recalcular() {
+  if (typeof SpreadsheetApp !== 'undefined' && typeof SpreadsheetApp.flush === 'function') {
+    SpreadsheetApp.flush();
+  }
+}
+
+function copiarFormato(source, target) {
+  source.copyTo(target, { formatOnly: true });
+}
+
+/** Resolved, assigned and assignments by month of one HIC block (3-3 or 4-4). */
+function serieMensualHic(source) {
+  var series = {};
+  var data = sourceRows(source);
+
+  for (var rowIndex = 0; rowIndex < data.length; rowIndex += 1) {
+    var row = data[rowIndex] || [];
+    var date = toDate(row[0]);
+
+    if (!date || !fechaOperativa(date)) continue;
+
+    series[monthLabel(date)] = [toNumber(row[1]), toNumber(row[2]), toNumber(row[3])];
+  }
+
+  return series;
+}
+
+/**
+ * Surveys by month of tab 1-1: answers rated 1 to 5 and their sum, the same
+ * figures C31 and J33 of the survey report compute for the month in L24.
+ */
+function serieMensualEncuestas(found) {
+  var source = firstSource(found.encuestas, 'Encuestas');
+  var header = source.grid[source.headerRow] || [];
+  var monthAt = headerIndex(header)[normalize('Fecha')];
+  var scoreAt = columnLikeIndex(header, 'Nivel de satis');
+  var series = {};
+
+  if (monthAt === undefined || scoreAt < 0) {
+    throw new Error('El template de encuestas no trae Fecha y la valoración general.');
+  }
+
+  for (var rowIndex = source.headerRow + 1; rowIndex < source.grid.length; rowIndex += 1) {
+    var row = source.grid[rowIndex] || [];
+    var date = toDate(row[monthAt]);
+    var score = toNumber(row[scoreAt]);
+
+    if (!date || !fechaOperativa(date) || text(row[scoreAt]) === '') continue;
+    if (score < 1 || score > 5 || Math.floor(score) !== score) continue;
+
+    var month = monthLabel(date);
+    var current = series[month] || { numero: 0, suma: 0 };
+
+    current.numero += 1;
+    current.suma += score;
+    series[month] = current;
+  }
+
+  return series;
+}
+
+/** Row and column of the month total in the site-by-type table of 2.1.6 (Informe). */
+function celdaTotalWorkOrders(sheet) {
+  var grid = sheet
+    .getRange(1, 1, Math.min(sheet.getMaxRows(), 120), Math.min(sheet.getMaxColumns(), 40))
+    .getValues();
+
+  for (var rowIndex = 0; rowIndex < grid.length; rowIndex += 1) {
+    if (normalize(grid[rowIndex][1]) !== 'EDIFICIO') continue;
+
+    // The small per-site table at the top also says Edificio / Total, with
+    // Total in C; the site-by-type table keeps it after the type columns.
+    var totalAt = -1;
+
+    for (var column = 6; column < grid[rowIndex].length; column += 1) {
+      if (normalize(grid[rowIndex][column]) === 'TOTAL') totalAt = column;
+    }
+
+    if (totalAt < 0) continue;
+
+    for (var below = rowIndex + 1; below < grid.length; below += 1) {
+      if (text(grid[below][0]) === '' && text(grid[below][1]) === '') {
+        return { row: below + 1, column: totalAt + 1 };
+      }
+    }
+  }
+
+  throw new Error('2.1.6 Work Orders (Informe) no trae la tabla Edificio por tipo con su columna Total.');
+}
+
+/**
+ * Work orders of `month` as the report counts them: the book's own table,
+ * filtered by territorial and type, read with its date markers H1:I1 on that
+ * month. The markers are put back afterwards.
+ */
+function workOrdersDelMes(month) {
+  var sheet = pestanaMensual(TAB.workOrdersInforme);
+  var cell = celdaTotalWorkOrders(sheet);
+  var markers = sheet.getRange(1, 8, 1, 2);
+  var previous = markers.getValues();
+  var bounds = monthBounds(fechaDeMes(month));
+
+  markers.setValues([[bounds.first, bounds.last]]);
+  recalcular();
+
+  var value = toNumber(sheet.getRange(cell.row, cell.column).getValue());
+
+  markers.setValues(previous);
+
+  return value;
+}
+
+/** Month → row of a dated column, and the row of the latest month. */
+function filasPorMes(sheet, column, firstRow) {
+  var count = sheet.getMaxRows() - firstRow + 1;
+  var result = { rows: {}, last: firstRow - 1, lastMonth: '' };
+
+  if (count < 1) return result;
+
+  var values = sheet.getRange(firstRow, column, count, 1).getValues();
+
+  for (var index = 0; index < values.length; index += 1) {
+    var month = mesDeCelda(values[index][0]);
+
+    if (month === '') continue;
+
+    result.rows[month] = firstRow + index;
+
+    if (month > result.lastMonth) {
+      result.lastMonth = month;
+      result.last = firstRow + index;
+    }
+  }
+
+  return result;
+}
+
+/** Month → column of a dated header row, and the column of the latest month. */
+function columnasPorMes(sheet, row, firstColumn) {
+  var count = sheet.getMaxColumns() - firstColumn + 1;
+  var result = { columns: {}, last: firstColumn - 1, lastMonth: '' };
+
+  if (count < 1) return result;
+
+  var values = sheet.getRange(row, firstColumn, 1, count).getValues()[0];
+
+  for (var index = 0; index < values.length; index += 1) {
+    var month = mesDeCelda(values[index]);
+
+    if (month === '') continue;
+
+    result.columns[month] = firstColumn + index;
+
+    if (month > result.lastMonth) {
+      result.lastMonth = month;
+      result.last = firstColumn + index;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Row of `month` in a dated column, appended after the latest month when it
+ * is missing. Every written row takes the format of the last hand-closed
+ * month, so rows opened by earlier versions of this script line up again.
+ */
+function filaDelMes(sheet, column, firstRow, width, month) {
+  var found = filasPorMes(sheet, column, firstRow);
+  var row = found.rows[month];
+
+  if (!row) {
+    row = found.last + 1;
+    asegurarFila(sheet, row);
+  }
+
+  var model = found.rows[MES_CERRADO_INICIAL] || (row > firstRow ? row - 1 : 0);
+
+  if (model >= firstRow && model !== row) {
+    copiarFormato(sheet.getRange(model, column, 1, width), sheet.getRange(row, column, 1, width));
+  }
+
+  return row;
+}
+
+function limpiarFilasPosteriores(sheet, column, firstRow, width, limit, cleared) {
+  var found = filasPorMes(sheet, column, firstRow);
+
+  for (var month in found.rows) {
+    if (month <= limit || month < MES_GESTION_INICIAL) continue;
+
+    sheet.getRange(found.rows[month], column, 1, width).clearContent();
+    cleared[month] = true;
+  }
+}
+
+/** 2.1.1: one block (A for 3-3, F for 4-4), date and the three HIC figures. */
+function escribirMesVolumetria(sheet, column, month, values) {
+  var row = filaDelMes(sheet, column, 4, 4, month);
+
+  sheet.getRange(row, column, 1, 4).setValues([[fechaDeMes(month)].concat(values || ['', '', ''])]);
+}
+
+/** Hoja 13: totals (3-5), BBVA (6-8) and BBVA Tech (9-11) under the month header. */
+function escribirMesHistorico(sheet, month, bbva, tech) {
+  var found = columnasPorMes(sheet, 2, 3);
+  var column = found.columns[month];
+
+  if (!column) {
+    column = found.last + 1;
+    asegurarColumna(sheet, column);
+
+    // A side table may sit right after the history. Move it instead of
+    // writing over it; formulas elsewhere follow the inserted column.
+    if (rangoTieneContenido(sheet.getRange(2, column, 10, 1))) sheet.insertColumnBefore(column);
+  }
+
+  var model = found.columns[MES_CERRADO_INICIAL];
+
+  if (model && model !== column) {
+    copiarFormato(sheet.getRange(2, model, 10, 1), sheet.getRange(2, column, 10, 1));
+  }
+
+  var values = [['']];
+
+  if (bbva || tech) {
+    var b = bbva || [0, 0, 0];
+    var t = tech || [0, 0, 0];
+
+    values = [[b[0] + t[0]], [b[1] + t[1]], [b[2] + t[2]], [b[0]], [b[1]], [b[2]], [t[0]], [t[1]], [t[2]]];
+  } else {
+    values = [[''], [''], [''], [''], [''], [''], [''], [''], ['']];
+  }
+
+  sheet.getRange(2, column).setValue(fechaDeMes(month));
+  sheet.getRange(3, column, 9, 1).setValues(values);
+}
+
+function limpiarColumnasPosteriores(sheet, limit, cleared) {
+  var found = columnasPorMes(sheet, 2, 3);
+
+  for (var month in found.columns) {
+    if (month <= limit || month < MES_GESTION_INICIAL) continue;
+
+    sheet.getRange(2, found.columns[month], 10, 1).clearContent();
+    cleared[month] = true;
+  }
+}
+
+/** Hoja 14: the month cell of the year column, a new year column when January needs it. */
+function escribirMesWorkOrdersAnual(sheet, month, value) {
+  var date = fechaDeMes(month);
+  var year = date.getUTCFullYear();
+  var column = columnaAnual(sheet, year);
+
+  if (column === 0) {
+    var previous = columnaAnual(sheet, year - 1);
+
+    if (previous === 0) throw new Error('Hoja 14 no trae la columna del año ' + (year - 1) + '.');
+
+    column = asegurarColumnaAnual(sheet, year, previous);
+  }
+
+  sheet.getRange(4 + date.getUTCMonth(), column).setValue(value);
+}
+
+function limpiarWorkOrdersAnualPosteriores(sheet, limit, cleared) {
+  var months = mesesEntre(shiftMonthLabel(limit, 1), shiftMonthLabel(limit, 12));
+
+  for (var index = 0; index < months.length; index += 1) {
+    if (months[index] < MES_GESTION_INICIAL) continue;
+
+    var date = fechaDeMes(months[index]);
+    var column = columnaAnual(sheet, date.getUTCFullYear());
+
+    if (column === 0) continue;
+
+    var cell = sheet.getRange(4 + date.getUTCMonth(), column);
+
+    if (text(cell.getValue()) === '' && text(cell.getFormula()) === '') continue;
+
+    cell.clearContent();
+    cleared[months[index]] = true;
+  }
+}
+
+/** Hoja 15: incidents (BBVA + BBVA Tech resolved), work orders and their sum. */
+function escribirMesTotal(sheet, month, incidencias, workOrders) {
+  var row = filaDelMes(sheet, 1, 2, 4, month);
+
+  sheet.getRange(row, 1, 1, 3).setValues([[fechaDeMes(month), incidencias, workOrders]]);
+
+  if (text(sheet.getRange(row, 4).getFormula()) === '') {
+    sheet.getRange(row, 4).setFormula('=SUM(B' + row + ':C' + row + ')');
+  }
+}
+
+/** 2.1.5 (Informe): surveys and mean of the month, Histórico or Vivo. */
+function escribirMesEncuestas(sheet, month, survey, live) {
+  var row = filaDelMes(sheet, 2, 4, 4, month);
+  var numero = survey ? survey.numero : 0;
+
+  sheet.getRange(row, 2, 1, 4).setValues([
+    [fechaDeMes(month), numero, numero > 0 ? survey.suma / numero : '', live ? 'Vivo' : 'Histórico']
+  ]);
+
+  return row;
+}
+
+/** Points the chart window G2:… at the last `windowMonths` rows up to the live one. */
+function ventanaEncuestas(sheet, liveRow, windowMonths) {
   var width = Number(windowMonths);
 
   if (!isFinite(width) || width < 1) width = DEFAULT_WINDOW_MONTHS;
-  width = Math.round(width);
+  width = Math.min(Math.round(width), liveRow - 3);
 
-  var newRow = liveRow + 1;
-  var firstWindowRow = newRow - width + 1;
-
-  if (firstWindowRow < 4) {
-    throw new Error('La ventana de encuestas es mayor que el histórico disponible.');
-  }
-
-  asegurarFila(sheet, newRow);
-  asegurarColumna(sheet, 6 + width);
-
-  var frozen = sheet.getRange(liveRow, 3, 1, 2).getValues();
-
-  sheet.getRange(liveRow, 3, 1, 2).setValues(frozen);
-  sheet.getRange(liveRow, 5).setValue('Histórico');
-
-  sheet.getRange(liveRow, 2, 1, 4).copyTo(sheet.getRange(newRow, 2, 1, 4));
-  sheet.getRange(newRow, 2).setValue(month).setNumberFormat('dd/mm/yyyy');
-  sheet.getRange(newRow, 3).setFormula('=C31');
-  sheet.getRange(newRow, 4).setFormula('=J33');
-  sheet.getRange(newRow, 5).setValue('Vivo (C31 y J33)');
-  sheet.getRange('L24').setValue(month).setNumberFormat('dd/mm/yyyy');
-
+  var firstRow = liveRow - width + 1;
   var dates = [];
   var averages = [];
 
   for (var index = 0; index < width; index += 1) {
-    dates.push('=B' + (firstWindowRow + index));
-    averages.push('=D' + (firstWindowRow + index));
+    dates.push('=B' + (firstRow + index));
+    averages.push('=D' + (firstRow + index));
   }
 
+  asegurarColumna(sheet, 6 + width);
   sheet.getRange(2, 7, 1, width).setFormulas([dates]);
   sheet.getRange(3, 7, 1, width).setFormulas([averages]);
-  sheet.getRange('F1').setValue(width + ' meses');
+  sheet.getRange(1, 6).setValue(width + ' meses');
+}
 
-  return true;
+/**
+ * Hoja 19 keeps one formula pair per month, bounded by its own dates, so it
+ * needs no freezing: pairs are added up to the live month and pairs after it
+ * are emptied.
+ */
+function ajustarImacs(current, limit, cleared) {
+  var sheet = pestanaMensual(TAB.imacsInforme);
+
+  for (var guard = 0; guard < 24; guard += 1) {
+    var live = ultimaParejaImacs(sheet);
+
+    if (live === 0) throw new Error('Hoja 19 no trae ningún par mensual válido.');
+
+    var liveMonth = mesDeCelda(sheet.getRange(5, live).getValue());
+
+    if (liveMonth === '' || liveMonth >= current) break;
+
+    cerrarImacs(fechaDeMes(shiftMonthLabel(liveMonth, 1)));
+  }
+
+  for (var column = 3; column < sheet.getMaxColumns(); column += 2) {
+    var month = mesDeCelda(sheet.getRange(5, column).getValue());
+
+    if (month === '') break;
+    if (month <= limit || month < MES_GESTION_INICIAL) continue;
+
+    sheet.getRange(3, column, 48, 2).clearContent();
+    cleared[month] = true;
+  }
+}
+
+/** Every tab the monthly tables write, checked before the first write of a run. */
+function validarTablasMensuales() {
+  var names = [
+    TAB.volumetria,
+    TAB.volumetriaHistorico,
+    TAB.workOrdersMensual,
+    TAB.totalMensual,
+    TAB.encuestasInforme,
+    TAB.imacsInforme
+  ];
+
+  for (var index = 0; index < names.length; index += 1) pestanaMensual(names[index]);
+
+  celdaTotalWorkOrders(pestanaMensual(TAB.workOrdersInforme));
+}
+
+/**
+ * Writes the monthly tables as values, from the months after the last closed
+ * one up to the extraction month.
+ *
+ * Months before the extraction month are written once, with the most complete
+ * data there is (the export of the 1st), and from then on are closed: a late
+ * survey or correction does not change them. The extraction month stays live
+ * and is rewritten on every run. Anything after it is emptied, so the next run
+ * with a right date undoes a run made with a wrong one.
+ */
+function actualizarMeses(found, extraction, lastClosed, windowMonths) {
+  var current = monthLabel(extraction);
+  var result = { cerrados: [], vivo: '', limpiados: [], ultimoCerrado: lastClosed };
+
+  // An extraction inside an already closed month has nothing left to write.
+  if (current <= lastClosed) return result;
+
+  var next = shiftMonthLabel(lastClosed, 1);
+  var months = mesesEntre(next > MES_GESTION_INICIAL ? next : MES_GESTION_INICIAL, current);
+  var grids = templateGrids(found);
+  var bbva = serieMensualHic(monthlySource(grids, '3-3'));
+  var tech = serieMensualHic(monthlySource(grids, '4-4'));
+  var surveys = serieMensualEncuestas(found);
+  var volumetria = pestanaMensual(TAB.volumetria);
+  var historico = pestanaMensual(TAB.volumetriaHistorico);
+  var anual = pestanaMensual(TAB.workOrdersMensual);
+  var total = pestanaMensual(TAB.totalMensual);
+  var encuestas = pestanaMensual(TAB.encuestasInforme);
+  var cleared = {};
+
+  // Cleared first, so a missing month is appended right after the real last one.
+  limpiarFilasPosteriores(volumetria, 1, 4, 4, current, cleared);
+  limpiarFilasPosteriores(volumetria, 6, 4, 4, current, cleared);
+  limpiarColumnasPosteriores(historico, current, cleared);
+  limpiarWorkOrdersAnualPosteriores(anual, current, cleared);
+  limpiarFilasPosteriores(total, 1, 2, 4, current, cleared);
+  limpiarFilasPosteriores(encuestas, 2, 4, 4, current, cleared);
+
+  var liveRow = 0;
+
+  for (var index = 0; index < months.length; index += 1) {
+    var month = months[index];
+    var workOrders = workOrdersDelMes(month);
+    var b = bbva[month] || null;
+    var t = tech[month] || null;
+    var incidencias = b || t ? (b ? b[0] : 0) + (t ? t[0] : 0) : '';
+
+    escribirMesVolumetria(volumetria, 1, month, b);
+    escribirMesVolumetria(volumetria, 6, month, t);
+    escribirMesHistorico(historico, month, b, t);
+    escribirMesWorkOrdersAnual(anual, month, workOrders);
+    escribirMesTotal(total, month, incidencias, workOrders);
+    liveRow = escribirMesEncuestas(encuestas, month, surveys[month], month === current);
+
+    if (month < current) result.cerrados.push(month);
+  }
+
+  ventanaEncuestas(encuestas, liveRow, windowMonths);
+  ajustarImacs(current, current, cleared);
+
+  var keyboard = pestanaMensual(TAB.workOrdersInforme);
+
+  if (yearFromCell(keyboard.getRange(45, 3).getValue()) !== extraction.getUTCFullYear()) {
+    cerrarBloqueTeclado(fechaDeMes(current));
+  }
+
+  var closed = shiftMonthLabel(current, -1);
+
+  if (closed > lastClosed) {
+    writeConfigValue(CONFIG_KEYS.lastClosed, closed);
+    result.ultimoCerrado = closed;
+  }
+
+  result.vivo = current;
+  result.limpiados = Object.keys(cleared).sort();
+
+  return result;
+}
+
+/** One line for Comprobación: what was closed, what is live, what was emptied. */
+function describirMeses(result) {
+  if (result.vivo === '') {
+    return 'La extracción cae en un mes ya cerrado (' + result.ultimoCerrado + '): no se escribe ningún mes.';
+  }
+
+  var parts = [];
+
+  if (result.cerrados.length > 0) parts.push('Cerrados: ' + result.cerrados.join(', '));
+  parts.push('vivo: ' + result.vivo);
+  if (result.limpiados.length > 0) parts.push('vaciados: ' + result.limpiados.join(', '));
+
+  return parts.join('; ');
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2046,54 +2245,6 @@ function setDateFormat(tabName, firstRow, column, rowCount) {
     .setNumberFormat('dd/mm/yyyy');
 }
 
-/** Latest usable monthly row, converted to date plus three numbers. */
-function latestMonthlyRow(source) {
-  var latest = null;
-
-  for (var row = source.headerRow + 1; row < source.grid.length; row += 1) {
-    var current = source.grid[row] || [];
-    var date = toDate(current[0]);
-
-    if (!date) continue;
-
-    if (!latest || date.getTime() > latest[0].getTime()) {
-      latest = [date, toNumber(current[1]), toNumber(current[2]), toNumber(current[3])];
-    }
-  }
-
-  if (!latest) throw new Error('El bloque "' + source.name + '" no trae ningún mes válido.');
-
-  return latest;
-}
-
-/** Update the current month or append it into the first free history row. */
-function writeMonthlyRow(tabName, row, firstRow, firstColumn) {
-  var sheet = sheetByName(tabName, false);
-  var last = Math.max(sheet.getLastRow(), firstRow);
-  var dates = sheet.getRange(firstRow, firstColumn, last - firstRow + 1, 1).getValues();
-  var target = 0;
-  var firstBlank = 0;
-
-  for (var index = 0; index < dates.length; index += 1) {
-    var current = toDate(dates[index][0]);
-
-    if (current && current.getTime() === row[0].getTime()) {
-      target = firstRow + index;
-      break;
-    }
-
-    if (!current && firstBlank === 0) firstBlank = firstRow + index;
-  }
-
-  if (target === 0) target = firstBlank || last + 1;
-  if (target > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), target - sheet.getMaxRows());
-
-  sheet.getRange(target, firstColumn, 1, 4).setValues([row]);
-  sheet.getRange(target, firstColumn).setNumberFormat('dd/mm/yyyy');
-
-  return 1;
-}
-
 function yearSource(entry, extraction) {
   var year = String(extraction.getUTCFullYear());
 
@@ -2212,13 +2363,9 @@ function escribirDatos(clasificacion, informe) {
 
   written[TAB.topCincoDatos] = writeGrid(TAB.topCincoDatos, topRows, 3, 1, 19);
 
-  var bbva = latestMonthlyRow(monthlySource(grids, '3-3'));
-  var bbvaTech = latestMonthlyRow(monthlySource(grids, '4-4'));
-
-  writeMonthlyRow(TAB.volumetria, bbva, 4, 1);
-  writeMonthlyRow(TAB.volumetria, bbvaTech, 4, 6);
-  read[TAB.volumetria] = 2;
-  written[TAB.volumetria] = 2;
+  // 2.1.1 is written month by month in actualizarMeses, after the markers.
+  read[TAB.volumetria] = 0;
+  written[TAB.volumetria] = 0;
 
   var workSource = firstSource(found.workOrders, 'Work Orders');
   var workOrders = rowsBelowHeader(workSource, 15);
@@ -4433,28 +4580,6 @@ function escribirComprobacion(informe) {
   sheet.getRange(1, 1, rowsValue.length, 4).setWrap(true);
 }
 
-/** Updates only the close row, preserving the latest weekly evidence. */
-function actualizarComprobacionCierre(status, detail) {
-  var sheet = sheetByName(TAB.check, true);
-
-  if (sheet.getLastRow() < 8) {
-    escribirComprobacion({ cierreStatus: status, cierre: detail });
-    return;
-  }
-
-  var groups = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1).getValues();
-
-  for (var index = 0; index < groups.length; index += 1) {
-    if (text(groups[index][0]) === 'Cierre mensual') {
-      sheet.getRange(index + 2, 1, 1, 4).setValues([[new Date(), 'Cierre mensual', status, detail]]);
-      sheet.getRange(index + 2, 1).setNumberFormat('dd/mm/yyyy hh:mm:ss');
-      return;
-    }
-  }
-
-  escribirComprobacion({ cierreStatus: status, cierre: detail });
-}
-
 function procesarSemana() {
   var config = null;
   var clasificacion = null;
@@ -4498,28 +4623,32 @@ function procesarSemana() {
       throw new Error('Faltan ficheros o pestañas requeridos: ' + informe.faltan.join(', '));
     }
 
-    // Freeze months that extraction has already left behind, using the data
-    // still in the book. Writing the new dumps first would freeze August with
-    // September's backlog snapshot.
-    var cerrados = cerrarMesesPendientes(config.extraction, config.windowMonths);
-
-    if (cerrados.length > 0) {
-      informe.cierreStatus = 'OK';
-      informe.cierre = cerrados.join('; ');
-    } else {
-      informe.cierreStatus = 'No ejecutado';
-      informe.cierre = 'Sin meses pendientes detrás de la extracción.';
-    }
     // Every source check that can fail runs here, before the first write: a
     // run that stops halfway has already rolled the week and stored the date,
     // and repeating it is then blocked.
     validarOrigenes(clasificacion.found, config.extraction);
+    validarTablasMensuales();
 
     informe.semanaRodada = rodarSemanaAnterior(config.extraction, config.lastProcessed);
     writeConfigValue(CONFIG_KEYS.lastProcessed, config.extraction);
     escribirDatos(clasificacion.found, informe);
     repararFormulas(informe);
     escribirMarcadores(config.extraction);
+
+    // After the dumps: a month is closed with the data of the first export of
+    // the next month, which on the 1st is the whole month.
+    var meses = actualizarMeses(
+      clasificacion.found,
+      config.extraction,
+      config.lastClosed,
+      config.windowMonths
+    );
+    var mesesEscritos = meses.cerrados.length + (meses.vivo === '' ? 0 : 1);
+
+    informe.leidas[TAB.volumetria] = mesesEscritos * 2;
+    informe.escritas[TAB.volumetria] = mesesEscritos * 2;
+    informe.cierreStatus = meses.vivo === '' ? 'AVISO' : 'OK';
+    informe.cierre = describirMeses(meses);
 
     var week = weekBounds(config.extraction);
     var month = monthBounds(config.extraction);
