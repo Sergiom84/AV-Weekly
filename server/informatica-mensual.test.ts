@@ -21,7 +21,6 @@ function dataset(): InformaticaDataset {
     source: { sourceFile: "Informatica 2026-09-28.txt", uploadedAt: null, asOfDate: "2026-09-28" },
     incidenciasOnsite: [
       { mes: "2026/09", metrica: "Resueltas", total: 720 },
-      { mes: "2026/09", metrica: "Resuelto", total: 117 },
       { mes: "2026/09", metrica: "Abiertas", total: 736 },
       { mes: "2026/09", metrica: "Backlog", total: 47 },
     ],

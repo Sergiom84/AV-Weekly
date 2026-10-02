@@ -649,7 +649,10 @@ export function informeMensualSpeech(slides: MensualSlides, narracion: string): 
 export interface MesCerrado {
   month: string | null;
   incidencias: {
-    /** Rows opened in the month and still in Resuelto. Null before the script emits it. */
+    /**
+     * Rows opened in the month now in Resuelto or Cerrado. It need not match
+     * Abiertas: the service closes tickets of other months too.
+     */
     resueltas: number | null;
     /** Rows opened in the month, any state. */
     abiertas: number | null;
@@ -712,12 +715,7 @@ export function mesCerrado(dataset: InformaticaDataset): MesCerrado {
   return {
     month,
     incidencias: {
-      // Null only while the extract predates the Resuelto metric; a month
-      // with none of its rows still in Resuelto counts zero.
-      resueltas:
-        hasOnsite && onsite.some((row) => fold(row.metrica) === "RESUELTO")
-          ? metricOf(onsite, month!, "Resuelto") ?? 0
-          : null,
+      resueltas: hasOnsite ? metricOf(onsite, month!, "Resueltas") ?? 0 : null,
       abiertas: hasOnsite ? metricOf(onsite, month!, "Abiertas") ?? 0 : null,
       backlog: hasOnsite ? backlogFrom(onsite, month!) : null,
     },

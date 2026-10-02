@@ -788,8 +788,6 @@ describe("Codigo.gs informe mensual", () => {
     expect(value("2026/08", "Resueltas")).toBe(2);
     expect(value("2026/09", "Abiertas")).toBe(2);
     expect(value("2026/09", "Resueltas")).toBe(1);
-    expect(value("2026/09", "Resuelto")).toBe(1);
-    expect(value("2026/08", "Resuelto")).toBeUndefined();
     expect(value("2026/07", "Abiertas")).toBe(1);
     expect(value("2026/09", "Backlog")).toBe(1);
     expect(value("2026/07", "Backlog")).toBeUndefined();
