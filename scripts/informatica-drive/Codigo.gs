@@ -2833,7 +2833,8 @@ function listadoOnsite(found) {
   return null;
 }
 
-function esIncidenciaResuelta(estado) {
+/** Resuelto or Cerrado: the states the service counts as done. */
+function esEstadoResuelto(estado) {
   var value = normalize(estado);
 
   return value === 'RESUELTO' || value === 'CERRADO';
@@ -2865,7 +2866,7 @@ function agregarIncidenciasOnsite(found, extraction, incidenciasOnsite) {
 
       bump(incidenciasOnsite, [mes, 'Abiertas'], 1);
 
-      if (esIncidenciaResuelta(estado)) bump(incidenciasOnsite, [mes, 'Resueltas'], 1);
+      if (esEstadoResuelto(estado)) bump(incidenciasOnsite, [mes, 'Resueltas'], 1);
     }
 
     if (normalize(estado) === 'PENDIENTE') pending += 1;
@@ -3005,6 +3006,19 @@ function citaDate(value) {
   return toDate(value);
 }
 
+/**
+ * An appointment counts once it is Resuelto or Cerrado, the same rule as the
+ * on-site incidents; Cancelado, Asignado and En curso stay out. The tab must
+ * carry Estado: counting without it would pass cancellations as served.
+ */
+function citaAtendida(row, columns) {
+  if (columns[normalize('Estado')] === undefined) {
+    throw new Error('La pestaña de citas no trae Estado.');
+  }
+
+  return esEstadoResuelto(valueAt(row, columns, 'Estado'));
+}
+
 function agregarCitas(found, extraction, citas, citasAnual) {
   if (!found.citas) return;
 
@@ -3022,6 +3036,8 @@ function agregarCitas(found, extraction, citas, citasAnual) {
     if (!date || isoDate(date) > cutoff || building === '' || normalize(building).indexOf('TELEFONIA') >= 0) {
       continue;
     }
+
+    if (!citaAtendida(row, source.columns)) continue;
 
     bump(citas, periodCells(date).concat([building, booked ? 'Con Cita' : 'Sin Cita']), 1);
     bump(citasAnual, [String(date.getUTCFullYear()), monthLabel(date)], 1);
@@ -3445,6 +3461,8 @@ function contarCitasMensuales(found, extraction) {
     var building = text(valueAt(row, columns, 'Smart_Tech'));
 
     if (building === '' || normalize(building).indexOf('TELEFONIA') >= 0) continue;
+
+    if (!citaAtendida(row, columns)) continue;
 
     if (!date) {
       result.sinFecha += 1;

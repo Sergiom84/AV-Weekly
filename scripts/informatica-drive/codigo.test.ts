@@ -118,7 +118,7 @@ function loadCodigo() {
       grids: { name: string; grid: unknown[][] }[],
       required: string[]
     ) => { name: string; grid: unknown[][]; headerRow: number; columns: Record<string, number> }[];
-    REQUIRED: { peticiones: string[] };
+    REQUIRED: { peticiones: string[]; citas: string[] };
   };
 }
 
@@ -671,11 +671,14 @@ describe("Codigo.gs citas mensuales 2.3.3", () => {
   it("cuenta por mes y sede, excluye Telefonía y respeta el corte", () => {
     const counted = gs.contarCitasMensuales(
       citasFound([
-        ["1", null, new Date(2026, 7, 10), "", "", "", "", "Smart Tech Principal AN"],
-        ["2", null, "08/15/2026, 09:00:00 AM", "", "", "", "", "Smart Tech Principal AN"],
-        ["3", null, new Date(2026, 8, 2), "", "", "", "", "Smart Tech Sevilla, Palmera"],
-        ["4", null, new Date(2026, 8, 3), "", "", "", "", "Smart Tech Telefonía"],
-        ["5", null, new Date(2026, 8, 20), "", "", "", "", "Smart Tech Tablas I"],
+        ["1", null, new Date(2026, 7, 10), "", "Cerrado", "", "", "Smart Tech Principal AN"],
+        ["2", null, "08/15/2026, 09:00:00 AM", "", "Resuelto", "", "", "Smart Tech Principal AN"],
+        ["3", null, new Date(2026, 8, 2), "", "Cerrado", "", "", "Smart Tech Sevilla, Palmera"],
+        ["4", null, new Date(2026, 8, 3), "", "Cerrado", "", "", "Smart Tech Telefonía"],
+        ["5", null, new Date(2026, 8, 20), "", "Cerrado", "", "", "Smart Tech Tablas I"],
+        // Not served: out of the count.
+        ["6", null, new Date(2026, 7, 11), "", "Cancelado", "", "", "Smart Tech Principal AN"],
+        ["7", new Date(2026, 8, 4), null, "", "Asignado", "", "", "Smart Tech Sevilla, Palmera"],
       ]),
       new Date(Date.UTC(2026, 8, 17))
     );
@@ -685,6 +688,42 @@ describe("Codigo.gs citas mensuales 2.3.3", () => {
     expect(counted.byBuilding["2026/08"]["Smart Tech Principal AN"]).toBe(2);
     expect(counted.byBuilding["2026/09"]["Smart Tech Sevilla, Palmera"]).toBe(1);
     expect(counted.filas).toBe(3);
+  });
+
+  it("cuenta en la semanal solo las citas Resuelto o Cerrado", () => {
+    const citas: Record<string, number> = {};
+    const anual: Record<string, number> = {};
+    const grid = citasFound([
+      ["1", null, new Date(Date.UTC(2026, 8, 22)), "", "Cerrado", "", "", "Smart Tech Tablas I"],
+      ["2", new Date(Date.UTC(2026, 8, 22)), null, "", "Resuelto", "", "", "Smart Tech Tablas I"],
+      ["3", null, new Date(Date.UTC(2026, 8, 23)), "", "Cancelado", "", "", "Smart Tech Tablas I"],
+      ["4", new Date(Date.UTC(2026, 8, 23)), null, "", "En curso", "", "", "Smart Tech Tablas I"],
+    ]).citas.sheets[0].grid;
+    const found = {
+      citas: { sheets: gs.findDataSheets([{ name: "Citas", grid }], gs.REQUIRED.citas) },
+    };
+
+    gs.agregarCitas(found, new Date(Date.UTC(2026, 8, 28)), citas, anual);
+
+    expect(gs.rows(anual)).toEqual([["2026", "2026/09", 2]]);
+    expect(
+      gs.rows(citas).map((row: unknown[]) => row.slice(-2))
+    ).toEqual([
+      ["Con Cita", 1],
+      ["Sin Cita", 1],
+    ]);
+  });
+
+  it("falla si la pestaña de citas no trae Estado", () => {
+    const found = citasFound([]);
+    found.citas.sheets[0].grid = [
+      ["Incidencia", "Walkup", "Cita_Previa", "Smart_Tech"],
+      ["1", null, new Date(2026, 8, 2), "Smart Tech Tablas I"],
+    ];
+
+    expect(() => gs.contarCitasMensuales(found, new Date(Date.UTC(2026, 8, 28)))).toThrow(
+      "no trae Estado"
+    );
   });
 
   it("escribe AT agosto, AU septiembre y BB11/BB12 del histórico anual", () => {
@@ -733,10 +772,10 @@ describe("Codigo.gs citas mensuales 2.3.3", () => {
 
     writer.escribirCitasMensuales(
       citasFound([
-        ["1", null, new Date(2026, 7, 10), "", "", "", "", "Smart Tech Principal AN"],
-        ["2", null, new Date(2026, 7, 11), "", "", "", "", "Smart Tech Principal AN"],
-        ["3", null, new Date(2026, 8, 2), "", "", "", "", "Smart Tech Sevilla, Palmera"],
-        ["4", null, new Date(2026, 8, 3), "", "", "", "", "Smart Tech Telefonía"],
+        ["1", null, new Date(2026, 7, 10), "", "Cerrado", "", "", "Smart Tech Principal AN"],
+        ["2", null, new Date(2026, 7, 11), "", "Cerrado", "", "", "Smart Tech Principal AN"],
+        ["3", null, new Date(2026, 8, 2), "", "Cerrado", "", "", "Smart Tech Sevilla, Palmera"],
+        ["4", null, new Date(2026, 8, 3), "", "Cerrado", "", "", "Smart Tech Telefonía"],
       ]),
       informe
     );
