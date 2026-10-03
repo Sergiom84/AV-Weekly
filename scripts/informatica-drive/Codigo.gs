@@ -869,10 +869,11 @@ function classifyFolder(folderId) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The three settings of the "Configuración" tab.
+ * Settings of the "Configuración" tab.
  *
- * The extraction date is the only date the colleague types, and every period
- * marker of section 6 of SPEC.md is derived from it. It is returned as a UTC
+ * Folder ids and the survey window stay on the sheet. The extraction date is
+ * not typed: Procesar semana stamps today. A blank cell is normal, and a date
+ * still present is only the stamp of the last run. It is returned as a UTC
  * midnight Date so the week and month bounds cannot drift a day when the
  * sheet renders it in another timezone.
  */
@@ -899,13 +900,6 @@ function readConfig() {
 
   if (folderId === '') {
     throw new Error('Falta el ID de la carpeta de Drive en la pestaña "' + TAB.config + '".');
-  }
-
-  if (!extraction) {
-    throw new Error(
-      'Falta la fecha de extracción en la pestaña "' + TAB.config + '". ' +
-        'Es el lunes de la semana que se informa.'
-    );
   }
 
   return {
@@ -1139,13 +1133,18 @@ function debeRodarSemanaAnterior(extraction, lastProcessed) {
 }
 
 /**
- * True when the extraction date on Configuración is the one already processed.
+ * True when the extraction date is the calendar day already stored.
  *
- * Running the same Monday twice is the most common mistake of the routine:
- * nothing errors, the week simply rewrites itself and "Semana anterior" stops
- * rolling, which is invisible on the sheet and wrong on the report. The run
- * stops on it instead of repeating the work.
+ * Procesar semana does not stop on this. A second click the same day refreshes
+ * the data. Semana anterior stays put because debeRodarSemanaAnterior is false
+ * for that same day.
  */
+function extraccionYaProcesada(extraction, lastProcessed) {
+  if (!extraction || !lastProcessed) return false;
+
+  return isoDate(extraction) === isoDate(lastProcessed);
+}
+
 /** Today as `yyyy-mm-dd` in the script's time zone, local time outside Apps Script. */
 function hoyIso(now) {
   var date = now || new Date();
@@ -1182,10 +1181,24 @@ function comprobarExtraccionNoFutura(extraction, now) {
   );
 }
 
-function extraccionYaProcesada(extraction, lastProcessed) {
-  if (!extraction || !lastProcessed) return false;
+/**
+ * UTC midnight of today in the script time zone.
+ *
+ * This is the extraction date of every run. The operator does not type it,
+ * and a future date left in the cell cannot survive into the month close.
+ */
+function extraccionDeHoy(now) {
+  var parts = hoyIso(now).split('-');
 
-  return isoDate(extraction) === isoDate(lastProcessed);
+  return utcDate(Number(parts[0]), Number(parts[1]), Number(parts[2]));
+}
+
+/** Stamps Configuración with today and returns that date on `config`. */
+function aplicarExtraccionDeHoy(config, now) {
+  config.extraction = extraccionDeHoy(now);
+  writeConfigValue(CONFIG_KEYS.extraction, config.extraction);
+
+  return config;
 }
 
 /**
@@ -2285,7 +2298,9 @@ function escribirDatos(clasificacion, informe) {
   var unknownWorkOrders = [];
   var unknownAddresses = [];
   var grids = templateGrids(found);
-  var extraction = informe.extraction ? toDate(informe.extraction) : readConfig().extraction;
+  var extraction = informe.extraction
+    ? toDate(informe.extraction)
+    : readConfig().extraction || extraccionDeHoy();
 
   if (!extraction) throw new Error('No hay una fecha de extracción válida para seleccionar los IMAC.');
 
@@ -4587,20 +4602,10 @@ function procesarSemana() {
   try {
     config = readConfig();
 
-    // Before classifyFolder, which opens and converts every workbook of the
-    // folder: the run that must not happen is also the slowest thing to undo.
-    if (extraccionYaProcesada(config.extraction, config.lastProcessed)) {
-      throw new Error(
-        'Membrillo, cambia la semana de extracción: "' +
-          CONFIG_KEYS.extraction +
-          '" y "' +
-          CONFIG_KEYS.lastProcessed +
-          '" tienen la misma fecha (' +
-          fechaCorta(config.extraction) +
-          '). Esa semana ya se procesó.'
-      );
-    }
-
+    // Today, not the cell. A typed future date would close the live month.
+    // The same calendar day is allowed: the second click refreshes the files
+    // and debeRodarSemanaAnterior keeps Semana anterior from rolling twice.
+    aplicarExtraccionDeHoy(config);
     comprobarExtraccionNoFutura(config.extraction);
 
     clasificacion = classifyFolder(config.folderId);
@@ -4623,9 +4628,9 @@ function procesarSemana() {
       throw new Error('Faltan ficheros o pestañas requeridos: ' + informe.faltan.join(', '));
     }
 
-    // Every source check that can fail runs here, before the first write: a
-    // run that stops halfway has already rolled the week and stored the date,
-    // and repeating it is then blocked.
+    // Every source check that can fail runs here, before the week rolls or the
+    // data tabs are written. The stamp above is only today's date. A second
+    // click the same day refreshes the files and does not roll again.
     validarOrigenes(clasificacion.found, config.extraction);
     validarTablasMensuales();
 
@@ -4705,6 +4710,9 @@ function escribirPlanoTxt(notify) {
   }
 
   var config = readConfig();
+
+  if (!config.extraction) config.extraction = extraccionDeHoy();
+
   var values = sheet.getRange(1, 1, sheet.getLastRow(), 1).getValues();
   var lines = [];
 

@@ -42,36 +42,31 @@ por el equipo.
    `2.2.1 Volum de peticiones (Informe)`: agosto 2026 en `Q11`, septiembre
    en `Q12`, y así. Sin ese fichero el proceso no se detiene, pero
    `Comprobación` apunta `Acumuladas (ausente)` y la serie anual no avanza.
-2. Escribir en `Configuración` la fecha de extracción de la semana.
-3. Ejecutar `⭐ Informática Weekly > Procesar semana` **una sola vez**.
-4. Revisar las siete líneas de `Comprobación`: archivo leído, fecha de
+2. Ejecutar `⭐ Informática Weekly > Procesar semana`. La fecha de extracción
+   la escribe el propio proceso: es el día de hoy. No hay que abrir
+   `Configuración` para ponerla, ni para vaciarla. Las carpetas y los 19 meses
+   de encuestas siguen en esa pestaña y ya vienen rellenos.
+3. Revisar las siete líneas de `Comprobación`: archivo leído, fecha de
    modificación, filas leídas y escritas, desconocidos, cierre de meses
    pendientes, citas de **esa** semana y el nombre del TXT generado.
-5. Subir el TXT que el propio proceso deja en `Carpeta salida PLANO`
+4. Subir el TXT que el propio proceso deja en `Carpeta salida PLANO`
    (`Informatica YYYY-MM-DD.txt`) en `Informática > Texto plano (Drive)`.
    El menú `Guardar PLANO como .txt` sigue existiendo por si hay que
    regenerarlo a mano. El TXT nunca se guarda junto a los Excel de
    `Carpeta Drive`.
 
-Si se vuelve a pulsar `Procesar semana` sin cambiar la fecha de extracción, el
-proceso se detiene antes de leer nada y avisa:
+Pulsar `Procesar semana` otra vez el mismo día vuelve a leer la carpeta y
+reescribe los datos. No copia otra vez *Semana anterior*: esa columna solo
+rueda cuando el día cambia. `Última extracción procesada` la escribe el
+proceso. Vaciarla obliga a copiar *Semana anterior* en la siguiente ejecución;
+en un día normal no hace falta tocarla.
 
-> Membrillo, cambia la semana de extracción: "Fecha de extracción" y "Última
-> extracción procesada" tienen la misma fecha (15/09/2026). Esa semana ya se
-> procesó.
-
-El corte ocurre antes de abrir los ficheros de la carpeta, así que no cuesta
-tiempo ni deja nada a medias.
-
-Tampoco se acepta una fecha de extracción posterior a hoy: la fecha decide qué
-meses se cierran, y una fecha futura cerraría el mes en curso con datos
-parciales. Antes de la primera escritura se validan además las pestañas del
-template que pueden fallar (HIC, comparativas, SLAs y la columna `Estado` de
-citas), para que un origen mal formado detenga el proceso sin dejar el libro a
-medias. Para rehacer una semana a propósito, basta con
-vaciar `Última extracción procesada` en `Configuración`; en ese caso la columna
-*Semana anterior* sí se vuelve a copiar, que es lo que antes pasaba en silencio
-cada vez que se repetía la ejecución.
+Si la celda trae una fecha posterior a hoy, el proceso la sustituye por hoy
+antes de leer los ficheros. La fecha decide qué meses se cierran, y una fecha
+futura cerraría el mes en curso con datos parciales. Antes de la primera
+escritura de datos se validan además las pestañas del template que pueden
+fallar (HIC, comparativas, SLAs y la columna `Estado` de citas), para que un
+origen mal formado detenga el proceso sin dejar el libro a medias.
 
 Cuando la extracción pasa a un mes nuevo, el proceso cierra solo el mes que
 quedó atrás (agosto se cierra al informar septiembre). Ya no hay paso manual de

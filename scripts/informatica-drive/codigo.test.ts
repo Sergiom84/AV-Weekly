@@ -131,13 +131,23 @@ function loadCodigo() {
     ) => void;
     validarOrigenes: (found: Record<string, unknown>, extraction: Date) => void;
     extraccionFutura: (extraction: Date | null, now?: Date) => boolean;
+    extraccionDeHoy: (now?: Date) => Date;
+    aplicarExtraccionDeHoy: (
+      config: { extraction: Date | null },
+      now?: Date
+    ) => { extraction: Date };
+    isoDate: (date: Date) => string;
     actualizarMeses: (
       found: Record<string, unknown>,
       extraction: Date,
       lastClosed: string,
       windowMonths: number
     ) => { cerrados: string[]; vivo: string; limpiados: string[]; ultimoCerrado: string };
-    readConfig: () => { lastClosed: string };
+    readConfig: () => {
+      lastClosed: string;
+      extraction: Date | null;
+      lastProcessed: Date | null;
+    };
   };
 }
 
@@ -317,12 +327,13 @@ describe("Codigo.gs weekly safeguards", () => {
     ).toBe(true);
   });
 
-  it("detiene la semana cuando la extracción es la ya procesada", () => {
+  it("reconoce el mismo día sin tratar la hora como otra extracción", () => {
     const extraction = new Date("2026-09-15T00:00:00.000Z");
 
     expect(gs.extraccionYaProcesada(extraction, extraction)).toBe(true);
-    // La primera vez no hay fecha guardada, y ahí la semana tiene que correr.
+    // La primera vez no hay fecha guardada: Semana anterior sí rueda.
     expect(gs.extraccionYaProcesada(extraction, null)).toBe(false);
+    expect(gs.debeRodarSemanaAnterior(extraction, null)).toBe(true);
     expect(
       gs.extraccionYaProcesada(extraction, new Date("2026-09-08T00:00:00.000Z"))
     ).toBe(false);
@@ -330,7 +341,41 @@ describe("Codigo.gs weekly safeguards", () => {
     expect(
       gs.extraccionYaProcesada(extraction, new Date("2026-09-15T23:30:00.000Z"))
     ).toBe(true);
+    // El mismo día no detiene el proceso: se refrescan los datos y no se rueda.
+    expect(gs.debeRodarSemanaAnterior(extraction, extraction)).toBe(false);
     expect(gs.fechaCorta(extraction)).toBe("15/09/2026");
+  });
+
+  it("sella la extracción con hoy aunque la celda traiga un día futuro o esté vacía", () => {
+    const now = new Date(2026, 9, 3, 18, 30);
+    const futura = bookSheet([
+      ["Carpeta Drive", "17O7dORS6oIDN0hyLP1AXQEN7tR6k3ZbH"],
+      ["Fecha de extracción", new Date(Date.UTC(2026, 9, 4))],
+      ["Última extracción procesada", null],
+    ]);
+    const vacia = bookSheet([
+      ["Carpeta Drive", "17O7dORS6oIDN0hyLP1AXQEN7tR6k3ZbH"],
+      ["Fecha de extracción", ""],
+    ]);
+    const gsFutura = loadCodigoWithSheets({
+      Configuración: futura,
+    } as unknown as Record<string, ReturnType<typeof memorySheet>>);
+    const gsVacia = loadCodigoWithSheets({
+      Configuración: vacia,
+    } as unknown as Record<string, ReturnType<typeof memorySheet>>);
+
+    expect(gsVacia.readConfig().extraction).toBeNull();
+
+    const config = gsFutura.readConfig();
+    gsFutura.aplicarExtraccionDeHoy(config, now);
+
+    expect(gsFutura.isoDate(config.extraction)).toBe("2026-10-03");
+    expect(gsFutura.extraccionFutura(config.extraction, now)).toBe(false);
+    expect(futura.grid[1][1]).toEqual(config.extraction);
+    expect(gsFutura.debeRodarSemanaAnterior(config.extraction, null)).toBe(true);
+    expect(
+      gsFutura.debeRodarSemanaAnterior(gsFutura.extraccionDeHoy(now), config.extraction)
+    ).toBe(false);
   });
 
   it("cuenta solo las citas de la semana de extracción, no el histórico", () => {

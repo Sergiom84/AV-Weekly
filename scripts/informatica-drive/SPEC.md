@@ -76,11 +76,11 @@ Pestaña `Configuración`:
 |---|---|
 | `Carpeta Drive` | `17O7dORS6oIDN0hyLP1AXQEN7tR6k3ZbH` |
 | `Carpeta salida PLANO` | `1b1yyWSoWIj3cNwuCn-1Co1jtqgdGK2_A` |
-| `Fecha de extracción` | Lunes de la semana que se informa |
+| `Fecha de extracción` | La pone `Procesar semana`: el día de hoy. No se teclea. |
 | `Meses en la ventana de encuestas` | `19` |
 
-De la fecha de extracción se derivan todos los marcadores de periodo del apartado 6. No se
-introduce ninguna fecha más a mano.
+De la fecha de extracción se derivan todos los marcadores de periodo del apartado 6. El
+proceso la sella con el día de hoy; no se introduce ninguna fecha a mano.
 
 ### Identificación de los ficheros
 
