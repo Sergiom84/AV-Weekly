@@ -137,6 +137,8 @@ export interface InformeWeeklyDataset {
   resolutionSource?: DatasetSource;
   /** Highest week number found across all sheets. */
   maxWeek: number;
+  /** Report year, set by the texto upload. Older stored datasets lack it. */
+  year?: string;
   sourceFile: string | null;
   uploadedAt: string | null;
 }
