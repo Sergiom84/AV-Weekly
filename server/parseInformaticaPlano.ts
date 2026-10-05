@@ -1331,10 +1331,64 @@ export function mergeInformaticaDataset(
   // `sheetsFound` describes the dataset, not the last file: after a merge it is
   // every section that ends up carrying rows, or the deck would send a page
   // back to "Próximamente" for data it still holds.
-  merged.sheetsFound = SECTION_KEYS.filter((key) => {
-    const rows = merged[key];
-    return Array.isArray(rows) && rows.length > 0;
-  });
+  merged.sheetsFound = sectionsWithRows(merged);
 
   return merged;
+}
+
+function sectionsWithRows(dataset: InformaticaDataset): InformaticaSectionKey[] {
+  return SECTION_KEYS.filter((key) => {
+    const rows = dataset[key];
+    return Array.isArray(rows) && rows.length > 0;
+  });
+}
+
+/**
+ * Sections a complete Drive text cannot rebuild on its own.
+ *
+ * The rest of the text is re-derived every week from sources that carry their
+ * whole window, so replacing them keeps optional data (WASP, Renove) from
+ * looking current after it stops arriving. These three are snapshots instead:
+ * the weekly request exports are one week each, and the monthly trio is
+ * uploaded once a month. Replaced like the others, the first weekly text after
+ * a close would publish that month empty again.
+ */
+const KEPT_ON_COMPLETE_TEXT: InformaticaSectionKey[] = [
+  "peticiones",
+  "peticionesProducto",
+  "peticionesMes",
+];
+
+/**
+ * A complete Drive text stored over the existing dataset.
+ *
+ * The text replaces the dataset, except for `KEPT_ON_COMPLETE_TEXT`: there the
+ * periods the text brings replace themselves and every other stored period
+ * stays, so a week without the monthly trio keeps the last close.
+ */
+export function foldCompleteInformaticaDataset(
+  existing: InformaticaDataset | null,
+  incoming: InformaticaDataset,
+  source: InformaticaDataset["source"]
+): InformaticaDataset {
+  const stored: InformaticaDataset = { ...incoming, source };
+
+  for (const key of KEPT_ON_COMPLETE_TEXT) {
+    const monthOf = SECTION_MONTH[key] as ((row: unknown) => string) | null;
+    const rows = mergeSectionRows(
+      existing?.[key] as unknown[] | undefined,
+      incoming[key] as unknown[] | undefined,
+      monthOf
+    );
+
+    if (rows && rows.length > 0) {
+      (stored as unknown as Record<string, unknown>)[key] = rows;
+    } else {
+      delete (stored as unknown as Record<string, unknown>)[key];
+    }
+  }
+
+  stored.sheetsFound = sectionsWithRows(stored);
+
+  return stored;
 }

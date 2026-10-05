@@ -91,6 +91,7 @@ import {
   type OficinasImportReport,
 } from "./parseOficinasPlano.js";
 import {
+  foldCompleteInformaticaDataset,
   mergeInformaticaDataset,
   mergeInformaticaWorkbooks,
   parseInformaticaPlanoWorkbook,
@@ -1230,9 +1231,11 @@ router.post("/api/informatica/upload/texto", upload.single("file"), async (req, 
     // from an older import would make optional data (notably WASP) look current.
     // EDIFICIOS is the exception: coded weekly texts omit it so the proxy does
     // not see addresses, and the catalogue is written to its own table below.
+    // The request snapshots are the other one: a week keeps the stored weeks and
+    // the last monthly close (see `foldCompleteInformaticaDataset`).
     const stored =
       meta.scope === "completo"
-        ? { ...normalized, source }
+        ? foldCompleteInformaticaDataset(normalizedExisting, normalized, source)
         : mergeInformaticaDataset(normalizedExisting, normalized, source);
 
     await saveInformaticaEdificios(catalog, source.sourceFile);

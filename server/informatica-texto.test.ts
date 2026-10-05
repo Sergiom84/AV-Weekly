@@ -582,6 +582,39 @@ describe("POST /api/informatica/upload/texto", () => {
     expect(body.data.hic).toEqual([
       { ambito: "SSCC", mes: "2026/08", categoria: "", metrica: "Resueltas", total: 722 },
     ]);
-    expect(body.data.sheetsFound).toEqual(["hic"]);
+    expect(body.data.sheetsFound).toContain("hic");
+    expect(body.data.sheetsFound).not.toContain("wasp");
+    expect(body.data.sheetsFound).not.toContain("renove");
+  });
+
+  it("un TXT completo sin peticiones de mes conserva el último cierre", async () => {
+    const subir = async (sections: string[]) => {
+      const response = await fetch(`${origin}/api/informatica/upload/texto`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ texto: textoCompleto(sections) }),
+      });
+
+      expect(response.status).toBe(200);
+      return ((await response.json()) as { data: InformaticaDataset }).data;
+    };
+    const mes = (data: InformaticaDataset) =>
+      data.peticionesMes?.map((row) => [row.mes, row.origen, row.estado, row.total]);
+
+    await subir(["", "[PETICIONESMES]", "2026/09\tOn Site\tBacklog\t1"]);
+    // The close re-sent with the right figures replaces its own month.
+    await subir(["", "[PETICIONESMES]", "2026/09\tOn Site\tBacklog\t359"]);
+
+    const semanal = await subir(["", "[HIC]", "SSCC\t2026/09\t\tResueltas\t700"]);
+
+    expect(mes(semanal)).toEqual([["2026/09", "On Site", "Backlog", 359]]);
+    expect(semanal.sheetsFound).toContain("peticionesMes");
+
+    const octubre = await subir(["", "[PETICIONESMES]", "2026/10\tTechnology\tGestionadas\t30"]);
+
+    expect(mes(octubre)).toEqual([
+      ["2026/09", "On Site", "Backlog", 359],
+      ["2026/10", "Technology", "Gestionadas", 30],
+    ]);
   });
 });

@@ -72,6 +72,15 @@ Cuando la extracción pasa a un mes nuevo, el proceso cierra solo el mes que
 quedó atrás (agosto se cierra al informar septiembre). Ya no hay paso manual de
 cierre: ver *Cierre de mes*.
 
+El cierre mensual de peticiones es otro trío con la misma cabecera:
+`BacklogMes`, `LiberadasMes` y `GestionadasMes`, o con el mes en el nombre
+(`BacklogSeptiembre`, `GestionadasSeptiembre`, `LiberadasSepriembre`; se admite
+una errata). Basta subirlo una vez al mes: el proceso lo guarda en la pestaña
+`Peticiones mes` y las semanas siguientes lo vuelven a emitir en `PLANO` hasta
+que llega el siguiente cierre. Los semanales llevan fecha (`Backlog 20261005`);
+un nombre con una palabra distinta del mes tras el tipo se sigue leyendo como
+semanal.
+
 Los ficheros se reconocen por cabeceras. Backlog, liberadas, gestionadas y
 Acumuladas se distinguen por nombre porque comparten exactamente el mismo
 formato, y los dos libros de Renove también: el ámbito está en el nombre del

@@ -67,7 +67,8 @@ var TAB = {
   imacsInforme: 'Hoja 19',
   config: 'Configuración',
   check: 'Comprobación',
-  plano: 'PLANO'
+  plano: 'PLANO',
+  peticionesMes: 'Peticiones mes'
 };
 
 /** Full names in the native Google Sheet, in the same logical slots as TAB. */
@@ -94,14 +95,16 @@ var TAB_NATIVE = {
   imacsInforme: '2.4.1 Vol Imacs resuelos OnSite (Informe)',
   config: 'Configuración',
   check: 'Comprobación',
-  plano: 'PLANO'
+  plano: 'PLANO',
+  peticionesMes: 'Peticiones mes'
 };
 
 /** Only operational tabs may be created; report/data tabs must already exist. */
 var CREATABLE_TABS = {
   'Configuración': true,
   'Comprobación': true,
-  PLANO: true
+  PLANO: true,
+  'Peticiones mes': true
 };
 
 var CONFIG_KEYS = {
@@ -655,19 +658,91 @@ var ENCUESTAS_SCORE_HINT = 'Nivel de satis';
  * The monthly close uses a second trio, BacklogMes / LiberadasMes /
  * GestionadasMes (GestionadesMes is the spelling that arrived in the brief).
  * Those files are the whole month. The weekly names stay the week.
+ *
+ * The month can also be named instead of the word Mes: the close of
+ * 2026-09 arrived as BacklogSeptiembre, GestionadasSeptiembre and
+ * LiberadasSepriembre. Read as weekly, those three replaced the weekly trio
+ * because they were newer, and the monthly section came out empty. Weekly
+ * exports carry a date (Backlog 20261005), never a word, so any word after
+ * the kind that is Mes or a month — one typo allowed — makes it monthly.
  */
 function requestKind(fileName) {
-  var compact = String(fileName).toLowerCase().replace(/[^a-z0-9]/g, '');
+  var base = String(fileName).replace(/\.[a-z0-9]+$/i, '');
+  var compact = normalize(base).toLowerCase().replace(/[^a-z0-9]/g, '');
+  var words = normalize(base).toLowerCase().replace(/[^a-z]+/g, ' ').trim().split(' ');
+  var kinds = [
+    ['backlog', 'backlog', 'backlogMes'],
+    ['liberadas', 'liberadas', 'liberadasMes'],
+    ['liberades', 'liberadas', 'liberadasMes'],
+    ['gestionadas', 'gestionadas', 'gestionadasMes'],
+    ['gestionades', 'gestionadas', 'gestionadasMes']
+  ];
 
   if (compact.indexOf('acumuladas') >= 0) return 'acumuladas';
-  if (compact.indexOf('backlogmes') >= 0) return 'backlogMes';
-  if (compact.indexOf('liberadasmes') >= 0 || compact.indexOf('liberadesmes') >= 0) return 'liberadasMes';
-  if (compact.indexOf('gestionadasmes') >= 0 || compact.indexOf('gestionadesmes') >= 0) return 'gestionadasMes';
-  if (compact.indexOf('backlog') >= 0) return 'backlog';
-  if (compact.indexOf('liberadas') >= 0) return 'liberadas';
-  if (compact.indexOf('gestionadas') >= 0) return 'gestionadas';
+
+  for (var index = 0; index < kinds.length; index += 1) {
+    var stem = kinds[index][0];
+
+    for (var wordIndex = 0; wordIndex < words.length; wordIndex += 1) {
+      var at = words[wordIndex].indexOf(stem);
+
+      if (at < 0) continue;
+
+      var tail = [words[wordIndex].slice(at + stem.length)].concat(words.slice(wordIndex + 1));
+
+      for (var tailIndex = 0; tailIndex < tail.length; tailIndex += 1) {
+        if (esPalabraDeMes(tail[tailIndex])) return kinds[index][2];
+      }
+
+      return kinds[index][1];
+    }
+  }
 
   return null;
+}
+
+var MESES_NOMBRE = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto',
+  'septiembre', 'setiembre', 'octubre', 'noviembre', 'diciembre'
+];
+var MESES_ABREVIATURA = [
+  'ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'sept', 'set', 'oct', 'nov', 'dic'
+];
+
+/** Mes, a month abbreviation, or a month name at most one edit away. */
+function esPalabraDeMes(word) {
+  if (!word) return false;
+  if (word === 'mes' || MESES_ABREVIATURA.indexOf(word) >= 0) return true;
+  if (word.length < 4) return false;
+
+  for (var index = 0; index < MESES_NOMBRE.length; index += 1) {
+    if (distanciaEdicion(word, MESES_NOMBRE[index]) <= 1) return true;
+  }
+
+  return false;
+}
+
+/** Levenshtein distance; the words compared are a dozen letters long. */
+function distanciaEdicion(a, b) {
+  var previous = [];
+
+  for (var j = 0; j <= b.length; j += 1) previous.push(j);
+
+  for (var i = 1; i <= a.length; i += 1) {
+    var current = [i];
+
+    for (var k = 1; k <= b.length; k += 1) {
+      current.push(Math.min(
+        previous[k] + 1,
+        current[k - 1] + 1,
+        previous[k - 1] + (a.charAt(i - 1) === b.charAt(k - 1) ? 0 : 1)
+      ));
+    }
+
+    previous = current;
+  }
+
+  return previous[b.length];
 }
 
 /**
@@ -3017,6 +3092,99 @@ function agregarPeticionesMes(found, extraction, peticionesMes) {
 }
 
 /**
+ * The stored monthly request rows with this run's folded in.
+ *
+ * The trio is uploaded once a month, but PLANO is rebuilt every week and the
+ * app replaces its dataset with each complete text. Without a memory here the
+ * first weekly run after the close would publish the month empty again. A
+ * month this run brings replaces itself; every other month stays as stored.
+ */
+function fusionarPeticionesMes(guardadas, nuevas) {
+  var propios = {};
+  var out = [];
+
+  for (var index = 0; index < nuevas.length; index += 1) propios[String(nuevas[index][0])] = true;
+
+  for (var stored = 0; stored < guardadas.length; stored += 1) {
+    if (!propios[String(guardadas[stored][0])]) out.push(guardadas[stored]);
+  }
+
+  return out.concat(nuevas).sort(function (left, right) {
+    var a = left.join('\t');
+    var b = right.join('\t');
+
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+}
+
+/** Month label of a stored cell, which Sheets may have turned into a date. */
+function mesGuardado(value) {
+  if (value instanceof Date) return value.getFullYear() + '/' + pad2(value.getMonth() + 1);
+
+  var match = /^(\d{4})[\/-](\d{1,2})/.exec(text(value));
+
+  return match ? match[1] + '/' + pad2(Number(match[2])) : '';
+}
+
+/** Distinct months of a set of monthly rows, oldest first. */
+function mesesDistintos(filas) {
+  var vistos = {};
+  var out = [];
+
+  for (var index = 0; index < filas.length; index += 1) {
+    var mes = String(filas[index][0]);
+
+    if (!vistos[mes]) {
+      vistos[mes] = true;
+      out.push(mes);
+    }
+  }
+
+  return out.sort();
+}
+
+function leerPeticionesMesGuardadas() {
+  var sheet = sheetByName(TAB.peticionesMes, false);
+
+  if (!sheet || sheet.getLastRow() < 2) return [];
+
+  var values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+  var out = [];
+
+  for (var index = 0; index < values.length; index += 1) {
+    var mes = mesGuardado(values[index][0]);
+
+    if (mes === '' || text(values[index][1]) === '' || text(values[index][2]) === '') continue;
+
+    out.push([mes, text(values[index][1]), text(values[index][2]), toNumber(values[index][3])]);
+  }
+
+  return out;
+}
+
+/**
+ * Keeps the monthly request rows in their own tab and returns the full set.
+ *
+ * The tab is only rewritten when this run brought the trio, so a weekly run
+ * without it reads the history and leaves the sheet untouched. Column A is
+ * plain text: typed as a value, 2026/09 would become a date.
+ */
+function guardarPeticionesMes(nuevas) {
+  var todas = fusionarPeticionesMes(leerPeticionesMesGuardadas(), nuevas);
+
+  if (nuevas.length === 0) return todas;
+
+  var sheet = sheetByName(TAB.peticionesMes, true);
+  var values = [['Mes', 'Origen', 'Métrica', 'Total']].concat(todas);
+
+  sheet.clear();
+  sheet.getRange(1, 1, values.length, 1).setNumberFormat('@');
+  sheet.getRange(1, 1, values.length, 4).setValues(values);
+
+  return todas;
+}
+
+/**
  * Tab 7-7 of the weekly template: the on-site incident list.
  *
  * The service's rule, column by column: Abiertas is every row whose Abierta
@@ -4420,8 +4588,12 @@ function registrarArchivosLeidos(clasificacion, informe) {
   }
 
   if (!algunMes) {
+    var guardados = informe.peticionesMesGuardados || [];
+
     informe.archivos.push({
-      name: 'Peticiones de mes (ausente)',
+      name: guardados.length > 0
+        ? 'Peticiones de mes (ausente, se mantiene ' + guardados[guardados.length - 1] + ')'
+        : 'Peticiones de mes (ausente)',
       modified: null,
       rows: 0
     });
@@ -4666,6 +4838,12 @@ function procesarSemana() {
     };
 
     var agregado = agregar(clasificacion.found, config.extraction);
+
+    // The monthly trio arrives once a month; every other week PLANO carries
+    // what the tab remembers, so the monthly slide holds until the next close.
+    agregado.peticionesMes = guardarPeticionesMes(agregado.peticionesMes);
+    informe.peticionesMesGuardados = mesesDistintos(agregado.peticionesMes);
+
     var textoPlano = serializarPlano(agregado, {
       week: isoDate(config.extraction),
       generated: new Date().toISOString(),

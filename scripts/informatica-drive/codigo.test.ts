@@ -61,6 +61,8 @@ function loadCodigo() {
       meta: Record<string, string>
     ) => string;
     requestKind: (fileName: string) => string | null;
+    fusionarPeticionesMes: (guardadas: unknown[][], nuevas: unknown[][]) => unknown[][];
+    mesGuardado: (value: unknown) => string;
     PETICIONES_ANUAL_SEMILLA: { anio: number; mes: number; peticiones: number }[];
     aniosConsecutivos: (
       headersFromM: unknown[]
@@ -863,6 +865,41 @@ describe("Codigo.gs informe mensual", () => {
     expect(gs.requestKind("Backlog20260928.xlsx")).toBe("backlog");
     expect(gs.requestKind("Gestionadas20260928.xlsx")).toBe("gestionadas");
     expect(gs.requestKind("Acumuladas20260921.xlsx")).toBe("acumuladas");
+  });
+
+  it("reconoce el trío de mes por el nombre del mes, con erratas", () => {
+    // The 2026-09 close as it reached the folder on 2026-10-05.
+    expect(gs.requestKind("BacklogSeptiembre.xlsx")).toBe("backlogMes");
+    expect(gs.requestKind("GestionadasSeptiembre.xlsx")).toBe("gestionadasMes");
+    expect(gs.requestKind("LiberadasSepriembre.xlsx")).toBe("liberadasMes");
+    expect(gs.requestKind("Liberadas de octubre.xlsx")).toBe("liberadasMes");
+    expect(gs.requestKind("Gestionadas Oct 2026.xlsx")).toBe("gestionadasMes");
+    expect(gs.requestKind("Backlog 20261005.xlsx")).toBe("backlog");
+    expect(gs.requestKind("Liberadas 20261005.xlsx")).toBe("liberadas");
+    expect(gs.requestKind("Copia de Gestionadas 20261005 (1).xlsx")).toBe("gestionadas");
+    expect(gs.requestKind("Backlog semana 40.xlsx")).toBe("backlog");
+  });
+
+  it("conserva los meses guardados y sustituye solo el mes que llega", () => {
+    const guardadas = [
+      ["2026/08", "On Site", "Gestionadas", 600],
+      ["2026/09", "On Site", "Gestionadas", 1],
+      ["2026/09", "Technology", "Backlog", 9],
+    ];
+    const septiembre = [["2026/09", "On Site", "Gestionadas", 680]];
+
+    expect(gs.fusionarPeticionesMes(guardadas, septiembre)).toEqual([
+      ["2026/08", "On Site", "Gestionadas", 600],
+      ["2026/09", "On Site", "Gestionadas", 680],
+    ]);
+    // A weekly run without the trio publishes what is stored.
+    expect(gs.fusionarPeticionesMes(guardadas, [])).toEqual(guardadas);
+  });
+
+  it("lee el mes guardado aunque la hoja lo haya convertido en fecha", () => {
+    expect(gs.mesGuardado("2026/09")).toBe("2026/09");
+    expect(gs.mesGuardado(new Date(2026, 8, 1))).toBe("2026/09");
+    expect(gs.mesGuardado("")).toBe("");
   });
 
   it("cuenta abiertas y resueltas por la fecha Abierta y el backlog pendiente", () => {
