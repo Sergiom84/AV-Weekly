@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveDatabaseUrl } from "./db-config.js";
 import { tursoFetch } from "./db-fetch.js";
+import { ensureBackupTables } from "./uploadBackup.js";
 
 // Keep all local state next to the application. APP_DATA_DIR is useful when
 // the app is launched from a shortcut or a shared installation folder.
@@ -182,4 +183,6 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS deck_change_history_department_date
       ON deck_change_history (department, changed_at DESC);
   `);
+
+  await ensureBackupTables(client);
 }

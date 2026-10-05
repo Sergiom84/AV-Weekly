@@ -112,6 +112,12 @@ import {
 } from "./parseInformeWeekly.js";
 import { parseInformePlanoWorkbook } from "./parseInformePlano.js";
 import { parseAvTexto } from "./parseAvTexto.js";
+import { backupBeforeImport } from "./uploadBackup.js";
+import {
+  appendMonthlyDataset,
+  appendResolutionWeeks,
+  appendWeeklyDataset,
+} from "./avAppend.js";
 import {
   mergeMonthlyDatasets,
   mergeWeeklyHistory,
@@ -428,7 +434,7 @@ router.put("/api/informe/deck", async (req, res) => {
   }
 });
 
-router.post("/api/informe/upload/semanal", upload.single("file"), async (req, res) => {
+router.post("/api/informe/upload/semanal", upload.single("file"), backupBeforeImport(client, "av", "semanal", ["informe_weekly", "informe_resolution_history"]), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Debes adjuntar el libro semanal del Informe." });
@@ -490,7 +496,7 @@ router.post("/api/informe/upload/semanal", upload.single("file"), async (req, re
   }
 });
 
-router.post("/api/informe/upload/texto", upload.single("file"), async (req, res) => {
+router.post("/api/informe/upload/texto", upload.single("file"), backupBeforeImport(client, "av", "texto", ["informe_weekly", "informe_resolution_history", "informe_monthly", "informe_weekly_history"]), async (req, res) => {
   try {
     const body = req.body as { texto?: unknown } | undefined;
     const pasted = typeof body?.texto === "string" ? body.texto : "";
@@ -511,11 +517,16 @@ router.post("/api/informe/upload/texto", upload.single("file"), async (req, res)
       parsed.document.meta.year ??
       String(new Date().getUTCFullYear());
 
-    const storedWeekly: InformeWeeklyDataset = {
-      ...parsed.weekly,
-      sourceFile: stamp.sourceFile,
-      uploadedAt: stamp.uploadedAt,
-    };
+    // Uploads are append-only: what is stored stays, new weeks and months are added.
+    const storedWeekly: InformeWeeklyDataset = appendWeeklyDataset(
+      await readStoredInformeWeekly(),
+      {
+        ...parsed.weekly,
+        year,
+        sourceFile: stamp.sourceFile,
+        uploadedAt: stamp.uploadedAt,
+      }
+    );
 
     const writes: Array<{ sql: string; args: Array<string | null> }> = [
       {
@@ -538,7 +549,10 @@ router.post("/api/informe/upload/texto", upload.single("file"), async (req, res)
               SET data = excluded.data, uploaded_at = excluded.uploaded_at`,
         args: [
           JSON.stringify({
-            byYear: { ...previous.byYear, [year]: parsed.resolutions },
+            byYear: {
+              ...previous.byYear,
+              [year]: appendResolutionWeeks(previous.byYear[year], parsed.resolutions),
+            },
             sourceFile: stamp.sourceFile,
             uploadedAt: stamp.uploadedAt,
           }),
@@ -548,7 +562,7 @@ router.post("/api/informe/upload/texto", upload.single("file"), async (req, res)
 
     if (parsed.document.mensual.length > 0) {
       const previousMonthly = (await readStoredInformeMonthly()) ?? emptyMonthlyDataset();
-      const monthly = mergeMonthlyDatasets(previousMonthly, {
+      const monthly = appendMonthlyDataset(previousMonthly, {
         ...parsed.monthly,
         sourceFile: stamp.sourceFile,
         uploadedAt: stamp.uploadedAt,
@@ -589,7 +603,7 @@ router.post("/api/informe/upload/texto", upload.single("file"), async (req, res)
   }
 });
 
-router.post("/api/informe/upload/plano", upload.single("file"), async (req, res) => {
+router.post("/api/informe/upload/plano", upload.single("file"), backupBeforeImport(client, "av", "plano", ["informe_resolution_history"]), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Debes adjuntar el fichero plano de tendencias." });
@@ -635,7 +649,7 @@ router.post("/api/informe/upload/plano", upload.single("file"), async (req, res)
   }
 });
 
-router.post("/api/informe/upload/tendencia", upload.single("file"), async (req, res) => {
+router.post("/api/informe/upload/tendencia", upload.single("file"), backupBeforeImport(client, "av", "tendencia", ["informe_monthly", "informe_weekly_history"]), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Debes adjuntar el libro de tendencias." });
@@ -686,7 +700,7 @@ router.post("/api/informe/upload/tendencia", upload.single("file"), async (req, 
   }
 });
 
-router.post("/api/informe/reset-deck", async (_req, res) => {
+router.post("/api/informe/reset-deck", backupBeforeImport(client, "av", "reset-deck", ["informe_deck"]), async (_req, res) => {
   try {
     await client.execute("DELETE FROM informe_deck WHERE id = 1");
 
@@ -1066,7 +1080,7 @@ function describeSourceFiles(names: string[]): string {
   return names.length === 1 ? names[0] : `${names.length} ficheros: ${names.join(", ")}`;
 }
 
-router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req, res) => {
+router.post("/api/informatica/upload/plano", uploadInformaticaPlano, backupBeforeImport(client, "informatica", "plano", ["informatica_dataset", "informatica_edificios", "building_location_alias"]), async (req, res) => {
   try {
     const grouped = (req.files ?? {}) as Record<string, Express.Multer.File[] | undefined>;
     const uploaded = [...(grouped.files ?? []), ...(grouped.file ?? [])];
@@ -1188,7 +1202,7 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, async (req,
  * folded into what is stored, exactly like the flat workbook upload: the text
  * carries the whole monthly history, so re-sending it is idempotent.
  */
-router.post("/api/informatica/upload/texto", upload.single("file"), async (req, res) => {
+router.post("/api/informatica/upload/texto", upload.single("file"), backupBeforeImport(client, "informatica", "texto", ["informatica_dataset", "informatica_edificios", "building_location_alias"]), async (req, res) => {
   try {
     const body = req.body as { texto?: unknown } | undefined;
     const pasted = typeof body?.texto === "string" ? body.texto : "";
@@ -1258,7 +1272,7 @@ router.post("/api/informatica/upload/texto", upload.single("file"), async (req, 
   }
 });
 
-router.post("/api/informatica/reset-deck", async (_req, res) => {
+router.post("/api/informatica/reset-deck", backupBeforeImport(client, "informatica", "reset-deck", ["informatica_deck"]), async (_req, res) => {
   try {
     await client.execute("DELETE FROM informatica_deck WHERE id = 1");
 
@@ -1368,7 +1382,7 @@ router.put("/api/aga/deck", async (req, res) => {
   }
 });
 
-router.post("/api/aga/upload/plano", upload.single("file"), async (req, res) => {
+router.post("/api/aga/upload/plano", upload.single("file"), backupBeforeImport(client, "aga", "plano", ["aga_dataset"]), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Debes adjuntar el excel GPS semanal." });
@@ -1425,7 +1439,7 @@ router.post("/api/aga/upload/plano", upload.single("file"), async (req, res) => 
   }
 });
 
-router.post("/api/aga/upload/office", upload.single("file"), async (req, res) => {
+router.post("/api/aga/upload/office", upload.single("file"), backupBeforeImport(client, "aga", "office", ["aga_dataset"]), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Debes adjuntar el export de licencias Office." });
@@ -1527,7 +1541,7 @@ const AGA_MANAGED_DEPARTMENTS = new Set(
   ].map(agaManagedLabel)
 );
 
-router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res) => {
+router.post("/api/aga/upload/gestionado", upload.single("file"), backupBeforeImport(client, "aga", "gestionado", ["aga_dataset"]), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Debes adjuntar el export Gestionado de ZPT025." });
@@ -1630,7 +1644,7 @@ router.post("/api/aga/upload/gestionado", upload.single("file"), async (req, res
  * Accepts a `.txt` upload (`file`) or a pasted body (`{ texto }`), because the
  * colleague copies the tab and the sidebar uploads a file.
  */
-router.post("/api/aga/upload/texto", upload.single("file"), async (req, res) => {
+router.post("/api/aga/upload/texto", upload.single("file"), backupBeforeImport(client, "aga", "texto", ["aga_dataset"]), async (req, res) => {
   try {
     const body = req.body as { texto?: unknown } | undefined;
     const pasted = typeof body?.texto === "string" ? body.texto : "";
@@ -1716,7 +1730,7 @@ router.post("/api/aga/upload/texto", upload.single("file"), async (req, res) => 
   }
 });
 
-router.post("/api/aga/reset-deck", async (_req, res) => {
+router.post("/api/aga/reset-deck", backupBeforeImport(client, "aga", "reset-deck", ["aga_deck"]), async (_req, res) => {
   try {
     await client.execute("DELETE FROM aga_deck WHERE id = 1");
 
@@ -1832,7 +1846,7 @@ router.put("/api/oficinas/deck", async (req, res) => {
   }
 });
 
-router.post("/api/oficinas/upload/plano", upload.single("file"), async (req, res) => {
+router.post("/api/oficinas/upload/plano", upload.single("file"), backupBeforeImport(client, "oficinas", "plano", ["oficinas_dataset"]), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Debes adjuntar el template semanal de Oficinas." });
@@ -1892,7 +1906,7 @@ router.post("/api/oficinas/upload/plano", upload.single("file"), async (req, res
   }
 });
 
-router.post("/api/oficinas/reset-deck", async (_req, res) => {
+router.post("/api/oficinas/reset-deck", backupBeforeImport(client, "oficinas", "reset-deck", ["oficinas_deck"]), async (_req, res) => {
   try {
     await client.execute("DELETE FROM oficinas_deck WHERE id = 1");
 
