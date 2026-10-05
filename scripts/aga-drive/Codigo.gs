@@ -1586,6 +1586,19 @@ function checkBreakdown(block, counts) {
 }
 
 /** The PLANO tab as a `.txt` in the same folder, for uploading to AV Weekly. */
+/**
+ * Moves an earlier TXT to the archive subfolder instead of trashing it, so a
+ * reprocessed week never loses the previous version. The subfolder is created
+ * inside the output folder the first time it is needed.
+ */
+function archivarTxt(file, outputFolder, archiveName) {
+  var folders = outputFolder.getFoldersByName(archiveName);
+  var archive = folders.hasNext() ? folders.next() : outputFolder.createFolder(archiveName);
+  var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm');
+  file.setName(file.getName().replace(/\.txt$/, ' (archivado ' + stamp + ').txt'));
+  file.moveTo(archive);
+}
+
 function guardarPlanoTxt() {
   var ui = SpreadsheetApp.getUi();
   var sheet = sheetByName(TAB.plano, false);
@@ -1608,7 +1621,7 @@ function guardarPlanoTxt() {
   var existing = folder.getFilesByName(name);
 
   while (existing.hasNext()) {
-    existing.next().setTrashed(true);
+    archivarTxt(existing.next(), folder, 'histórico AGA - txt');
   }
 
   var file = folder.createFile(name, lines.join('\n'), MimeType.PLAIN_TEXT);

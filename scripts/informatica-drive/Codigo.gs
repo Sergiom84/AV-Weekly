@@ -4880,6 +4880,19 @@ function procesarSemana() {
  * `notify` is only for the menu item. Weekly processing saves silently and
  * records the file name on Comprobación instead of opening a dialog.
  */
+/**
+ * Moves an earlier TXT to the archive subfolder instead of trashing it, so a
+ * reprocessed week never loses the previous version. The subfolder is created
+ * inside the output folder the first time it is needed.
+ */
+function archivarTxt(file, outputFolder, archiveName) {
+  var folders = outputFolder.getFoldersByName(archiveName);
+  var archive = folders.hasNext() ? folders.next() : outputFolder.createFolder(archiveName);
+  var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm');
+  file.setName(file.getName().replace(/\.txt$/, ' (archivado ' + stamp + ').txt'));
+  file.moveTo(archive);
+}
+
 function escribirPlanoTxt(notify) {
   var sheet = sheetByName(TAB.plano, false);
 
@@ -4907,16 +4920,16 @@ function escribirPlanoTxt(notify) {
   while (existing.hasNext()) {
     var candidate = existing.next();
 
-    if (candidate.getId() !== createdId) candidate.setTrashed(true);
+    if (candidate.getId() !== createdId) archivarTxt(candidate, folder, 'histórico Informática - txt');
   }
 
   // Versions created by the previous script lived beside the raw uploads.
-  // Remove that misplaced copy only after the correct file exists.
+  // Archive that misplaced copy only after the correct file exists.
   if (config.outputFolderId !== config.folderId) {
     var rawFolder = DriveApp.getFolderById(config.folderId);
     var misplaced = rawFolder.getFilesByName(name);
 
-    while (misplaced.hasNext()) misplaced.next().setTrashed(true);
+    while (misplaced.hasNext()) archivarTxt(misplaced.next(), folder, 'histórico Informática - txt');
   }
 
   if (notify) {

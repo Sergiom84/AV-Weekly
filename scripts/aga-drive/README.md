@@ -141,3 +141,10 @@ con la hoja no se ejecuta.
 Contrastado con la semana 33 de 2026: el texto que produce coincide posición a
 posición con lo que dan `parseAgaOffice.ts` y `parseAgaGestionado.ts` sobre los
 mismos ficheros, y con los números de la presentación publicada.
+
+## TXT anteriores
+
+Si se vuelve a generar el TXT de una semana que ya existía, el anterior no va a
+la papelera: se mueve a la subcarpeta `histórico AGA - txt` de la carpeta de
+salida, con la fecha de archivado en el nombre. La app guarda además copia de
+cada subida en Turso (`scripts/copias-seguridad.ts`).

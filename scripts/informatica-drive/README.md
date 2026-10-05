@@ -190,3 +190,10 @@ modificar el libro limpio:
 Por tanto, una diferencia no se corrige a ciegas para hacer coincidir dos
 números. Primero se decide si la fuente cambió después de congelar el libro o
 si la fórmula del libro representa otra magnitud.
+
+## TXT anteriores
+
+Si se vuelve a generar el TXT de una semana que ya existía, el anterior no va a
+la papelera: se mueve a la subcarpeta `histórico Informática - txt` de la carpeta de
+salida, con la fecha de archivado en el nombre. La app guarda además copia de
+cada subida en Turso (`scripts/copias-seguridad.ts`).
