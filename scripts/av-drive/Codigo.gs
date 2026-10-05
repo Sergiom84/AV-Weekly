@@ -39,6 +39,7 @@ function onOpen() {
   const menu = ui.createMenu('⭐ AV Weekly');
 
   menu.addItem('Procesar semana', 'importarDatosSemanales');
+  menu.addItem('Procesar mes', 'procesarMes');
   menu.addItem('Guardar PLANO como .txt en la carpeta', 'guardarPlanoTxt');
   menu.addItem('Actualizar Looker Studio', 'volcarDatosLookerStudio');
   menu.addSeparator();
@@ -1187,26 +1188,254 @@ function generarInformeCorrectivos(periodo, destinatario) {
 // ==========================================
 // 📥 AUTOMATIZACIÓN DE ENTRADA DE DATOS
 // ==========================================
-const ID_CARPETA_BUZON = '1dre4ydY0a9jnJ9Mufpj2EJFe5Cvd-o8h';
+// Input: the weekly and monthly templates. Output: the TXT for AV Weekly.
+const ID_CARPETA_TEMPLATES = '1Uz7rU5hm8jUvp1nLLQyALgaiYjhCR8LW';
+const ID_CARPETA_TXT = '1KdBpANFQ2O2_PBhlTtV8LpC2-xfyhNiR';
+// Earlier TXTs are moved here, never trashed: each one carries the resolution
+// detail of every week up to its own, so they are the backup of that detail.
+const ID_CARPETA_HISTORICO_TXT = '10beuK3so7X4lHMVuWKQ4azWJDq7My99E';
 
-function importarDatosSemanales() {
+// The templates folder holds the weekly and the monthly export, as .xlsx and as
+// Google Sheets. Only a Google Sheet can be opened here. The name decides the
+// kind: "Templates semanales..." or any name with "semanal" is weekly;
+// "Audiovisuales - Resueltas mes..." or any name with the word "mes" is
+// monthly. When several files match, the newest one wins.
+function clasificarTemplate(nombre) {
+  const texto = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (texto.startsWith('templates semanales') || /semanal/.test(texto)) return 'SEMANAL';
+  if (/^audiovisuales\s*-\s*resuelta/.test(texto) || /\bmes\b/.test(texto)) return 'MENSUAL';
+  return null;
+}
+
+function buscarTemplate(tipo) {
+  const archivos = DriveApp.getFolderById(ID_CARPETA_TEMPLATES).getFilesByType(MimeType.GOOGLE_SHEETS);
+  let elegido = null;
+  while (archivos.hasNext()) {
+    const archivo = archivos.next();
+    if (clasificarTemplate(archivo.getName()) !== tipo) continue;
+    if (!elegido || archivo.getLastUpdated() > elegido.getLastUpdated()) elegido = archivo;
+  }
+  return elegido;
+}
+
+function buscarTemplatesMensuales() {
+  const archivos = DriveApp.getFolderById(ID_CARPETA_TEMPLATES).getFilesByType(MimeType.GOOGLE_SHEETS);
+  const mensuales = [];
+  while (archivos.hasNext()) {
+    const archivo = archivos.next();
+    if (clasificarTemplate(archivo.getName()) === 'MENSUAL') mensuales.push(archivo);
+  }
+  return mensuales;
+}
+
+function buscarTemplateSemanal() {
+  return buscarTemplate('SEMANAL');
+}
+
+// ==========================================
+// 📅 PROCESAR MES
+// ==========================================
+// Counts the monthly export ("Resueltas mes anterior") into the month rows of
+// the five trend tabs. The mapping was checked against the weekly template:
+// weeks 37-39 of September 2026 match type by type.
+//   Grupo SOPORTE WEBEX                        -> Remotos
+//   Modulo SOPORTE PROGRAMADO                  -> Programados
+//   Modulo SOPORTE PRESENCIAL                  -> Presenciales
+//   Modulo MANTENIMIENTO CORRECTIVO            -> Correctivos
+//   Modulo MANTENIMIENTO (preventive)          -> not counted
+//   any other Modulo of AUDIOVISUALES          -> Incidencias
+// A month that already has a different value is only overwritten after
+// confirming it, so an incomplete export never replaces good data silently.
+const MESES_TENDENCIA = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+function tipoMensualDeTicket(grupo, modulo) {
+  const normalizar = (texto) => String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+  const g = normalizar(grupo);
+  const m = normalizar(modulo);
+  if (g === 'SOPORTE WEBEX') return 'REMOTOS';
+  if (m === 'SOPORTE PROGRAMADO') return 'PROGRAMADOS';
+  if (m === 'SOPORTE PRESENCIAL') return 'PRESENCIALES';
+  if (m === 'MANTENIMIENTO CORRECTIVO') return 'CORRECTIVOS';
+  if (m === 'MANTENIMIENTO') return null;
+  return 'INCIDENCIAS';
+}
+
+function contarTemplateMensual(origenSs) {
+  const valores = origenSs.getSheets()[0].getDataRange().getValues();
+  const cabecera = valores[0].map((celda) => String(celda).trim().toUpperCase());
+  const col = (nombre) => cabecera.indexOf(nombre);
+  const colCerrada = col('CERRADA');
+  const colGrupo = col('GRUPO');
+  const colModulo = col('MODULO');
+  const colId = col('INCIDENCIA');
+  if (colCerrada < 0 || colGrupo < 0 || colModulo < 0) {
+    throw new Error('El template mensual no tiene las columnas Cerrada, Grupo y Modulo.');
+  }
+
+  // The month is the one most tickets were closed in.
+  // Dates are read in the export's own time zone. The script project may use
+  // another one, which moved the evening closures of 30 September to October.
+  const zona = origenSs.getSpreadsheetTimeZone();
+  const filas = valores.slice(1)
+    .filter((fila) => fila[colCerrada] instanceof Date && (colId < 0 || fila[colId]))
+    .map((fila) => ({ fila, dia: Utilities.formatDate(fila[colCerrada], zona, 'yyyy-MM-dd').split('-').map(Number) }));
+  const porMes = {};
+  filas.forEach((item) => {
+    const clave = item.dia[0] + '-' + (item.dia[1] - 1);
+    porMes[clave] = (porMes[clave] || 0) + 1;
+  });
+  const claves = Object.keys(porMes);
+  if (claves.length === 0) throw new Error('El template mensual no tiene tickets con fecha de cierre.');
+  const clave = claves.sort((a, b) => porMes[b] - porMes[a])[0];
+  const anio = Number(clave.split('-')[0]);
+  const mes = Number(clave.split('-')[1]);
+
+  const conteo = { REMOTOS: 0, PROGRAMADOS: 0, PRESENCIALES: 0, INCIDENCIAS: 0, CORRECTIVOS: 0 };
+  const porSemana = { REMOTOS: {}, PROGRAMADOS: {}, PRESENCIALES: {}, INCIDENCIAS: {}, CORRECTIVOS: {} };
+  let dias = {};
+  filas.forEach((item) => {
+    const fila = item.fila;
+    if (item.dia[0] !== anio || item.dia[1] - 1 !== mes) return;
+    dias[item.dia[2]] = true;
+    const tipo = tipoMensualDeTicket(fila[colGrupo], fila[colModulo]);
+    if (tipo) {
+      conteo[tipo]++;
+      const semana = semanaIso(item.dia[0], item.dia[1], item.dia[2]);
+      porSemana[tipo][semana] = (porSemana[tipo][semana] || 0) + 1;
+    }
+  });
+
+  return {
+    anio,
+    mes,
+    conteo,
+    porSemana,
+    fuera: filas.length - porMes[clave],
+    primerDia: Math.min.apply(null, Object.keys(dias).map(Number)),
+    ultimoDia: Math.max.apply(null, Object.keys(dias).map(Number))
+  };
+}
+
+// Processes every monthly export in the folder, one month each, so August and
+// September can be loaded together. Two exports of the same month: the newest wins.
+function semanaIso(anio, mes, dia) {
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  const diaSemana = fecha.getUTCDay() || 7;
+  fecha.setUTCDate(fecha.getUTCDate() + 4 - diaSemana);
+  const inicio = new Date(Date.UTC(fecha.getUTCFullYear(), 0, 1));
+  return Math.ceil(((fecha - inicio) / 86400000 + 1) / 7);
+}
+
+// ISO weeks whose seven days fall inside the month: only those can be compared
+// one to one with the weekly totals of Tendencias.
+function semanasCompletasDelMes(anio, mes) {
+  const semanas = [];
+  const diasMes = new Date(anio, mes + 1, 0).getDate();
+  for (let dia = 1; dia <= diasMes; dia++) {
+    const fecha = new Date(Date.UTC(anio, mes, dia));
+    if ((fecha.getUTCDay() || 7) === 1 && dia + 6 <= diasMes) semanas.push(semanaIso(anio, mes + 1, dia));
+  }
+  return semanas;
+}
+
+// Compares the monthly export week by week with Tendencias. The export counts
+// every remote category, Tendencias only five, so small Remotos gaps are normal.
+function compararSemanasConTendencias(ss, datos) {
+  const avisos = [];
+  semanasCompletasDelMes(datos.anio, datos.mes).forEach((semana) => {
+    Object.keys(CONFIG_MENSUAL).forEach((tipo) => {
+      const bloque = BLOQUES_SEMANALES.filter((b) => b.hoja === CONFIG_MENSUAL[tipo].hoja)[0];
+      const hoja = ss.getSheetByName(bloque.hoja);
+      const valores = hoja.getRange(bloque.filas[0], semana + bloque.desplazamiento, bloque.filas[1] - bloque.filas[0] + 1, 1).getValues();
+      const tendencias = valores.reduce((suma, fila) => suma + (Number(fila[0]) || 0), 0);
+      const mensual = datos.porSemana[tipo][semana] || 0;
+      if (tendencias === 0 && mensual > 0) avisos.push(`  S${semana} ${bloque.hoja}: vacía en Tendencias, el mensual tiene ${mensual}.`);
+      else if (tendencias !== mensual) avisos.push(`  S${semana} ${bloque.hoja}: Tendencias ${tendencias}, mensual ${mensual}.`);
+    });
+  });
+  return avisos;
+}
+
+function procesarMes() {
   const ui = SpreadsheetApp.getUi();
-
   try {
-    const carpeta = DriveApp.getFolderById(ID_CARPETA_BUZON);
-    const archivos = carpeta.getFiles();
-
-    if (!archivos.hasNext()) {
-      ui.alert('Carpeta Vacía', 'No hay ningún archivo en la carpeta de buzón.', ui.ButtonSet.OK);
+    const archivos = buscarTemplatesMensuales();
+    if (archivos.length === 0) {
+      ui.alert('Sin template', 'No hay un template mensual en formato Google Sheets en la carpeta de templates.', ui.ButtonSet.OK);
       return;
     }
 
-    const archivo = archivos.next();
-    const origenSs = SpreadsheetApp.openById(archivo.getId());
-    const destinoSs = SpreadsheetApp.getActiveSpreadsheet();
+    const anioInforme = anioInformeActual();
+    const porMes = {};
+    archivos.forEach((archivo) => {
+      const datos = contarTemplateMensual(SpreadsheetApp.openById(archivo.getId()));
+      datos.archivo = archivo;
+      if (datos.anio !== anioInforme) {
+        throw new Error(`"${archivo.getName()}" es de ${datos.anio} y Tendencias es de ${anioInforme}.`);
+      }
+      const previo = porMes[datos.mes];
+      if (!previo || archivo.getLastUpdated() > previo.archivo.getLastUpdated()) porMes[datos.mes] = datos;
+    });
+    const meses = Object.keys(porMes).map(Number).sort((a, b) => a - b);
 
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const bloques = [];
+    meses.forEach((mes) => {
+      const datos = porMes[mes];
+      const nombreMes = MESES_TENDENCIA[mes];
+      const diasMes = new Date(datos.anio, mes + 1, 0).getDate();
+      const lineas = [];
+      const cambios = [];
+      Object.keys(CONFIG_MENSUAL).forEach((tipo) => {
+        const conf = CONFIG_MENSUAL[tipo];
+        const hoja = ss.getSheetByName(conf.hoja);
+        if (!hoja) throw new Error(`No se encuentra la pestaña ${conf.hoja}.`);
+        const fila = conf.rangoFilas[0] + mes;
+        const actual = hoja.getRange(`${conf.colActual}${fila}`).getValue();
+        const nuevo = datos.conteo[tipo];
+        lineas.push(`  ${conf.hoja} (${conf.colActual}${fila}): ${nuevo}`);
+        if (actual !== '' && actual !== null && Number(actual) !== nuevo) {
+          cambios.push(`  ${conf.hoja}: ${actual} -> ${nuevo}`);
+        }
+      });
+      let bloque = `${nombreMes} ${datos.anio} - "${datos.archivo.getName()}"\n` +
+        `Cierres del ${datos.primerDia} al ${datos.ultimoDia} de ${diasMes} días.\n` + lineas.join('\n');
+      if (datos.primerDia > 3 || datos.ultimoDia < diasMes - 3) bloque += '\nEl fichero no parece cubrir el mes entero.';
+      if (datos.fuera > 0) bloque += `\n${datos.fuera} tickets de otros meses no se cuentan.`;
+      if (cambios.length > 0) bloque += '\nYa había otros valores:\n' + cambios.join('\n');
+      const diferencias = compararSemanasConTendencias(ss, datos);
+      if (diferencias.length > 0) bloque += '\nSemanas que no cuadran con Tendencias:\n' + diferencias.join('\n');
+      bloques.push(bloque);
+    });
+
+    const respuesta = ui.alert('Procesar mes', bloques.join('\n\n') + '\n\n¿Escribir estos valores?', ui.ButtonSet.YES_NO);
+    if (respuesta !== ui.Button.YES) return;
+
+    meses.forEach((mes) => {
+      Object.keys(CONFIG_MENSUAL).forEach((tipo) => {
+        const conf = CONFIG_MENSUAL[tipo];
+        const hoja = ss.getSheetByName(conf.hoja);
+        const fila = conf.rangoFilas[0] + mes;
+        hoja.getRange(`A${fila}`).setValue(MESES_TENDENCIA[mes]);
+        hoja.getRange(`${conf.colActual}${fila}`).setValue(porMes[mes].conteo[tipo]);
+      });
+    });
+    SpreadsheetApp.flush();
+
+    const archivoTxt = escribirPlanoTxt();
+    const nombres = meses.map((mes) => MESES_TENDENCIA[mes]).join(' y ');
+    ui.alert('Procesar mes', `${nombres} escrito en Tendencias.\nGuardado "${archivoTxt.getName()}" en la carpeta.`, ui.ButtonSet.OK);
+  } catch (e) {
+    ui.alert('Procesar mes', e.message, ui.ButtonSet.OK);
+  }
+}
+
+// Writes one week of the template into Tendencias. The detail tabs (7 to 10)
+// only carry the template's last week, so the resolution rows are written only
+// when conDetalle is true; earlier weeks get locations and Remotos categories.
+function importarSemana(origenSs, destinoSs, semana, conDetalle) {
     let resumenImportacion = '';
-    let numSemanaGlobal = '';
+    const numSemanaGlobal = semana;
 
     const obtenerHojaPorNombre = (ss, fragmento) => {
       const hojas = ss.getSheets();
@@ -1227,32 +1456,20 @@ function importarDatosSemanales() {
       return (!isNaN(num) && num > 0 && num <= 53) ? num : null;
     };
 
-    const obtenerColumnaUltimaSemanaAntesDeTotal = (hoja, filaCabecera, colTotal, nombreHoja) => {
-      if (colTotal <= 1) throw new Error(`No se encontró una columna de semana antes de "Total" en ${nombreHoja}.`);
-
-      for (let col = colTotal - 1; col >= 1; col--) {
-        let semana = obtenerNumeroSemana(filaCabecera[col - 1]);
-        if (semana !== null) return col;
-
-        semana = obtenerNumeroSemana(hoja.getRange(2, col).getValue());
-        if (semana !== null) return col;
-      }
-
-      throw new Error(`No se pudo detectar la última semana antes de "Total" en ${nombreHoja}.`);
-    };
-
     const obtenerColumnaSemanaObjetivo = (hoja, filaCabecera, colTotal, numSemanaObjetivo, nombreHoja) => {
       const objetivo = Number(numSemanaObjetivo);
+      // Read the second header row once: a getValue per column took minutes.
+      const fila2 = colTotal > 1 ? hoja.getRange(2, 1, 1, colTotal - 1).getValues()[0] : [];
 
       for (let col = 1; col < colTotal; col++) {
         const semanaFila1 = obtenerNumeroSemana(filaCabecera[col - 1]);
         if (semanaFila1 === objetivo) return col;
 
-        const semanaFila2 = obtenerNumeroSemana(hoja.getRange(2, col).getValue());
+        const semanaFila2 = obtenerNumeroSemana(fila2[col - 1]);
         if (semanaFila2 === objetivo) return col;
       }
 
-      return obtenerColumnaUltimaSemanaAntesDeTotal(hoja, filaCabecera, colTotal, nombreHoja);
+      return -1;
     };
 
     // 1. REMOTOS
@@ -1266,18 +1483,23 @@ function importarDatosSemanales() {
     }
     if (colTotalRem === -1) throw new Error('No se encontró "Total" en la primera fila de Remotos.');
 
-    const colDatosRem = obtenerColumnaUltimaSemanaAntesDeTotal(hojaOrigenRemotos, fila1Rem, colTotalRem, 'Remotos');
-    let numSemana = hojaOrigenRemotos.getRange(1, colDatosRem).getValue();
-    if (!numSemana || isNaN(numSemana)) numSemana = hojaOrigenRemotos.getRange(2, colDatosRem).getValue();
-    if (isNaN(numSemana) || numSemana <= 0) throw new Error(`No se pudo detectar un número de semana en Remotos.`);
+    const colDatosRem = obtenerColumnaSemanaObjetivo(hojaOrigenRemotos, fila1Rem, colTotalRem, semana, 'Remotos');
+    const numSemana = semana;
 
-    numSemanaGlobal = numSemana;
-
-    const valErrores = Number(hojaOrigenRemotos.getRange(3, colDatosRem).getValue());
-    const valOperativa = Number(hojaOrigenRemotos.getRange(4, colDatosRem).getValue());
-    const valConexion = Number(hojaOrigenRemotos.getRange(5, colDatosRem).getValue());
-    const valVideo = Number(hojaOrigenRemotos.getRange(6, colDatosRem).getValue());
-    const valBlueBranch = Number(hojaOrigenRemotos.getRange(8, colDatosRem).getValue());
+    // The template sorts categories by yearly volume, so their rows move: read them by label.
+    const datosRemOrigen = hojaOrigenRemotos.getDataRange().getValues();
+    const valorRemoto = (etiqueta) => {
+      if (colDatosRem < 0) return 0;
+      for (let f = 0; f < datosRemOrigen.length; f++) {
+        if (normalizarTexto(datosRemOrigen[f][0]) === etiqueta) return Number(datosRemOrigen[f][colDatosRem - 1]) || 0;
+      }
+      return 0;
+    };
+    const valErrores = valorRemoto('ERRORES');
+    const valOperativa = valorRemoto('OPERATIVA');
+    const valConexion = valorRemoto('CONEXION');
+    const valVideo = valorRemoto('VIDEO');
+    const valBlueBranch = valorRemoto('BLUE BRANCH');
 
     const hojaDestinoRem = destinoSs.getSheetByName('Remotos');
     const colDestinoRem = Number(numSemana) + 1;
@@ -1308,7 +1530,7 @@ function importarDatosSemanales() {
 
     let valoresProg = { 'CIUDAD': "", 'CAMPUS': "", 'VELA': "", 'TERRITORIOS': "", 'RECOLETOS': "", 'TABLAS': "" };
 
-    for (let f = 0; f < datosProgOrigen.length; f++) {
+    for (let f = 0; colDatosProg > 0 && f < datosProgOrigen.length; f++) {
       const textoColA = normalizarTexto(datosProgOrigen[f][0]);
       const textoColB = normalizarTexto(datosProgOrigen[f][1]);
       for (let ubicacion in valoresProg) {
@@ -1329,48 +1551,52 @@ function importarDatosSemanales() {
       hojaDestinoProg.getRange(filasDestinoProg[ubicacion], colDestinoProg).setValue(valoresProg[ubicacion]);
     }
 
-    // 3. PROGRAMADOS RESOLUCIONES
-    const hojaOrigenProgRes = obtenerHojaPorNombre(origenSs, '7-Soporte Programado');
-    if (!hojaOrigenProgRes) throw new Error('No se encontró "7-Soporte Programado - Detalle".');
+    if (conDetalle) {
+      // 3. PROGRAMADOS RESOLUCIONES
+      const hojaOrigenProgRes = obtenerHojaPorNombre(origenSs, '7-Soporte Programado');
+      if (!hojaOrigenProgRes) throw new Error('No se encontró "7-Soporte Programado - Detalle".');
 
-    const datosProgRes = hojaOrigenProgRes.getDataRange().getValues();
+      const datosProgRes = hojaOrigenProgRes.getDataRange().getValues();
 
-    const filasProgRes = {
-      'SALA|PREPARACION SALA': 5, 'SALA|PRESTAMO': 6, 'WEBEX|CONEXION': 7,
-      'WEBEX|SEMINARIO WEB': 8, 'WEBEX|TRADUCCION': 9, 'MEET|CONEXION': 10,
-      'MEET|TRADUCCION': 11, 'OTRAS VC|CONEXION': 12
-    };
+      const filasProgRes = {
+        'SALA|PREPARACION SALA': 5, 'SALA|PRESTAMO': 6, 'WEBEX|CONEXION': 7,
+        'WEBEX|SEMINARIO WEB': 8, 'WEBEX|TRADUCCION': 9, 'MEET|CONEXION': 10,
+        'MEET|TRADUCCION': 11, 'OTRAS VC|CONEXION': 12
+      };
 
-    let valoresProgRes = {};
-    for (let key in filasProgRes) valoresProgRes[key] = "";
-    let lastTier2Prog = "";
+      let valoresProgRes = {};
+      for (let key in filasProgRes) valoresProgRes[key] = "";
+      let lastTier2Prog = "";
 
-    for (let f = 1; f < datosProgRes.length; f++) {
-      let valA = normalizarTexto(datosProgRes[f][0]);
-      if (valA === 'TOTAL') break;
-      let valB = normalizarTexto(datosProgRes[f][1]);
-      let valC = normalizarTexto(datosProgRes[f][2]);
-      let valD = Number(datosProgRes[f][3]);
-      if (valB !== "") lastTier2Prog = valB;
-      let llave = lastTier2Prog + "|" + valC;
-      if (filasProgRes[llave] !== undefined) valoresProgRes[llave] = valorOBlanco(valD);
-    }
+      for (let f = 1; f < datosProgRes.length; f++) {
+        let valA = normalizarTexto(datosProgRes[f][0]);
+        if (valA === 'TOTAL') break;
+        let valB = normalizarTexto(datosProgRes[f][1]);
+        let valC = normalizarTexto(datosProgRes[f][2]);
+        let valD = Number(datosProgRes[f][3]);
+        if (valB !== "") lastTier2Prog = valB;
+        let llave = lastTier2Prog + "|" + valC;
+        if (filasProgRes[llave] !== undefined) valoresProgRes[llave] = valorOBlanco(valD);
+      }
 
-    for (let key in filasProgRes) {
-      hojaDestinoProg.getRange(filasProgRes[key], colDestinoProg).setValue(valoresProgRes[key]);
-    }
+      for (let key in filasProgRes) {
+        hojaDestinoProg.getRange(filasProgRes[key], colDestinoProg).setValue(valoresProgRes[key]);
+      }
 
-    // CÁLCULO DEL PARCHE EN MEMORIA (Evita leer fórmulas de la hoja para que nunca falle)
-    let totalUbicProg = Object.values(valoresProg).reduce((acc, val) => acc + (Number(val) || 0), 0);
-    let totalResProg = Object.values(valoresProgRes).reduce((acc, val) => acc + (Number(val) || 0), 0);
-    let difProg = totalUbicProg - totalResProg;
+      // CÁLCULO DEL PARCHE EN MEMORIA (Evita leer fórmulas de la hoja para que nunca falle)
+      let totalUbicProg = Object.values(valoresProg).reduce((acc, val) => acc + (Number(val) || 0), 0);
+      let totalResProg = Object.values(valoresProgRes).reduce((acc, val) => acc + (Number(val) || 0), 0);
+      let difProg = totalUbicProg - totalResProg;
 
-    if (difProg !== 0) {
-      let valActualProg = Number(valoresProgRes['SALA|PREPARACION SALA']) || 0;
-      hojaDestinoProg.getRange(5, colDestinoProg).setValue(valorOBlanco(valActualProg + difProg));
-      resumenImportacion += `✅ PROGRAMADOS: Completado (Ajuste: ${difProg > 0 ? '+' : ''}${difProg} en SALA|PREPARACION SALA).\n`;
+      if (difProg !== 0) {
+        let valActualProg = Number(valoresProgRes['SALA|PREPARACION SALA']) || 0;
+        hojaDestinoProg.getRange(5, colDestinoProg).setValue(valorOBlanco(valActualProg + difProg));
+        resumenImportacion += `✅ PROGRAMADOS: Completado (Ajuste: ${difProg > 0 ? '+' : ''}${difProg} en SALA|PREPARACION SALA).\n`;
+      } else {
+        resumenImportacion += `✅ PROGRAMADOS: Completado.\n`;
+      }
     } else {
-      resumenImportacion += `✅ PROGRAMADOS: Completado.\n`;
+      resumenImportacion += `✅ PROGRAMADOS: ubicaciones (sin detalle de resolución).\n`;
     }
 
     // 4. PRESENCIALES UBICACIONES
@@ -1388,7 +1614,7 @@ function importarDatosSemanales() {
     const datosPresOrigen = hojaOrigenPres.getDataRange().getValues();
     let valoresPres = { 'TERRITORIOS': "", 'CIUDAD': "", 'CAMPUS': "", 'RECOLETOS': "", 'TABLAS': "", 'VELA': "" };
 
-    for (let f = 0; f < datosPresOrigen.length; f++) {
+    for (let f = 0; colDatosPres > 0 && f < datosPresOrigen.length; f++) {
       const textoColA = normalizarTexto(datosPresOrigen[f][0]);
       const textoColB = normalizarTexto(datosPresOrigen[f][1]);
       for (let ubicacion in valoresPres) {
@@ -1409,52 +1635,56 @@ function importarDatosSemanales() {
       hojaDestinoPres.getRange(filasDestinoPres[ubicacion], colDestinoPres).setValue(valoresPres[ubicacion]);
     }
 
-    // 5. PRESENCIALES RESOLUCIONES
-    const hojaOrigenPresRes = obtenerHojaPorNombre(origenSs, '8-Soporte Presencial');
-    if (!hojaOrigenPresRes) throw new Error('No se encontró la pestaña "8-Soporte Presencial".');
+    if (conDetalle) {
+      // 5. PRESENCIALES RESOLUCIONES
+      const hojaOrigenPresRes = obtenerHojaPorNombre(origenSs, '8-Soporte Presencial');
+      if (!hojaOrigenPresRes) throw new Error('No se encontró la pestaña "8-Soporte Presencial".');
 
-    const datosPresRes = hojaOrigenPresRes.getDataRange().getValues();
+      const datosPresRes = hojaOrigenPresRes.getDataRange().getValues();
 
-    const filasPresRes = {
-      'SALA|PREPARACION SALA': 5, 'SALA|DES/INSTALACION': 6, 'SALA|DES/MONTAJE': 7,
-      'SALA|ENCENDIDO/APAGADO': 8, 'SALA|EVENTO': 9, 'SALA|ETIQUETADO': 10,
-      'WEBEX|CONEXION': 11, 'WEBEX|TRADUCCION': 12, 'OTRAS VC|CONEXION': 13, 'MEET|CONEXION': 14
-    };
+      const filasPresRes = {
+        'SALA|PREPARACION SALA': 5, 'SALA|DES/INSTALACION': 6, 'SALA|DES/MONTAJE': 7,
+        'SALA|ENCENDIDO/APAGADO': 8, 'SALA|EVENTO': 9, 'SALA|ETIQUETADO': 10,
+        'WEBEX|CONEXION': 11, 'WEBEX|TRADUCCION': 12, 'OTRAS VC|CONEXION': 13, 'MEET|CONEXION': 14
+      };
 
-    let valoresPresRes = {};
-    for (let key in filasPresRes) valoresPresRes[key] = 0;
-    let lastTier2Pres = "";
+      let valoresPresRes = {};
+      for (let key in filasPresRes) valoresPresRes[key] = 0;
+      let lastTier2Pres = "";
 
-    for (let f = 1; f < datosPresRes.length; f++) {
-      let valA = normalizarTexto(datosPresRes[f][0]);
-      if (valA === 'TOTAL') break;
-      let valB = normalizarTexto(datosPresRes[f][1]);
-      let valC = normalizarTexto(datosPresRes[f][2]);
-      let valD = Number(datosPresRes[f][3]) || 0;
-      if (valB !== "") {
-        if (valB === "SALAS") valB = "SALA";
-        lastTier2Pres = valB;
+      for (let f = 1; f < datosPresRes.length; f++) {
+        let valA = normalizarTexto(datosPresRes[f][0]);
+        if (valA === 'TOTAL') break;
+        let valB = normalizarTexto(datosPresRes[f][1]);
+        let valC = normalizarTexto(datosPresRes[f][2]);
+        let valD = Number(datosPresRes[f][3]) || 0;
+        if (valB !== "") {
+          if (valB === "SALAS") valB = "SALA";
+          lastTier2Pres = valB;
+        }
+        if (lastTier2Pres === "SALA" && valC === "") valC = "DES/INSTALACION";
+        let llave = lastTier2Pres + "|" + valC;
+        if (filasPresRes[llave] !== undefined) valoresPresRes[llave] += valD;
       }
-      if (lastTier2Pres === "SALA" && valC === "") valC = "DES/INSTALACION";
-      let llave = lastTier2Pres + "|" + valC;
-      if (filasPresRes[llave] !== undefined) valoresPresRes[llave] += valD;
-    }
 
-    for (let key in filasPresRes) {
-      hojaDestinoPres.getRange(filasPresRes[key], colDestinoPres).setValue(valorOBlanco(valoresPresRes[key]));
-    }
+      for (let key in filasPresRes) {
+        hojaDestinoPres.getRange(filasPresRes[key], colDestinoPres).setValue(valorOBlanco(valoresPresRes[key]));
+      }
 
-    // CÁLCULO DEL PARCHE EN MEMORIA PRESENCIALES
-    let totalUbicPres = Object.values(valoresPres).reduce((acc, val) => acc + (Number(val) || 0), 0);
-    let totalResPres = Object.values(valoresPresRes).reduce((acc, val) => acc + (Number(val) || 0), 0);
-    let difPres = totalUbicPres - totalResPres;
+      // CÁLCULO DEL PARCHE EN MEMORIA PRESENCIALES
+      let totalUbicPres = Object.values(valoresPres).reduce((acc, val) => acc + (Number(val) || 0), 0);
+      let totalResPres = Object.values(valoresPresRes).reduce((acc, val) => acc + (Number(val) || 0), 0);
+      let difPres = totalUbicPres - totalResPres;
 
-    if (difPres !== 0) {
-      let valActualPres = Number(valoresPresRes['SALA|DES/MONTAJE']) || 0;
-      hojaDestinoPres.getRange(7, colDestinoPres).setValue(valorOBlanco(valActualPres + difPres));
-      resumenImportacion += `✅ PRESENCIALES: Completado (Ajuste: ${difPres > 0 ? '+' : ''}${difPres} en SALA|DES/MONTAJE).\n`;
+      if (difPres !== 0) {
+        let valActualPres = Number(valoresPresRes['SALA|DES/MONTAJE']) || 0;
+        hojaDestinoPres.getRange(7, colDestinoPres).setValue(valorOBlanco(valActualPres + difPres));
+        resumenImportacion += `✅ PRESENCIALES: Completado (Ajuste: ${difPres > 0 ? '+' : ''}${difPres} en SALA|DES/MONTAJE).\n`;
+      } else {
+        resumenImportacion += `✅ PRESENCIALES: Completado.\n`;
+      }
     } else {
-      resumenImportacion += `✅ PRESENCIALES: Completado.\n`;
+      resumenImportacion += `✅ PRESENCIALES: ubicaciones (sin detalle de resolución).\n`;
     }
 
     // 6. INCIDENCIAS UBICACIONES
@@ -1472,7 +1702,7 @@ function importarDatosSemanales() {
     const datosIncOrigen = hojaOrigenInc.getDataRange().getValues();
     let valoresInc = { 'CIUDAD': "", 'TERRITORIOS': "", 'CAMPUS': "", 'RECOLETOS': "", 'TABLAS': "", 'VELA': "" };
 
-    for (let f = 0; f < datosIncOrigen.length; f++) {
+    for (let f = 0; colDatosInc > 0 && f < datosIncOrigen.length; f++) {
       const textoColA = normalizarTexto(datosIncOrigen[f][0]);
       const textoColB = normalizarTexto(datosIncOrigen[f][1]);
       for (let ubicacion in valoresInc) {
@@ -1493,56 +1723,60 @@ function importarDatosSemanales() {
       hojaDestinoInc.getRange(filasDestinoInc[ubicacion], colDestinoInc).setValue(valoresInc[ubicacion]);
     }
 
-    // 7. INCIDENCIAS RESOLUCIONES
-    const hojaOrigenIncRes = obtenerHojaPorNombre(origenSs, '9-Incidencias');
-    if (!hojaOrigenIncRes) throw new Error('No se encontró la pestaña "9-Incidencias".');
+    if (conDetalle) {
+      // 7. INCIDENCIAS RESOLUCIONES
+      const hojaOrigenIncRes = obtenerHojaPorNombre(origenSs, '9-Incidencias');
+      if (!hojaOrigenIncRes) throw new Error('No se encontró la pestaña "9-Incidencias".');
 
-    const datosIncRes = hojaOrigenIncRes.getDataRange().getValues();
-    const filasIncResExactas = {
-      'WEBEX|CONEXION': 6, 'WEBEX|FORMACION': 7, 'WEBEX|GESTION': 8,
-      'CABLEADO|PRESTAMO': 10, 'CABLEADO|SANEADO': 11, 'CABLEADO|SUSTITUCION': 12,
-      'PC\\PORTATIL|CONFIGURACION': 14, 'PC/PORTATIL|CONFIGURACION': 14,
-      'PC\\PORTATIL|FORMACION': 15, 'PC/PORTATIL|FORMACION': 15,
-      'DOMOTICA|CONFIGURACION': 17, 'DOMOTICA|FORMACION': 18, 'DOMOTICA|REINICIO': 19, 'DOMOTICA|SUSTITUCION': 20,
-      'MEET|CONEXION': 22, 'MEET|FORMACION': 23
-    };
-    const filasIncResSuma = {
-      'EQUIPO VIDEO': 24, 'EQUIPO DE VIDEO': 24, 'MONITOR': 25, 'EQUIPO AUDIO': 26,
-      'VC. CISCO': 27, 'VC CISCO': 27, 'PERIFERICO PC': 28, 'OTRAS VC': 29,
-      'PROYECTOR': 30, 'TRADUCCION': 31, 'ROOMWIZARD\\QR': 32, 'ROOMWIZARD/QR': 32, 'VIDEO WALL': 33, 'VIDEOWALL': 33
-    };
+      const datosIncRes = hojaOrigenIncRes.getDataRange().getValues();
+      const filasIncResExactas = {
+        'WEBEX|CONEXION': 6, 'WEBEX|FORMACION': 7, 'WEBEX|GESTION': 8,
+        'CABLEADO|PRESTAMO': 10, 'CABLEADO|SANEADO': 11, 'CABLEADO|SUSTITUCION': 12,
+        'PC\\PORTATIL|CONFIGURACION': 14, 'PC/PORTATIL|CONFIGURACION': 14,
+        'PC\\PORTATIL|FORMACION': 15, 'PC/PORTATIL|FORMACION': 15,
+        'DOMOTICA|CONFIGURACION': 17, 'DOMOTICA|FORMACION': 18, 'DOMOTICA|REINICIO': 19, 'DOMOTICA|SUSTITUCION': 20,
+        'MEET|CONEXION': 22, 'MEET|FORMACION': 23
+      };
+      const filasIncResSuma = {
+        'EQUIPO VIDEO': 24, 'EQUIPO DE VIDEO': 24, 'MONITOR': 25, 'EQUIPO AUDIO': 26,
+        'VC. CISCO': 27, 'VC CISCO': 27, 'PERIFERICO PC': 28, 'OTRAS VC': 29,
+        'PROYECTOR': 30, 'TRADUCCION': 31, 'ROOMWIZARD\\QR': 32, 'ROOMWIZARD/QR': 32, 'VIDEO WALL': 33, 'VIDEOWALL': 33
+      };
 
-    let valoresIncRes = {};
-    let lastTier2Inc = "";
+      let valoresIncRes = {};
+      let lastTier2Inc = "";
 
-    for (let f = 1; f < datosIncRes.length; f++) {
-      let valA = normalizarTexto(datosIncRes[f][0]);
-      if (valA === 'TOTAL') break;
-      let valB = normalizarTexto(datosIncRes[f][1]);
-      let valC = normalizarTexto(datosIncRes[f][2]);
-      let valD = Number(datosIncRes[f][3]) || 0;
-      if (valB !== "") lastTier2Inc = valB;
-      let llaveExacta = lastTier2Inc + "|" + valC;
-      let filaDestino = filasIncResExactas[llaveExacta] || filasIncResSuma[lastTier2Inc];
-      if (filaDestino) valoresIncRes[filaDestino] = (valoresIncRes[filaDestino] || 0) + valD;
-    }
+      for (let f = 1; f < datosIncRes.length; f++) {
+        let valA = normalizarTexto(datosIncRes[f][0]);
+        if (valA === 'TOTAL') break;
+        let valB = normalizarTexto(datosIncRes[f][1]);
+        let valC = normalizarTexto(datosIncRes[f][2]);
+        let valD = Number(datosIncRes[f][3]) || 0;
+        if (valB !== "") lastTier2Inc = valB;
+        let llaveExacta = lastTier2Inc + "|" + valC;
+        let filaDestino = filasIncResExactas[llaveExacta] || filasIncResSuma[lastTier2Inc];
+        if (filaDestino) valoresIncRes[filaDestino] = (valoresIncRes[filaDestino] || 0) + valD;
+      }
 
-    const todasLasFilasIncRes = [6,7,8, 10,11,12, 14,15, 17,18,19,20, 22,23, 24,25,26,27,28,29,30,31,32,33];
-    for (let i = 0; i < todasLasFilasIncRes.length; i++) {
-      hojaDestinoInc.getRange(todasLasFilasIncRes[i], colDestinoInc).setValue(valorOBlanco(valoresIncRes[todasLasFilasIncRes[i]] || 0));
-    }
+      const todasLasFilasIncRes = [6,7,8, 10,11,12, 14,15, 17,18,19,20, 22,23, 24,25,26,27,28,29,30,31,32,33];
+      for (let i = 0; i < todasLasFilasIncRes.length; i++) {
+        hojaDestinoInc.getRange(todasLasFilasIncRes[i], colDestinoInc).setValue(valorOBlanco(valoresIncRes[todasLasFilasIncRes[i]] || 0));
+      }
 
-    // CÁLCULO DEL PARCHE EN MEMORIA INCIDENCIAS
-    let totalUbicInc = Object.values(valoresInc).reduce((acc, val) => acc + (Number(val) || 0), 0);
-    let totalResInc = Object.values(valoresIncRes).reduce((acc, val) => acc + (Number(val) || 0), 0);
-    let difInc = totalUbicInc - totalResInc;
+      // CÁLCULO DEL PARCHE EN MEMORIA INCIDENCIAS
+      let totalUbicInc = Object.values(valoresInc).reduce((acc, val) => acc + (Number(val) || 0), 0);
+      let totalResInc = Object.values(valoresIncRes).reduce((acc, val) => acc + (Number(val) || 0), 0);
+      let difInc = totalUbicInc - totalResInc;
 
-    if (difInc !== 0) {
-      let valActualInc = Number(valoresIncRes[11]) || 0;
-      hojaDestinoInc.getRange(11, colDestinoInc).setValue(valorOBlanco(valActualInc + difInc));
-      resumenImportacion += `✅ INCIDENCIAS: Completado (Ajuste: ${difInc > 0 ? '+' : ''}${difInc} en CABLEADO|SANEADO).\n`;
+      if (difInc !== 0) {
+        let valActualInc = Number(valoresIncRes[11]) || 0;
+        hojaDestinoInc.getRange(11, colDestinoInc).setValue(valorOBlanco(valActualInc + difInc));
+        resumenImportacion += `✅ INCIDENCIAS: Completado (Ajuste: ${difInc > 0 ? '+' : ''}${difInc} en CABLEADO|SANEADO).\n`;
+      } else {
+        resumenImportacion += `✅ INCIDENCIAS: Completado.\n`;
+      }
     } else {
-      resumenImportacion += `✅ INCIDENCIAS: Completado.\n`;
+      resumenImportacion += `✅ INCIDENCIAS: ubicaciones (sin detalle de resolución).\n`;
     }
 
     // 8. CORRECTIVOS UBICACIONES
@@ -1560,7 +1794,7 @@ function importarDatosSemanales() {
     const datosCorrOrigen = hojaOrigenCorr.getDataRange().getValues();
     let valoresCorr = { 'CIUDAD': "", 'TERRITORIOS': "", 'CAMPUS': "", 'RECOLETOS': "", 'TABLAS': "", 'VELA': "" };
 
-    for (let f = 0; f < datosCorrOrigen.length; f++) {
+    for (let f = 0; colDatosCorr > 0 && f < datosCorrOrigen.length; f++) {
       const textoColA = normalizarTexto(datosCorrOrigen[f][0]);
       const textoColB = normalizarTexto(datosCorrOrigen[f][1]);
       for (let ubicacion in valoresCorr) {
@@ -1581,75 +1815,219 @@ function importarDatosSemanales() {
       hojaDestinoCorr.getRange(filasDestinoCorr[ubicacion], colDestinoCorr).setValue(valoresCorr[ubicacion]);
     }
 
-    // 9. CORRECTIVOS RESOLUCIONES
-    const hojaOrigenCorrRes = obtenerHojaPorNombre(origenSs, '10-Mantenimientos correctivos');
-    if (!hojaOrigenCorrRes) throw new Error('No se encontró "10-Mantenimientos correctivos".');
+    if (conDetalle) {
+      // 9. CORRECTIVOS RESOLUCIONES
+      const hojaOrigenCorrRes = obtenerHojaPorNombre(origenSs, '10-Mantenimientos correctivos');
+      if (!hojaOrigenCorrRes) throw new Error('No se encontró "10-Mantenimientos correctivos".');
 
-    const datosCorrRes = hojaOrigenCorrRes.getDataRange().getValues();
+      const datosCorrRes = hojaOrigenCorrRes.getDataRange().getValues();
 
-    const filasCorrResExactas = {
-      'ALMACEN|INVENTARIO': 6, 'ALMACEN|TRASLADO': 7,
-      'CABLEADO|SANEADO': 9, 'CABLEADO|SUSTITUCION': 10,
-      'PC\\PORTATIL|CONFIGURACION': 12, 'PC/PORTATIL|CONFIGURACION': 12,
-      'PC\\PORTATIL|REINICIO': 13, 'PC/PORTATIL|REINICIO': 13,
-      'PC\\PORTATIL|SUSTITUCION': 14, 'PC/PORTATIL|SUSTITUCION': 14,
-      'EQUIPO AUDIO|CONFIGURACION': 16, 'EQUIPO AUDIO|REINICIO': 17, 'EQUIPO AUDIO|SUSTITUCION': 18,
-      'EQUIPO VIDEO|CONFIGURACION': 20, 'EQUIPO VIDEO|REINICIO': 21, 'EQUIPO VIDEO|SUSTITUCION': 22
-    };
+      const filasCorrResExactas = {
+        'ALMACEN|INVENTARIO': 6, 'ALMACEN|TRASLADO': 7,
+        'CABLEADO|SANEADO': 9, 'CABLEADO|SUSTITUCION': 10,
+        'PC\\PORTATIL|CONFIGURACION': 12, 'PC/PORTATIL|CONFIGURACION': 12,
+        'PC\\PORTATIL|REINICIO': 13, 'PC/PORTATIL|REINICIO': 13,
+        'PC\\PORTATIL|SUSTITUCION': 14, 'PC/PORTATIL|SUSTITUCION': 14,
+        'EQUIPO AUDIO|CONFIGURACION': 16, 'EQUIPO AUDIO|REINICIO': 17, 'EQUIPO AUDIO|SUSTITUCION': 18,
+        'EQUIPO VIDEO|CONFIGURACION': 20, 'EQUIPO VIDEO|REINICIO': 21, 'EQUIPO VIDEO|SUSTITUCION': 22
+      };
 
-    const filasCorrResSuma = {
-      'PERIFERICO PC': 23, 'MONITOR': 24, 'DOMOTICA': 25,
-      'VIDEO WALL': 26, 'VIDEOWALL': 26, 'PROYECTOR': 27,
-      'VC. CISCO': 28, 'VC CISCO': 28, 'VC USB': 29, 'VC.USB': 29,
-      'ROOMWIZARD\\QR': 30, 'ROOMWIZARD/QR': 30
-    };
+      const filasCorrResSuma = {
+        'PERIFERICO PC': 23, 'MONITOR': 24, 'DOMOTICA': 25,
+        'VIDEO WALL': 26, 'VIDEOWALL': 26, 'PROYECTOR': 27,
+        'VC. CISCO': 28, 'VC CISCO': 28, 'VC USB': 29, 'VC.USB': 29,
+        'ROOMWIZARD\\QR': 30, 'ROOMWIZARD/QR': 30
+      };
 
-    let valoresCorrRes = {};
-    let lastTier2Corr = "";
+      let valoresCorrRes = {};
+      let lastTier2Corr = "";
 
-    for (let f = 1; f < datosCorrRes.length; f++) {
-      let valA = normalizarTexto(datosCorrRes[f][0]);
-      if (valA === 'TOTAL') break;
-      let valB = normalizarTexto(datosCorrRes[f][1]);
-      let valC = normalizarTexto(datosCorrRes[f][2]);
-      let valD = Number(datosCorrRes[f][3]) || 0;
-      if (valB !== "") lastTier2Corr = valB;
-      let llaveExacta = lastTier2Corr + "|" + valC;
-      let filaDestino = filasCorrResExactas[llaveExacta] || filasCorrResSuma[lastTier2Corr];
-      if (filaDestino) valoresCorrRes[filaDestino] = (valoresCorrRes[filaDestino] || 0) + valD;
-    }
+      for (let f = 1; f < datosCorrRes.length; f++) {
+        let valA = normalizarTexto(datosCorrRes[f][0]);
+        if (valA === 'TOTAL') break;
+        let valB = normalizarTexto(datosCorrRes[f][1]);
+        let valC = normalizarTexto(datosCorrRes[f][2]);
+        let valD = Number(datosCorrRes[f][3]) || 0;
+        if (valB !== "") lastTier2Corr = valB;
+        let llaveExacta = lastTier2Corr + "|" + valC;
+        let filaDestino = filasCorrResExactas[llaveExacta] || filasCorrResSuma[lastTier2Corr];
+        if (filaDestino) valoresCorrRes[filaDestino] = (valoresCorrRes[filaDestino] || 0) + valD;
+      }
 
-    const todasLasFilasCorrRes = [6,7, 9,10, 12,13,14, 16,17,18, 20,21,22, 23,24,25,26,27,28,29,30];
-    for (let i = 0; i < todasLasFilasCorrRes.length; i++) {
-      hojaDestinoCorr.getRange(todasLasFilasCorrRes[i], colDestinoCorr).setValue(valorOBlanco(valoresCorrRes[todasLasFilasCorrRes[i]] || 0));
-    }
+      const todasLasFilasCorrRes = [6,7, 9,10, 12,13,14, 16,17,18, 20,21,22, 23,24,25,26,27,28,29,30];
+      for (let i = 0; i < todasLasFilasCorrRes.length; i++) {
+        hojaDestinoCorr.getRange(todasLasFilasCorrRes[i], colDestinoCorr).setValue(valorOBlanco(valoresCorrRes[todasLasFilasCorrRes[i]] || 0));
+      }
 
-    // CÁLCULO DEL PARCHE EN MEMORIA CORRECTIVOS
-    let totalUbicCorr = Object.values(valoresCorr).reduce((acc, val) => acc + (Number(val) || 0), 0);
-    let totalResCorr = Object.values(valoresCorrRes).reduce((acc, val) => acc + (Number(val) || 0), 0);
-    let difCorr = totalUbicCorr - totalResCorr;
+      // CÁLCULO DEL PARCHE EN MEMORIA CORRECTIVOS
+      let totalUbicCorr = Object.values(valoresCorr).reduce((acc, val) => acc + (Number(val) || 0), 0);
+      let totalResCorr = Object.values(valoresCorrRes).reduce((acc, val) => acc + (Number(val) || 0), 0);
+      let difCorr = totalUbicCorr - totalResCorr;
 
-    if (difCorr !== 0) {
-      let valActualCorr = Number(valoresCorrRes[16]) || 0;
-      hojaDestinoCorr.getRange(16, colDestinoCorr).setValue(valorOBlanco(valActualCorr + difCorr));
-      resumenImportacion += `✅ CORRECTIVOS: Completado (Ajuste: ${difCorr > 0 ? '+' : ''}${difCorr} en EQUIPO AUDIO|CONFIGURACION).\n`;
+      if (difCorr !== 0) {
+        let valActualCorr = Number(valoresCorrRes[16]) || 0;
+        hojaDestinoCorr.getRange(16, colDestinoCorr).setValue(valorOBlanco(valActualCorr + difCorr));
+        resumenImportacion += `✅ CORRECTIVOS: Completado (Ajuste: ${difCorr > 0 ? '+' : ''}${difCorr} en EQUIPO AUDIO|CONFIGURACION).\n`;
+      } else {
+        resumenImportacion += `✅ CORRECTIVOS: Completado.\n`;
+      }
     } else {
-      resumenImportacion += `✅ CORRECTIVOS: Completado.\n`;
+      resumenImportacion += `✅ CORRECTIVOS: ubicaciones (sin detalle de resolución).\n`;
     }
+
+    return resumenImportacion;
+}
+
+// Rows that hold the weekly totals of each trend tab, and the column offset
+// between a week number and its column.
+const BLOQUES_SEMANALES = [
+  { hoja: 'Remotos', filas: [13, 17], desplazamiento: 1 },
+  { hoja: 'Programados', filas: [27, 32], desplazamiento: 3 },
+  { hoja: 'Presenciales', filas: [29, 34], desplazamiento: 3 },
+  { hoja: 'Incidencias', filas: [49, 54], desplazamiento: 3 },
+  { hoja: 'Correctivos', filas: [45, 50], desplazamiento: 3 }
+];
+
+function semanaConDatos(destinoSs, semana) {
+  return BLOQUES_SEMANALES.some((bloque) => {
+    const hoja = destinoSs.getSheetByName(bloque.hoja);
+    if (!hoja) return false;
+    const valores = hoja.getRange(bloque.filas[0], semana + bloque.desplazamiento, bloque.filas[1] - bloque.filas[0] + 1, 1).getValues();
+    return valores.some((fila) => Number(fila[0]) > 0);
+  });
+}
+
+function semanasDelTemplate(origenSs) {
+  const hoja = origenSs.getSheets().find((h) => h.getName().includes('1-Soporte Remoto'));
+  if (!hoja) throw new Error('No se encontró la pestaña de "1-Soporte Remoto".');
+  const cabecera = hoja.getRange(1, 1, 2, hoja.getLastColumn()).getValues();
+  const semanas = [];
+  for (let col = 0; col < cabecera[0].length; col++) {
+    if (String(cabecera[0][col]).toUpperCase().trim() === 'TOTAL') break;
+    const semana = Number(cabecera[0][col]) || Number(cabecera[1][col]);
+    if (semana >= 1 && semana <= 53 && semanas.indexOf(semana) < 0) semanas.push(semana);
+  }
+  return semanas.sort((a, b) => a - b);
+}
+
+// Fills every week of the template that is still empty in Tendencias. Weeks
+// that already have tickets are left as they are.
+function importarDatosSemanales() {
+  const ui = SpreadsheetApp.getUi();
+
+  try {
+    const archivo = buscarTemplateSemanal();
+    if (!archivo) {
+      ui.alert('Sin template', 'No hay un template semanal en formato Google Sheets en la carpeta de templates.', ui.ButtonSet.OK);
+      return;
+    }
+
+    const origenSs = SpreadsheetApp.openById(archivo.getId());
+    const destinoSs = SpreadsheetApp.getActiveSpreadsheet();
+    const semanas = semanasDelTemplate(origenSs);
+    if (semanas.length === 0) throw new Error('El template no tiene semanas.');
+    const ultima = semanas[semanas.length - 1];
+    const pendientes = semanas.filter((semana) => !semanaConDatos(destinoSs, semana));
+
+    if (pendientes.length === 0) {
+      // Nothing new in the template, but a week may still lack its detail.
+      const recuperadas = recuperarDetalleDesdeHistorico(destinoSs);
+      const avisos = revisarSemanas(destinoSs, ultima);
+      let texto = `Tendencias ya tiene todas las semanas del template (hasta la ${ultima}).`;
+      if (recuperadas.length > 0) texto += '\n\nRecuperado del histórico:\n' + recuperadas.join('\n');
+      if (avisos.length > 0) texto += '\n\nRevisar:\n' + avisos.join('\n');
+      if (recuperadas.length > 0) {
+        SpreadsheetApp.flush();
+        volcarDatosLookerStudio();
+        texto += `\n\nTXT: ${escribirPlanoTxt(ultima).getName()}`;
+      }
+      ui.alert('AV Weekly', texto, ui.ButtonSet.OK);
+      return;
+    }
+
+    let aviso = `Template "${archivo.getName()}" (semanas hasta la ${ultima}).\n\n` +
+      `Semanas vacías en Tendencias que se van a rellenar: ${pendientes.join(', ')}.`;
+    if (pendientes.some((semana) => semana !== ultima)) {
+      aviso += `\n\nEl detalle de resolución solo existe para la semana ${ultima}; las demás llevan ubicaciones y categorías de Remotos.`;
+    }
+    if (ui.alert('Procesar semana', aviso + '\n\n¿Continuar?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+
+    let resumen = '';
+    pendientes.forEach((semana) => {
+      resumen += `Semana ${semana}\n` + importarSemana(origenSs, destinoSs, semana, semana === ultima) + '\n';
+    });
+    SpreadsheetApp.flush();
+
+    const recuperadas = recuperarDetalleDesdeHistorico(destinoSs);
+    if (recuperadas.length > 0) resumen += 'Recuperado del histórico:\n' + recuperadas.join('\n') + '\n\n';
+    SpreadsheetApp.flush();
+    const avisos = revisarSemanas(destinoSs, ultima);
+    if (avisos.length > 0) resumen += 'Revisar:\n' + avisos.join('\n') + '\n\n';
 
     volcarDatosLookerStudio();
-    const archivoTxt = escribirPlanoTxt(numSemanaGlobal);
+    const archivoTxt = escribirPlanoTxt(ultima);
 
     ui.alert(
       'AV Weekly',
-      `Semana ${numSemanaGlobal} procesada.\n\n${resumenImportacion}\nTXT: ${archivoTxt.getName()}\nSúbelo en AV Weekly > Audiovisuales > Texto plano (Drive).`,
+      `${resumen}TXT: ${archivoTxt.getName()}\nSúbelo en AV Weekly > Audiovisuales > Texto plano (Drive).`,
       ui.ButtonSet.OK
     );
-
   } catch (e) {
     ui.alert('⚠️ Error en la importación', e.message, ui.ButtonSet.OK);
   }
 }
+
+// Rows of each resolution block and the category/action they stand for. Shared
+// by the TXT dump and by the recovery of missing weeks from archived TXTs.
+const CONF_RESOLUCION_AV = [
+  {
+    hoja: 'Remotos', fSem: 5, tipo: 'REMOTO',
+    filas: { 13:['REMOTO','ERRORES'], 14:['REMOTO','CONEXION'], 15:['REMOTO','OPERATIVA'], 16:['REMOTO','BLUE BRANCH'], 17:['REMOTO','VIDEO'] }
+  },
+  {
+    hoja: 'Programados', fSem: 19, tipo: 'PROGRAMADO',
+    filas: {
+      5:['SALA','PREPARACION SALA'], 6:['SALA','PRESTAMO'], 7:['WEBEX','CONEXION'],
+      8:['WEBEX','SEMINARIO WEB'], 9:['WEBEX','TRADUCCION'], 10:['MEET','CONEXION'],
+      11:['MEET','TRADUCCION'], 12:['OTRAS VC','CONEXION']
+    }
+  },
+  {
+    hoja: 'Presenciales', fSem: 21, tipo: 'PRESENCIAL',
+    filas: {
+      5:['SALA','PREPARACION SALA'], 6:['SALA','DES/INSTALACION'], 7:['SALA','DES/MONTAJE'],
+      8:['SALA','ENCENDIDO/APAGADO'], 9:['SALA','EVENTO'], 10:['SALA','ETIQUETADO'],
+      11:['WEBEX','CONEXION'], 12:['WEBEX','TRADUCCION'], 13:['OTRAS VC','CONEXION'], 14:['MEET','CONEXION']
+    }
+  },
+  {
+    hoja: 'Incidencias', fSem: 41, tipo: 'INCIDENCIA',
+    filas: {
+      6:['WEBEX','CONEXION'], 7:['WEBEX','FORMACION'], 8:['WEBEX','GESTION'],
+      10:['CABLEADO','PRESTAMO'], 11:['CABLEADO','SANEADO'], 12:['CABLEADO','SUSTITUCION'],
+      14:['PC/PORTATIL','CONFIGURACION'], 15:['PC/PORTATIL','FORMACION'],
+      17:['DOMOTICA','CONFIGURACION'], 18:['DOMOTICA','FORMACION'], 19:['DOMOTICA','REINICIO'], 20:['DOMOTICA','SUSTITUCION'],
+      22:['MEET','CONEXION'], 23:['MEET','FORMACION'],
+      24:['EQUIPO VIDEO','EQUIPO VIDEO'], 25:['MONITOR','MONITOR'], 26:['EQUIPO AUDIO','EQUIPO AUDIO'],
+      27:['VC CISCO','VC CISCO'], 28:['PERIFERICO PC','PERIFERICO PC'], 29:['OTRAS VC','OTRAS VC'],
+      30:['PROYECTOR','PROYECTOR'], 31:['TRADUCCION','TRADUCCION'],
+      32:['ROOMWIZARD/QR','ROOMWIZARD/QR'], 33:['VIDEO WALL','VIDEO WALL']
+    }
+  },
+  {
+    hoja: 'Correctivos', fSem: 37, tipo: 'CORRECTIVO',
+    filas: {
+      6:['ALMACEN','INVENTARIO'], 7:['ALMACEN','TRASLADO'],
+      9:['CABLEADO','SANEADO'], 10:['CABLEADO','SUSTITUCION'],
+      12:['PC/PORTATIL','CONFIGURACION'], 13:['PC/PORTATIL','REINICIO'], 14:['PC/PORTATIL','SUSTITUCION'],
+      16:['EQUIPO AUDIO','CONFIGURACION'], 17:['EQUIPO AUDIO','REINICIO'], 18:['EQUIPO AUDIO','SUSTITUCION'],
+      20:['EQUIPO VIDEO','CONFIGURACION'], 21:['EQUIPO VIDEO','REINICIO'], 22:['EQUIPO VIDEO','SUSTITUCION'],
+      23:['PERIFERICO PC','PERIFERICO PC'], 24:['MONITOR','MONITOR'], 25:['DOMOTICA','DOMOTICA'],
+      26:['VIDEO WALL','VIDEO WALL'], 27:['PROYECTOR','PROYECTOR'], 28:['VC CISCO','VC CISCO'],
+      29:['VC USB','VC USB'], 30:['ROOMWIZARD/QR','ROOMWIZARD/QR']
+    }
+  }
+];
 
 // ==========================================
 // 📊 MOTOR DE EXPORTACIÓN A LOOKER STUDIO
@@ -1686,55 +2064,7 @@ function volcarDatosLookerStudio() {
     { hoja: 'Correctivos',  fSem: 37, tipo: 'CORRECTIVO', filas: {45:'CIUDAD', 46:'TERRITORIOS', 47:'CAMPUS', 48:'RECOLETOS', 49:'VELA', 50:'TABLAS'} }
   ];
 
-  const CONF_RESOLUCION = [
-    {
-      hoja: 'Remotos', fSem: 5, tipo: 'REMOTO',
-      filas: { 13:['REMOTO','ERRORES'], 14:['REMOTO','CONEXION'], 15:['REMOTO','OPERATIVA'], 16:['REMOTO','BLUE BRANCH'], 17:['REMOTO','VIDEO'] }
-    },
-    {
-      hoja: 'Programados', fSem: 19, tipo: 'PROGRAMADO',
-      filas: {
-        5:['SALA','PREPARACION SALA'], 6:['SALA','PRESTAMO'], 7:['WEBEX','CONEXION'],
-        8:['WEBEX','SEMINARIO WEB'], 9:['WEBEX','TRADUCCION'], 10:['MEET','CONEXION'],
-        11:['MEET','TRADUCCION'], 12:['OTRAS VC','CONEXION']
-      }
-    },
-    {
-      hoja: 'Presenciales', fSem: 21, tipo: 'PRESENCIAL',
-      filas: {
-        5:['SALA','PREPARACION SALA'], 6:['SALA','DES/INSTALACION'], 7:['SALA','DES/MONTAJE'],
-        8:['SALA','ENCENDIDO/APAGADO'], 9:['SALA','EVENTO'], 10:['SALA','ETIQUETADO'],
-        11:['WEBEX','CONEXION'], 12:['WEBEX','TRADUCCION'], 13:['OTRAS VC','CONEXION'], 14:['MEET','CONEXION']
-      }
-    },
-    {
-      hoja: 'Incidencias', fSem: 41, tipo: 'INCIDENCIA',
-      filas: {
-        6:['WEBEX','CONEXION'], 7:['WEBEX','FORMACION'], 8:['WEBEX','GESTION'],
-        10:['CABLEADO','PRESTAMO'], 11:['CABLEADO','SANEADO'], 12:['CABLEADO','SUSTITUCION'],
-        14:['PC/PORTATIL','CONFIGURACION'], 15:['PC/PORTATIL','FORMACION'],
-        17:['DOMOTICA','CONFIGURACION'], 18:['DOMOTICA','FORMACION'], 19:['DOMOTICA','REINICIO'], 20:['DOMOTICA','SUSTITUCION'],
-        22:['MEET','CONEXION'], 23:['MEET','FORMACION'],
-        24:['EQUIPO VIDEO','EQUIPO VIDEO'], 25:['MONITOR','MONITOR'], 26:['EQUIPO AUDIO','EQUIPO AUDIO'],
-        27:['VC CISCO','VC CISCO'], 28:['PERIFERICO PC','PERIFERICO PC'], 29:['OTRAS VC','OTRAS VC'],
-        30:['PROYECTOR','PROYECTOR'], 31:['TRADUCCION','TRADUCCION'],
-        32:['ROOMWIZARD/QR','ROOMWIZARD/QR'], 33:['VIDEO WALL','VIDEO WALL']
-      }
-    },
-    {
-      hoja: 'Correctivos', fSem: 37, tipo: 'CORRECTIVO',
-      filas: {
-        6:['ALMACEN','INVENTARIO'], 7:['ALMACEN','TRASLADO'],
-        9:['CABLEADO','SANEADO'], 10:['CABLEADO','SUSTITUCION'],
-        12:['PC/PORTATIL','CONFIGURACION'], 13:['PC/PORTATIL','REINICIO'], 14:['PC/PORTATIL','SUSTITUCION'],
-        16:['EQUIPO AUDIO','CONFIGURACION'], 17:['EQUIPO AUDIO','REINICIO'], 18:['EQUIPO AUDIO','SUSTITUCION'],
-        20:['EQUIPO VIDEO','CONFIGURACION'], 21:['EQUIPO VIDEO','REINICIO'], 22:['EQUIPO VIDEO','SUSTITUCION'],
-        23:['PERIFERICO PC','PERIFERICO PC'], 24:['MONITOR','MONITOR'], 25:['DOMOTICA','DOMOTICA'],
-        26:['VIDEO WALL','VIDEO WALL'], 27:['PROYECTOR','PROYECTOR'], 28:['VC CISCO','VC CISCO'],
-        29:['VC USB','VC USB'], 30:['ROOMWIZARD/QR','ROOMWIZARD/QR']
-      }
-    }
-  ];
+  const CONF_RESOLUCION = CONF_RESOLUCION_AV;
 
   CONF_UBICACION.forEach(conf => {
     let hoja = ss.getSheetByName(conf.hoja);
@@ -1911,6 +2241,126 @@ function serializarPlanoAv(numSemana) {
   return lineas.join('\n') + '\n';
 }
 
+// Moves every earlier AV TXT of the output folder to the archive. A file with
+// the same name as the new one gets the time it was archived in its name.
+function archivarTxtAnteriores(folder, nombreNuevo) {
+  var historico = DriveApp.getFolderById(ID_CARPETA_HISTORICO_TXT);
+  var archivos = folder.getFiles();
+  var sello = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH-mm');
+  while (archivos.hasNext()) {
+    var archivo = archivos.next();
+    var nombre = archivo.getName();
+    if (!/^AV \d{4}-S\d+.*\.txt$/.test(nombre)) continue;
+    if (nombre === nombreNuevo) archivo.setName(nombre.replace(/\.txt$/, ' (archivado ' + sello + ').txt'));
+    archivo.moveTo(historico);
+  }
+}
+
+// [RESOLUCION] rows of a TXT, keyed "TIPO|semana" -> {"CATEGORIA|ACCION": tickets}.
+function leerResolucionesTxt(texto) {
+  var resultado = {};
+  var seccion = '';
+  texto.split('\n').forEach(function (linea) {
+    var limpia = linea.replace(/\r$/, '');
+    if (/^\[.*\]$/.test(limpia)) { seccion = limpia; return; }
+    if (seccion !== '[RESOLUCION]') return;
+    var partes = limpia.split('\t');
+    if (partes.length < 5) return;
+    var tickets = Number(partes[4]);
+    if (!(tickets > 0)) return;
+    var clave = partes[1] + '|' + Number(partes[0]);
+    resultado[clave] = resultado[clave] || {};
+    var detalle = partes[2] + '|' + partes[3];
+    resultado[clave][detalle] = (resultado[clave][detalle] || 0) + tickets;
+  });
+  return resultado;
+}
+
+// Weeks of the four detailed types that have locations but no resolution rows.
+function semanasSinDetalle(destinoSs) {
+  var faltan = [];
+  CONF_RESOLUCION_AV.forEach(function (conf) {
+    if (conf.tipo === 'REMOTO') return;
+    var bloque = BLOQUES_SEMANALES.filter(function (b) { return b.hoja === conf.hoja; })[0];
+    var hoja = destinoSs.getSheetByName(conf.hoja);
+    if (!hoja || !bloque) return;
+    var valores = hoja.getRange(1, 1, hoja.getLastRow(), 58).getValues();
+    for (var semana = 1; semana <= 53; semana++) {
+      var col = semana + bloque.desplazamiento - 1;
+      if (Number(valores[conf.fSem - 1][col]) !== semana) continue;
+      var ubicaciones = 0;
+      for (var f = bloque.filas[0]; f <= bloque.filas[1]; f++) ubicaciones += Number(valores[f - 1][col]) || 0;
+      if (ubicaciones <= 0) continue;
+      var detalle = 0;
+      Object.keys(conf.filas).forEach(function (fila) { detalle += Number(valores[fila - 1][col]) || 0; });
+      if (detalle === 0) faltan.push({ conf: conf, hoja: hoja, semana: semana, col: col + 1, ubicaciones: ubicaciones });
+    }
+  });
+  return faltan;
+}
+
+// Fills missing resolution weeks from the archived TXTs, newest first. Only
+// empty cells are written, and only from a TXT of the same report year.
+function recuperarDetalleDesdeHistorico(destinoSs) {
+  var faltan = semanasSinDetalle(destinoSs);
+  if (faltan.length === 0) return [];
+
+  var anio = anioInformeActual();
+  var txts = [];
+  [ID_CARPETA_HISTORICO_TXT, ID_CARPETA_TXT].forEach(function (id) {
+    var archivos = DriveApp.getFolderById(id).getFiles();
+    while (archivos.hasNext()) {
+      var archivo = archivos.next();
+      var m = archivo.getName().match(/^AV (\d{4})-S\d+.*\.txt$/);
+      if (m && Number(m[1]) === anio) txts.push(archivo);
+    }
+  });
+  txts.sort(function (a, b) { return b.getLastUpdated() - a.getLastUpdated(); });
+
+  var lineas = [];
+  var cache = {};
+  faltan.forEach(function (falta) {
+    var clave = falta.conf.tipo + '|' + falta.semana;
+    for (var i = 0; i < txts.length; i++) {
+      var id = txts[i].getId();
+      if (!cache[id]) cache[id] = leerResolucionesTxt(txts[i].getBlob().getDataAsString('UTF-8'));
+      var detalle = cache[id][clave];
+      if (!detalle) continue;
+      var suma = 0;
+      Object.keys(falta.conf.filas).forEach(function (fila) {
+        var par = falta.conf.filas[fila];
+        var valor = detalle[par[0] + '|' + par[1]];
+        if (!valor) return;
+        var celda = falta.hoja.getRange(Number(fila), falta.col);
+        if (celda.getValue() === '' || celda.getValue() === null) celda.setValue(valor);
+        suma += valor;
+      });
+      lineas.push(`${falta.conf.hoja} S${falta.semana}: detalle recuperado de "${txts[i].getName()}" (${suma} de ${falta.ubicaciones}).`);
+      return;
+    }
+  });
+  return lineas;
+}
+
+// Weeks up to the last one that are empty in some tab, or still lack detail.
+function revisarSemanas(destinoSs, ultima) {
+  var avisos = [];
+  for (var semana = 1; semana <= ultima; semana++) {
+    var vacias = BLOQUES_SEMANALES.filter(function (bloque) {
+      var hoja = destinoSs.getSheetByName(bloque.hoja);
+      if (!hoja) return false;
+      var valores = hoja.getRange(bloque.filas[0], semana + bloque.desplazamiento, bloque.filas[1] - bloque.filas[0] + 1, 1).getValues();
+      return !valores.some(function (fila) { return Number(fila[0]) > 0; });
+    }).map(function (bloque) { return bloque.hoja; });
+    if (vacias.length === BLOQUES_SEMANALES.length) avisos.push(`S${semana}: vacía en todas las pestañas.`);
+    else if (vacias.length > 0) avisos.push(`S${semana}: sin datos en ${vacias.join(', ')}.`);
+  }
+  semanasSinDetalle(destinoSs).forEach(function (falta) {
+    avisos.push(`${falta.conf.hoja} S${falta.semana}: ubicaciones sin detalle de resolución.`);
+  });
+  return avisos;
+}
+
 function escribirPlanoTxt(numSemana) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss.getSheetByName('Ubicacion') || !ss.getSheetByName('Resolucion')) {
@@ -1920,11 +2370,8 @@ function escribirPlanoTxt(numSemana) {
   var anio = anioInformeActual();
   var name = 'AV ' + anio + '-S' + semana + '.txt';
   var texto = serializarPlanoAv(semana);
-  var folder = DriveApp.getFolderById(ID_CARPETA_BUZON);
-  var existing = folder.getFilesByName(name);
-  while (existing.hasNext()) {
-    existing.next().setTrashed(true);
-  }
+  var folder = DriveApp.getFolderById(ID_CARPETA_TXT);
+  archivarTxtAnteriores(folder, name);
   return folder.createFile(name, texto, MimeType.PLAIN_TEXT);
 }
 
