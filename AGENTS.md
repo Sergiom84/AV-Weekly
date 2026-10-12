@@ -12,7 +12,7 @@ The code is split in three areas that must stay separated:
 
 ## Working rules
 
-- `AGENTS.md` is canonical; `CLAUDE.md` is only a short bridge.
+- `AGENTS.md` is canonical; `CLAUDE.md` only imports it. Do not add rules there.
 - Respond to Sergio in Spanish by default. Keep this file and code comments in English unless product content requires Spanish.
 - Before editing, inspect `git status --short`, the deck page or component involved, the server route/parser, `shared/informe.ts`, and the package scripts. Preserve the client/server/shared separation.
 - Use the package manager declared by the repository (`pnpm`) for dependency changes. Do not change `.env`, credentials, production data, or external integrations without explicit scope.
