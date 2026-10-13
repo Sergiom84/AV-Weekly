@@ -14,13 +14,16 @@ export type DeckPdfRenderer = (
   origin: string,
   path: string,
   signal: AbortSignal,
-  cookie: DeckPdfCookie | null
+  cookie: DeckPdfCookie | null,
+  snapshot?: { apiPath: string; payload: unknown }
 ) => Promise<Buffer>;
 
 export interface DeckPdfRequest {
   origin: string;
   path: string;
   department: string;
+  snapshot?: { apiPath: string; payload: unknown };
+  onPdf?: (pdf: Buffer, res: Response) => Promise<void>;
   /**
    * Department access cookie of the visitor asking for the download.
    *
@@ -171,19 +174,24 @@ export function createDeckPdfSender(renderer: DeckPdfRenderer) {
         options.origin,
         options.path,
         controller.signal,
-        options.cookie ?? null
+        options.cookie ?? null,
+        options.snapshot
       );
 
       if (controller.signal.aborted || res.destroyed) {
         return;
       }
 
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="${reportPdfFilename(options.department, options.date)}"`
-      );
-      res.send(pdf);
+      if (options.onPdf) {
+        await options.onPdf(pdf, res);
+      } else {
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${reportPdfFilename(options.department, options.date)}"`
+        );
+        res.send(pdf);
+      }
       console.info(
         `[pdf] complete ${options.department} bytes=${pdf.length} durationMs=${Date.now() - startedAt}`
       );

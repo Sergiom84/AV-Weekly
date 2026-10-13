@@ -63,6 +63,7 @@ interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
   onPresent: () => void;
   /** Module-specific actions rendered inside the shared Exportar section. */
   exportActions?: SidebarExportAction[];
+  reportHistory?: React.ReactNode;
   /**
    * Endpoint that renders the deck server-side, e.g. `/api/aga/pdf`.
    *
@@ -140,7 +141,7 @@ interface SidebarSectionProps {
 }
 
 /** Sidebar card that the user can fold away to shorten the column. */
-function SidebarSection({
+export function SidebarSection({
   id,
   storagePrefix,
   title,
@@ -505,6 +506,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   onSelectPage,
   onPresent,
   exportActions = [],
+  reportHistory,
   pdfHref,
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
@@ -807,6 +809,8 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
           )}
         </CardContent>
       </SidebarSection>
+
+      {reportHistory}
 
       <SidebarSection
         id="paginas"

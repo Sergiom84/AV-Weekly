@@ -28,6 +28,7 @@ describe("department access", () => {
     app.use(createDepartmentAccessRouter());
     app.use(createDepartmentApiMiddleware());
     app.get("/api/oficinas", (_req, res) => res.json({ ok: true }));
+    app.all("/api/informe/reports*", (_req, res) => res.json({ ok: true }));
     for (const department of ["av", "informatica", "aga", "oficinas"]) {
       app.put(`/api/${department}/deck`, (_req, res) => res.json({ ok: true }));
     }
@@ -84,11 +85,14 @@ describe("department access", () => {
 
   it("deja guardar el deck a cualquier sesión del departamento", async () => {
     const open = async (pin: string, department: string) => {
-      const verified = await fetch(`${origin}/api/access/${department}/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin }),
-      });
+      const verified = await fetch(
+        `${origin}/api/access/${department}/verify`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin }),
+        }
+      );
       return verified.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
     };
 
@@ -130,5 +134,29 @@ describe("department access", () => {
     });
     expect(departmentAccessCookie(header, "aga")).toBeNull();
     expect(departmentAccessCookie(undefined, "oficinas")).toBeNull();
+  });
+
+  it("protects AV archive listing, saving and downloads with the AV session", async () => {
+    const avCookie = `avw_access_av=${createDepartmentToken("av")}`;
+    const otherCookie = `avw_access_oficinas=${createDepartmentToken("oficinas")}`;
+    for (const [method, path] of [
+      ["GET", "/api/informe/reports"],
+      ["POST", "/api/informe/reports"],
+      ["GET", "/api/informe/reports/report-id/pdf"],
+    ]) {
+      expect((await fetch(origin + path, { method })).status).toBe(401);
+      expect(
+        (
+          await fetch(origin + path, {
+            method,
+            headers: { Cookie: otherCookie },
+          })
+        ).status
+      ).toBe(401);
+      expect(
+        (await fetch(origin + path, { method, headers: { Cookie: avCookie } }))
+          .status
+      ).toBe(200);
+    }
   });
 });

@@ -1,4 +1,5 @@
 import PdfDeckView, { isPdfRender } from "@/components/deck/PdfDeckView";
+import ReportArchive from "@/modules/av/ReportArchive";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import {
@@ -75,6 +76,7 @@ export default function Informe() {
     movePage,
     removePage,
     resetDeck,
+    saveNow,
   } = useAvDeck();
   const [editing, setEditing] = useState(false);
   const [presenting, setPresenting] = useState(false);
@@ -366,6 +368,15 @@ export default function Informe() {
               onPresent={() => setPresenting(true)}
               exportActions={exportActions}
               pdfHref="/api/informe/pdf"
+              reportHistory={
+                <ReportArchive
+                  deck={deck}
+                  weekly={weekly}
+                  disabled={loading || saving || Boolean(error)}
+                  saveNow={saveNow}
+                  storagePrefix={MODULE.deck?.storagePrefix ?? ""}
+                />
+              }
             />
           </ResizableSidebar>
 

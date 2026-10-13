@@ -61,6 +61,19 @@ al primer arranque se crean en la carpeta hermana `AV Weekly - Datos`. Así se p
 sustituir `AV-Weekly-portable` por una versión nueva sin perder los datos. Para una
 copia de seguridad, conserva esa carpeta hermana.
 
+## Informes guardados de AV
+
+Después de revisar una presentación, pulsa **Guardar informe** en el apartado
+**Informes guardados** del panel lateral. Se conserva el PDF completo, incluidas
+las imágenes, los filtros y las correcciones de ese momento. Los iconos de ver
+y descargar recuperan ese mismo archivo aunque el informe actual haya cambiado.
+
+Se guardan las cinco semanas más recientes. Guardar otra vez una misma semana
+actualiza su PDF; al guardar una sexta semana se elimina la más antigua del
+histórico. Los archivos se identifican por año y semana y persisten en libSQL,
+también después de reiniciar o desplegar la aplicación. Las copias técnicas de
+las importaciones conservan su funcionamiento independiente.
+
 ## Datos: los dos Excel
 
 El deck se alimenta de dos libros que se suben desde el panel lateral del informe:

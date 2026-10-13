@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Router, type ErrorRequestHandler } from "express";
 import multer from "multer";
 import { createDeckPdfRenderer } from "./pdf-render.js";
+import { listAvReports, readAvReport, saveAvReport } from "./av-report-archive.js";
 import * as XLSX from "xlsx";
 import type {
   DeckState,
@@ -128,6 +129,7 @@ import {
   createDeckPdfSender,
   latestReportDate,
   resolveClientOrigin,
+  reportPdfFilename,
 } from "./pdf-export.js";
 import {
   departmentAccessCookie,
@@ -1964,6 +1966,100 @@ async function agaReportDate(): Promise<Date | undefined> {
 
 router.get("/api/informe/pdf", (req, res) => {
   sendDeckPdf(req, res, "/av", "AV", "av");
+});
+
+router.get("/api/informe/reports", async (_req, res) => {
+  try {
+    res.json({ reports: await listAvReports(client) });
+  } catch {
+    res
+      .status(500)
+      .json({ error: "No se pudieron cargar los informes guardados." });
+  }
+});
+
+router.post("/api/informe/reports", async (req, res) => {
+  try {
+    const payload = await buildInformePayload();
+    const body = (req.body ?? {}) as { deck?: DeckState; uploadedAt?: string | null };
+    if (body.uploadedAt !== payload.weekly.uploadedAt) {
+      res
+        .status(409)
+        .json({
+          error:
+            "Los datos han cambiado. Recarga el informe antes de guardarlo.",
+        });
+      return;
+    }
+    const year = Number(payload.weekly.year);
+    const week = payload.weekly.maxWeek;
+    if (
+      !Number.isInteger(year) ||
+      year < 2000 ||
+      !week ||
+      !payload.weekly.sourceFile
+    ) {
+      res
+        .status(400)
+        .json({ error: "Sube el TXT del informe antes de guardarlo." });
+      return;
+    }
+    if (
+      !body.deck ||
+      !Array.isArray(body.deck.pages) ||
+      body.deck.pages.length === 0
+    ) {
+      res.status(400).json({ error: "La presentación no es válida." });
+      return;
+    }
+    payload.deck = body.deck;
+    // ISO week's Monday, independent of the day the finished PDF is saved.
+    const january4 = new Date(Date.UTC(year, 0, 4));
+    const monday = new Date(
+      january4.getTime() +
+        ((week - 1) * 7 - ((january4.getUTCDay() + 6) % 7)) * 86_400_000
+    );
+    void sendCoordinatedDeckPdf(req, res, {
+      origin: resolveClientOrigin(req),
+      path: "/av",
+      department: "AV guardado",
+      cookie: departmentAccessCookie(req.get("cookie"), "av"),
+      snapshot: { apiPath: "/api/informe", payload },
+      onPdf: async (pdf, response) => {
+        const reports = await saveAvReport(
+          client,
+          year,
+          week,
+          reportPdfFilename("AV", monday),
+          pdf
+        );
+        if (!response.destroyed) response.status(201).json({ reports });
+      },
+    });
+  } catch {
+    res.status(500).json({ error: "No se pudo guardar el informe." });
+  }
+});
+
+router.get("/api/informe/reports/:id/pdf", async (req, res) => {
+  try {
+    const report = await readAvReport(client, req.params.id);
+    if (!report) {
+      res.status(404).json({ error: "El informe ya no está guardado." });
+      return;
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `${req.query.download === "1" ? "attachment" : "inline"}; filename="${report.filename}"`
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(report.pdf);
+  } catch {
+    res
+      .status(500)
+      .json({ error: "No se pudo recuperar el informe guardado." });
+  }
 });
 
 router.get("/api/informatica/pdf", (req, res) => {

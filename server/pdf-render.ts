@@ -12,7 +12,7 @@ export async function appendPdfPages(target: PDFDocument, bytes: Uint8Array) {
 export function createDeckPdfRenderer(
   credentials: () => { username: string; password: string } | null
 ): DeckPdfRenderer {
-  return async (origin, path, signal, cookie) => {
+  return async (origin, path, signal, cookie, snapshot) => {
     const browser = await puppeteer.launch({
       headless: "shell",
       args: [
@@ -39,6 +39,27 @@ export function createDeckPdfRenderer(
         });
       }
       const page = await browser.newPage();
+      if (snapshot) {
+        // The report must use the captured data even if another TXT arrives
+        // while Chromium is running. Image IDs already address immutable bytes.
+        await page.setRequestInterception(true);
+        page.on("request", request => {
+          if (
+            new URL(request.url()).pathname === snapshot.apiPath &&
+            request.method() === "GET"
+          ) {
+            void request
+              .respond({
+                status: 200,
+                contentType: "application/json",
+                body: JSON.stringify(snapshot.payload),
+              })
+              .catch(() => undefined);
+          } else {
+            void request.continue().catch(() => undefined);
+          }
+        });
+      }
       page.setDefaultTimeout(30_000);
       const auth = credentials();
       if (auth) await page.authenticate(auth);
