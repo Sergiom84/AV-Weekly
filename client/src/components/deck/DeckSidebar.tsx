@@ -509,10 +509,24 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
 }: DeckSidebarProps<TPage>) {
   const pages = deck?.pages ?? [];
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfSecondsRemaining, setPdfSecondsRemaining] = useState(0);
   const [pdfError, setPdfError] = useState<string | null>(null);
   // A ref as well as the state: two clicks in the same render would both pass
   // the state check and start two renders on a server that allows one.
   const pdfLock = useRef(false);
+  const pdfDeadline = useRef(0);
+
+  useEffect(() => {
+    if (!pdfBusy) return;
+    const timer = window.setInterval(() => {
+      setPdfSecondsRemaining(
+        Math.max(0, Math.ceil((pdfDeadline.current - Date.now()) / 1_000))
+      );
+    }, 1_000);
+    return () => window.clearInterval(timer);
+    // The deadline is fixed when a download starts; countdown ticks must not
+    // restart the interval. Use wall time so background tabs remain accurate.
+  }, [pdfBusy]);
 
   const downloadPdf = useCallback(async () => {
     if (pdfLock.current) {
@@ -520,6 +534,11 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
     }
 
     pdfLock.current = true;
+    // Production exports take roughly five seconds per visible slide. This is
+    // an estimate, not server progress; it disappears if the export runs longer.
+    const estimatedSeconds = 5 + 5 * pages.filter(isPageVisible).length;
+    pdfDeadline.current = Date.now() + estimatedSeconds * 1_000;
+    setPdfSecondsRemaining(estimatedSeconds);
     setPdfBusy(true);
     setPdfError(null);
 
@@ -559,7 +578,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
       pdfLock.current = false;
       setPdfBusy(false);
     }
-  }, [pdfHref]);
+  }, [pdfHref, pages]);
 
   const manualCorrections = pages.flatMap((page, index) => {
     const pageVisible = isPageVisible(page);
@@ -756,13 +775,29 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
             type="button"
             variant="outline"
             size="sm"
-            className="w-full justify-start gap-2"
+            className={`w-full justify-start gap-2 ${pdfBusy ? "h-auto py-2" : ""}`}
             disabled={pdfBusy}
             aria-busy={pdfBusy}
             onClick={() => void downloadPdf()}
           >
             <Download className="h-4 w-4" />
-            {pdfBusy ? "Generando" : "Descargar PDF"}
+            {pdfBusy ? (
+              <span className="flex flex-col items-start gap-1">
+                <span>Descargando</span>
+                {pdfSecondsRemaining > 0 && (
+                  <span
+                    className="font-mono text-xs tabular-nums"
+                    role="timer"
+                    aria-label={`Tiempo restante estimado: ${pdfSecondsRemaining} segundos`}
+                  >
+                    ~{String(Math.floor(pdfSecondsRemaining / 60)).padStart(2, "0")}
+                    :{String(pdfSecondsRemaining % 60).padStart(2, "0")}
+                  </span>
+                )}
+              </span>
+            ) : (
+              "Descargar PDF"
+            )}
           </Button>
 
           {pdfError && (
