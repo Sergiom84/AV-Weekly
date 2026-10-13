@@ -1,3 +1,4 @@
+import PdfDeckView, { isPdfRender } from "@/components/deck/PdfDeckView";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import {
@@ -314,6 +315,17 @@ export default function Informe() {
       id: page.id,
       node: renderPage(page, index + 1, false, false),
     }));
+
+  if (isPdfRender()) {
+    return (
+      <PdfDeckView
+        pages={rendered}
+        loading={loading}
+        error={error}
+        renderPage={renderPage}
+      />
+    );
+  }
 
   if (loading && !deck) {
     return (

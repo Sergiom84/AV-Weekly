@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { Router, type ErrorRequestHandler } from "express";
 import multer from "multer";
-import puppeteer from "puppeteer";
+import { createDeckPdfRenderer } from "./pdf-render.js";
 import * as XLSX from "xlsx";
 import type {
   DeckState,
@@ -128,7 +128,6 @@ import {
   createDeckPdfSender,
   latestReportDate,
   resolveClientOrigin,
-  type DeckPdfCookie,
 } from "./pdf-export.js";
 import {
   departmentAccessCookie,
@@ -1923,92 +1922,7 @@ router.post("/api/oficinas/reset-deck", backupBeforeImport(client, "oficinas", "
  * server). Production always renders through the loopback server so request
  * headers can never redirect authentication credentials to another origin.
  */
-/** Renders `path` as a PDF, one slide per page, via a headless render of the real app. */
-async function renderDeckPdf(
-  origin: string,
-  path: string,
-  signal: AbortSignal,
-  cookie: DeckPdfCookie | null
-): Promise<Buffer> {
-  const renderTimeoutMs = 120_000;
-  const browser = await puppeteer.launch({
-    // Chrome Headless Shell has a materially smaller footprint than full
-    // Chrome, which keeps PDF export inside Render's 512 MB free instance.
-    headless: "shell",
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
-  });
-  let closePromise: Promise<void> | null = null;
-  const closeBrowser = () => (closePromise ??= browser.close());
-  const abortRender = () => {
-    void closeBrowser().catch(() => undefined);
-  };
-  signal.addEventListener("abort", abortRender, { once: true });
-
-  try {
-    if (signal.aborted) {
-      throw new Error("La generación del PDF fue cancelada.");
-    }
-    if (cookie) {
-      // Set before the first navigation, or the gate answers with the keypad
-      // and the slide selector never resolves. The domain is read off the
-      // origin rather than hardcoded: it is the loopback server in production
-      // and the Vite port in development.
-      await browser.setCookie({
-        name: cookie.name,
-        value: cookie.value,
-        domain: new URL(origin).hostname,
-        path: "/",
-      });
-    }
-    const page = await browser.newPage();
-    const credentials = configuredCredentials();
-    if (credentials) {
-      await page.authenticate(credentials);
-    }
-    await page.setViewport({ width: 1600, height: 900 });
-    await page.goto(`${origin}${path}`, {
-      waitUntil: "domcontentloaded",
-      timeout: renderTimeoutMs,
-    });
-    await page.waitForSelector('main section[id^="slide-"]', {
-      timeout: renderTimeoutMs,
-    });
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-      await Promise.all(
-        Array.from(document.images, (image) =>
-          image.complete
-            ? Promise.resolve()
-            : new Promise<void>((resolve) => {
-                image.addEventListener("load", () => resolve(), { once: true });
-                image.addEventListener("error", () => resolve(), { once: true });
-              })
-        )
-      );
-    });
-    await page.emulateMediaType("print");
-    // Charts (recharts ResizeObserver) and the table auto-fit hook settle a
-    // frame or two after the DOM is ready; give them a beat before capturing.
-    await new Promise((resolve) => setTimeout(resolve, 600));
-
-    const pdf = await page.pdf({
-      preferCSSPageSize: true,
-      printBackground: true,
-      timeout: renderTimeoutMs,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 },
-    });
-
-    return Buffer.from(pdf);
-  } finally {
-    signal.removeEventListener("abort", abortRender);
-    await closeBrowser();
-  }
-}
+const renderDeckPdf = createDeckPdfRenderer(configuredCredentials);
 
 const sendCoordinatedDeckPdf = createDeckPdfSender(renderDeckPdf);
 

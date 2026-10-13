@@ -151,6 +151,13 @@ export function createDeckPdfSender(renderer: DeckPdfRenderer) {
 
     inProgress = true;
     const controller = new AbortController();
+    const startedAt = Date.now();
+    let timedOut = false;
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 240_000);
+    deadline.unref();
     const abortOnDisconnect = () => {
       if (!res.writableEnded) {
         controller.abort();
@@ -159,6 +166,7 @@ export function createDeckPdfSender(renderer: DeckPdfRenderer) {
     res.once("close", abortOnDisconnect);
 
     try {
+      console.info(`[pdf] start ${options.department}`);
       const pdf = await renderer(
         options.origin,
         options.path,
@@ -176,15 +184,29 @@ export function createDeckPdfSender(renderer: DeckPdfRenderer) {
         `attachment; filename="${reportPdfFilename(options.department, options.date)}"`
       );
       res.send(pdf);
+      console.info(
+        `[pdf] complete ${options.department} bytes=${pdf.length} durationMs=${Date.now() - startedAt}`
+      );
     } catch (err) {
-      if (controller.signal.aborted || res.destroyed) {
+      console.error(
+        `[pdf] failed ${options.department} durationMs=${Date.now() - startedAt}`,
+        err
+      );
+      if (res.destroyed || (controller.signal.aborted && !timedOut)) {
         return;
       }
 
       const message =
         err instanceof Error ? err.message : "No se pudo generar el PDF";
-      res.status(500).json({ error: message });
+      res
+        .status(timedOut ? 504 : 500)
+        .json({
+          error: timedOut
+            ? "La generación del PDF ha tardado demasiado. Inténtalo de nuevo."
+            : message,
+        });
     } finally {
+      clearTimeout(deadline);
       res.off("close", abortOnDisconnect);
       inProgress = false;
     }

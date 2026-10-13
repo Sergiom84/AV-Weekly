@@ -1,3 +1,4 @@
+import PdfDeckView, { isPdfRender } from "@/components/deck/PdfDeckView";
 import { useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import { nanoid } from "nanoid";
 import { Copy, Eye, EyeOff, FileText, Loader2, Plus } from "lucide-react";
@@ -355,6 +356,17 @@ export default function Informatica() {
       id: page.id,
       node: renderPage(page, index + 1, false, false),
     }));
+
+  if (isPdfRender()) {
+    return (
+      <PdfDeckView
+        pages={rendered}
+        loading={loading}
+        error={error}
+        renderPage={renderPage}
+      />
+    );
+  }
 
   if (loading && !deck) {
     return (
