@@ -94,7 +94,10 @@ export function createDeckPdfRenderer(
           preferCSSPageSize: true,
           printBackground: true,
           tagged: false,
-          timeout: 30_000,
+          // Notes may embed original 12 MP photos. Printing those on Render's
+          // free CPU takes longer than charts; the sender still caps the whole
+          // job at four minutes and cancels it if the visitor disconnects.
+          timeout: 120_000,
           margin: { top: 0, right: 0, bottom: 0, left: 0 },
         });
         await appendPdfPages(result, bytes);
