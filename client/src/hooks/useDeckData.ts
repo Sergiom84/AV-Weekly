@@ -160,6 +160,16 @@ export function useDeckData<TPage extends DeckPage<string, string>, TData>(
       } = loadRef.current;
 
       try {
+        const snapshot = (window as Window & {
+          __avwPdfSnapshot?: { apiPath: string; payload: unknown };
+        }).__avwPdfSnapshot;
+        if (
+          snapshot?.apiPath === apiBase &&
+          new URLSearchParams(window.location.search).get("pdf") === "slides"
+        ) {
+          apply(snapshot.payload);
+          return;
+        }
         const res = await fetch(apiBase);
 
         if (!res.ok) {

@@ -40,25 +40,12 @@ export function createDeckPdfRenderer(
       }
       const page = await browser.newPage();
       if (snapshot) {
-        // The report must use the captured data even if another TXT arrives
-        // while Chromium is running. Image IDs already address immutable bytes.
-        await page.setRequestInterception(true);
-        page.on("request", request => {
-          if (
-            new URL(request.url()).pathname === snapshot.apiPath &&
-            request.method() === "GET"
-          ) {
-            void request
-              .respond({
-                status: 200,
-                contentType: "application/json",
-                body: JSON.stringify(snapshot.payload),
-              })
-              .catch(() => undefined);
-          } else {
-            void request.continue().catch(() => undefined);
-          }
-        });
+        // Freeze data before React starts without pausing resource requests.
+        // Images and fonts then use the same loading path as a normal export.
+        await page.evaluateOnNewDocument(snapshot => {
+          (window as Window & { __avwPdfSnapshot?: unknown }).__avwPdfSnapshot =
+            snapshot;
+        }, snapshot);
       }
       page.setDefaultTimeout(30_000);
       const auth = credentials();
@@ -81,6 +68,7 @@ export function createDeckPdfRenderer(
 
       const result = await PDFDocument.create();
       for (let index = 0; index < count; index++) {
+        const slideStartedAt = Date.now();
         signal.throwIfAborted();
         await page.evaluate(
           index =>
@@ -110,6 +98,9 @@ export function createDeckPdfRenderer(
           margin: { top: 0, right: 0, bottom: 0, left: 0 },
         });
         await appendPdfPages(result, bytes);
+        console.info(
+          `[pdf] rendered ${path} slide=${index + 1}/${count} durationMs=${Date.now() - slideStartedAt}`
+        );
         // Unmount the slide immediately, including its decoded images.
         await page.evaluate(() =>
           window.dispatchEvent(
