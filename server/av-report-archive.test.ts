@@ -21,7 +21,13 @@ beforeEach(async () => {
 });
 afterEach(() => {
   db.close();
-  fs.rmSync(directory, { recursive: true, force: true });
+  try {
+    fs.rmSync(directory, { recursive: true, force: true });
+  } catch (error) {
+    // libSQL can keep its Windows file handle after close(). The temporary
+    // directory is harmless and the assertions have already run.
+    if ((error as NodeJS.ErrnoException).code !== "EPERM") throw error;
+  }
 });
 
 describe("finished AV reports", () => {
