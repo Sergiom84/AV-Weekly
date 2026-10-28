@@ -170,9 +170,17 @@ export const DECK_MODULES: DeckModule[] = [
         itIncidenciasOnsite: "Incidencias On Site",
         itSmartTechMes: "SmartTech mensual",
         itTopTenSlaMes: "Top Ten y SLA mensual",
+        itWorkOrdersMes: "Workorders mensual",
+        itOrigenImacsMes: "Origen e IMACS mensual",
       },
       storagePrefix: "av-weekly:informatica-sidebar-collapsed:",
-      monthlyKinds: ["itIncidenciasOnsite", "itSmartTechMes", "itTopTenSlaMes"],
+      monthlyKinds: [
+        "itIncidenciasOnsite",
+        "itWorkOrdersMes",
+        "itOrigenImacsMes",
+        "itSmartTechMes",
+        "itTopTenSlaMes",
+      ],
     },
   },
   {

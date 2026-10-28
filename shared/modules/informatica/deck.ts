@@ -153,6 +153,18 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
     sections: ["incidenciasOnsite"],
   },
   {
+    id: "workorders-mes",
+    kind: "itWorkOrdersMes",
+    title: "Workorders mensual",
+    sections: ["incidenciasOnsite"],
+  },
+  {
+    id: "origen-imacs-mes",
+    kind: "itOrigenImacsMes",
+    title: "Origen e IMACS mensual",
+    sections: ["incidenciasOnsite"],
+  },
+  {
     id: "smarttech-mes",
     kind: "itSmartTechMes",
     title: "SmartTech mensual",

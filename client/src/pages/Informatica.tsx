@@ -53,6 +53,8 @@ import PeticionesPage from "@/modules/informatica/pages/PeticionesPage";
 import RenoveAcumuladoPage from "@/modules/informatica/pages/RenoveAcumuladoPage";
 import IncidenciasOnsitePage from "@/modules/informatica/pages/IncidenciasOnsitePage";
 import SmartTechMesPage from "@/modules/informatica/pages/SmartTechMesPage";
+import WorkOrdersMesPage from "@/modules/informatica/pages/WorkOrdersMesPage";
+import OrigenImacsMesPage from "@/modules/informatica/pages/OrigenImacsMesPage";
 import TopTenSlaMesPage from "@/modules/informatica/pages/TopTenSlaMesPage";
 import RenoveSemanalPage from "@/modules/informatica/pages/RenoveSemanalPage";
 import WorkOrdersAnualPage from "@/modules/informatica/pages/WorkOrdersAnualPage";
@@ -99,6 +101,8 @@ const DATA_PAGES: Record<
   "imacs-tablas": ImacsTablePage,
   "imacs-grafico": ImacsChartPage,
   "incidencias-onsite": IncidenciasOnsitePage,
+  "workorders-mes": WorkOrdersMesPage,
+  "origen-imacs-mes": OrigenImacsMesPage,
   "smarttech-mes": SmartTechMesPage,
   "top-ten-sla-mes": TopTenSlaMesPage,
   renove: RenoveSemanalPage,
