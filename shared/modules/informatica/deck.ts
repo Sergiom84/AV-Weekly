@@ -158,6 +158,12 @@ export const INFORMATICA_PAGE_SPECS: PageSpec[] = [
     title: "SmartTech mensual",
     sections: ["citas"],
   },
+  {
+    id: "top-ten-sla-mes",
+    kind: "itTopTenSlaMes",
+    title: "Top Ten y SLA mensual",
+    sections: ["hic", "slas"],
+  },
 ];
 
 /** Sections a page needs, by page id. Empty for the pages with no dataset. */

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Play, Trash2 } from "lucide-react";
-import { isPageVisible } from "@shared/deck/core";
+import { Download, Pencil, Play, Trash2 } from "lucide-react";
+import { canBeMonthly, isPageMonthly, isPageVisible } from "@shared/deck/core";
 import type { DeckPage } from "@shared/deck/core";
 import { filenameFromDisposition } from "@shared/deck/pdf-download";
 import type { DeckActionResult, DeckStateOf } from "@/hooks/useDeckData";
@@ -16,6 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,6 +52,8 @@ interface DeckSidebarProps<TPage extends DeckPage<string, string>> {
   kindLabels: Record<string, string>;
   /** localStorage prefix of the collapsed state, one namespace per module. */
   storagePrefix: string;
+  /** Kinds of the monthly report; the "Mensual" switch drives them together. */
+  monthlyKinds?: string[];
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
   loading: boolean;
@@ -496,6 +499,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
   uploads,
   kindLabels,
   storagePrefix,
+  monthlyKinds = [],
   editing,
   onEditingChange,
   loading,
@@ -581,6 +585,21 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
       setPdfBusy(false);
     }
   }, [pdfHref, pages]);
+
+  const [classifying, setClassifying] = useState(false);
+  const classifyingMonthly = classifying && editing;
+  const monthlyPages = pages.filter(page => isPageMonthly(page, monthlyKinds));
+  // On while any monthly page shows: the switch sets them all at once, and a
+  // page switched by hand afterwards keeps what the user chose for it.
+  const monthlyOn = monthlyPages.some(page => isPageVisible(page));
+
+  const setMonthly = (checked: boolean) => {
+    for (const page of monthlyPages) {
+      if (isPageVisible(page) !== checked) {
+        onUpdatePage(page.id, { visible: checked } as Partial<TPage>);
+      }
+    }
+  };
 
   const manualCorrections = pages.flatMap((page, index) => {
     const pageVisible = isPageVisible(page);
@@ -824,6 +843,35 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
             </p>
           )}
 
+          {(monthlyPages.length > 0 || editing) && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 p-2">
+              <span className="font-mono text-xs font-semibold text-foreground">
+                Mensual
+              </span>
+              <div className="flex items-center gap-2">
+                {editing && (
+                  <Button
+                    type="button"
+                    variant={classifying ? "secondary" : "ghost"}
+                    size="icon"
+                    aria-pressed={classifying}
+                    aria-label="Elegir las slides mensuales"
+                    onClick={() => setClassifying(open => !open)}
+                    className="h-7 w-7"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                <Switch
+                  checked={monthlyOn}
+                  disabled={monthlyPages.length === 0}
+                  onCheckedChange={setMonthly}
+                  aria-label="Mostrar informe mensual"
+                />
+              </div>
+            </div>
+          )}
+
           {pages.map((page, index) => {
             const pageVisible = isPageVisible(page);
             // Match the canvas: only visible pages are numbered, correlatively.
@@ -851,6 +899,19 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
                       {page.supportType ? ` · ${page.supportType}` : ""}
                     </span>
                   </button>
+
+                  {classifyingMonthly && canBeMonthly(page) && (
+                    <Checkbox
+                      checked={isPageMonthly(page, monthlyKinds)}
+                      onCheckedChange={checked =>
+                        onUpdatePage(page.id, {
+                          monthly: checked === true,
+                        } as Partial<TPage>)
+                      }
+                      aria-label={`Mensual: ${page.text.title || page.id}`}
+                      className="mt-0.5 shrink-0"
+                    />
+                  )}
 
                   <Switch
                     checked={pageVisible}

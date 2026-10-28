@@ -19,6 +19,7 @@ const TRACKED_FIELDS = [
   "text",
   "overrides",
   "visible",
+  "monthly",
   "weekSelection",
   "years",
   "hiddenRows",
@@ -48,6 +49,7 @@ function fieldLabel(path: string): string {
   if (path === "text.footnote") return "Nota al pie";
   if (path === "text.body") return "Contenido";
   if (path === "visible") return "Visibilidad";
+  if (path === "monthly") return "Informe mensual";
   if (path === "weekSelection") return "Rango semanal";
   if (path === "years") return "Años comparados";
   if (path === "hiddenRows") return "Filas ocultas";

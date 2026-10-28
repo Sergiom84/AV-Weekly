@@ -1,10 +1,11 @@
 import MatrixTable from "@/components/deck/MatrixTable";
 import { EMPTY_TABLE_CELL } from "@/components/deck/emptyCell";
-import { monthName, PETICIONES_ORIGENES } from "@shared/modules/informatica/mensual";
+import { monthName } from "@shared/modules/informatica/mensual";
 import type { InformaticaDataset } from "@shared/modules/informatica/types";
 import { decimal } from "../aggregate";
 import { mensualSlides } from "../informeMensual";
 import PageShell, { type InformaticaPageProps } from "./PageShell";
+import { splitInBlocks } from "./splitInBlocks";
 
 interface IncidenciasOnsitePageProps extends InformaticaPageProps {
   dataset: InformaticaDataset;
@@ -21,9 +22,12 @@ function cell(value: number | null): number {
 const orHyphen = (format: (value: number) => string) => (value: number) =>
   Number.isNaN(value) ? EMPTY_TABLE_CELL : format(value);
 
+/** Blocks the work orders are split into, side by side. */
+const WORK_ORDER_BLOCKS = 3;
+
 /**
- * The month before the extraction: tabs 7-7, 1-1 and 5-5, the monthly GPS
- * request files and the IMAC file.
+ * First monthly slide, the month before the extraction: incidents and surveys
+ * side by side (tabs 7-7 and 1-1), work orders by site underneath.
  */
 export default function IncidenciasOnsitePage({
   page,
@@ -31,99 +35,33 @@ export default function IncidenciasOnsitePage({
   onChange,
   dataset,
 }: IncidenciasOnsitePageProps) {
-  const { month, incidencias, encuestas, peticiones, imacs, workOrders } =
-    mensualSlides(dataset);
-  const peticionRows = (
+  const { month, incidencias, encuestas, workOrders } = mensualSlides(dataset);
+  const workOrderBlocks = splitInBlocks(
     [
-      ["Backlog", "backlog"],
-      ["Liberadas", "liberadas"],
-      ["Gestionadas", "gestionadas"],
-    ] as const
-  ).map(([label, key]) => ({
-    label,
-    values: peticiones.map(row => cell(row[key])),
-  }));
+      ...workOrders.map(row => ({ label: row.site, values: [row.total] })),
+      {
+        label: "Total",
+        values: [workOrders.reduce((sum, row) => sum + row.total, 0)],
+      },
+    ],
+    WORK_ORDER_BLOCKS
+  );
 
   return (
     <PageShell page={page} editing={editing} onChange={onChange}>
       <p className="shrink-0 font-mono text-[1.4cqi] font-medium capitalize">
         {month ? monthName(month) : EMPTY_TABLE_CELL}
       </p>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)] gap-[2.5cqi]">
-        <div className="flex min-h-0 min-w-0 flex-col justify-between">
-          <div className="grid grid-cols-2 items-start gap-[2.5cqi]">
-            <section
-              className="min-h-0 min-w-0"
-              aria-label="Incidencias On Site"
-            >
-              <MatrixTable
-                rowHeader="Incidencias"
-                columns={["On Site"]}
-                rows={[
-                  { label: "Resueltas", values: [cell(incidencias.resueltas)] },
-                  { label: "Abiertas", values: [cell(incidencias.abiertas)] },
-                  { label: "Backlog", values: [cell(incidencias.backlog)] },
-                ]}
-                rowTotals={false}
-                columnTotals={false}
-                variant="report"
-                fill={false}
-                scale={SCALE}
-                formatValue={orHyphen(String)}
-              />
-            </section>
-            <section className="min-w-0" aria-label="Encuestas">
-              <MatrixTable
-                rowHeader="Encuestas"
-                columns={["Datos"]}
-                rows={[
-                  { label: "Nº", values: [cell(encuestas.numero)] },
-                  { label: "Promedio", values: [cell(encuestas.promedio)] },
-                ]}
-                rowTotals={false}
-                columnTotals={false}
-                variant="report"
-                fill={false}
-                scale={SCALE}
-                formatValue={value =>
-                  Number.isNaN(value)
-                    ? EMPTY_TABLE_CELL
-                    : Number.isInteger(value)
-                      ? String(value)
-                      : decimal(value)
-                }
-              />
-            </section>
-          </div>
-          <div className="flex flex-col gap-[0.6cqi]">
-            <section
-              className="min-h-0 min-w-0"
-              aria-label="Peticiones del mes"
-            >
-              <MatrixTable
-                rowHeader="Origen"
-                columns={[...PETICIONES_ORIGENES]}
-                rows={peticionRows}
-                columnTotals={false}
-                totalsLabel="Totales"
-                variant="report"
-                fill={false}
-                scale={SCALE}
-                formatValue={orHyphen(String)}
-              />
-            </section>
-          </div>
-          <section className="min-h-0 min-w-0" aria-label="IMACS del mes">
+      <div className="flex min-h-0 flex-1 flex-col gap-[2.5cqi]">
+        <div className="grid shrink-0 grid-cols-2 items-start gap-[2.5cqi]">
+          <section className="min-h-0 min-w-0" aria-label="Incidencias On Site">
             <MatrixTable
-              rowHeader="IMACS"
-              columns={["Solicitudes", "Trabajos"]}
+              rowHeader="Incidencias"
+              columns={["On Site"]}
               rows={[
-                {
-                  label: "Gestionados",
-                  values: imacs
-                    ? [imacs.solicitudes, imacs.trabajos]
-                    : [Number.NaN, Number.NaN],
-                },
+                { label: "Resueltas", values: [cell(incidencias.resueltas)] },
+                { label: "Abiertas", values: [cell(incidencias.abiertas)] },
+                { label: "Backlog", values: [cell(incidencias.backlog)] },
               ]}
               rowTotals={false}
               columnTotals={false}
@@ -133,16 +71,47 @@ export default function IncidenciasOnsitePage({
               formatValue={orHyphen(String)}
             />
           </section>
+          <section className="min-w-0" aria-label="Encuestas">
+            <MatrixTable
+              rowHeader="Encuestas"
+              columns={["Datos"]}
+              rows={[
+                { label: "Nº", values: [cell(encuestas.numero)] },
+                { label: "Promedio", values: [cell(encuestas.promedio)] },
+              ]}
+              rowTotals={false}
+              columnTotals={false}
+              variant="report"
+              fill={false}
+              scale={SCALE}
+              formatValue={value =>
+                Number.isNaN(value)
+                  ? EMPTY_TABLE_CELL
+                  : Number.isInteger(value)
+                    ? String(value)
+                    : decimal(value)
+              }
+            />
+          </section>
         </div>
-        <section className="min-h-0 min-w-0" aria-label="Workorders por sede">
-          <MatrixTable
-            rowHeader="Workorders"
-            columns={["Total"]}
-            rows={workOrders.map(row => ({ label: row.site, values: [row.total] }))}
-            rowTotals={false}
-            variant="report"
-            formatValue={String}
-          />
+        <section
+          className="grid min-h-0 min-w-0 flex-1 grid-cols-3 items-start gap-[2.5cqi]"
+          aria-label="Workorders por sede"
+        >
+          {workOrderBlocks.map((rows, index) => (
+            <MatrixTable
+              key={index}
+              rowHeader="Workorders"
+              columns={["Total"]}
+              rows={rows}
+              rowTotals={false}
+              columnTotals={false}
+              variant="report"
+              fill={false}
+              scale={SCALE}
+              formatValue={String}
+            />
+          ))}
         </section>
       </div>
     </PageShell>

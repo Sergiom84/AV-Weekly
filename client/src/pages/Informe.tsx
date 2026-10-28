@@ -357,6 +357,7 @@ export default function Informe() {
               uploads={uploads}
               kindLabels={MODULE.deck?.kindLabels ?? {}}
               storagePrefix={MODULE.deck?.storagePrefix ?? ""}
+              monthlyKinds={MODULE.deck?.monthlyKinds}
               editing={editing}
               onEditingChange={setEditing}
               loading={loading}

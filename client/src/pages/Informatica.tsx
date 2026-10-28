@@ -53,6 +53,7 @@ import PeticionesPage from "@/modules/informatica/pages/PeticionesPage";
 import RenoveAcumuladoPage from "@/modules/informatica/pages/RenoveAcumuladoPage";
 import IncidenciasOnsitePage from "@/modules/informatica/pages/IncidenciasOnsitePage";
 import SmartTechMesPage from "@/modules/informatica/pages/SmartTechMesPage";
+import TopTenSlaMesPage from "@/modules/informatica/pages/TopTenSlaMesPage";
 import RenoveSemanalPage from "@/modules/informatica/pages/RenoveSemanalPage";
 import WorkOrdersAnualPage from "@/modules/informatica/pages/WorkOrdersAnualPage";
 import WorkOrdersPage from "@/modules/informatica/pages/WorkOrdersPage";
@@ -99,6 +100,7 @@ const DATA_PAGES: Record<
   "imacs-grafico": ImacsChartPage,
   "incidencias-onsite": IncidenciasOnsitePage,
   "smarttech-mes": SmartTechMesPage,
+  "top-ten-sla-mes": TopTenSlaMesPage,
   renove: RenoveSemanalPage,
   "renove-acumulado": RenoveAcumuladoPage,
 };
@@ -396,6 +398,7 @@ export default function Informatica() {
               uploads={uploads}
               kindLabels={MODULE.deck?.kindLabels ?? {}}
               storagePrefix={MODULE.deck?.storagePrefix ?? ""}
+              monthlyKinds={MODULE.deck?.monthlyKinds}
               editing={editing}
               onEditingChange={setEditing}
               loading={loading}

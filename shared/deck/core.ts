@@ -428,6 +428,8 @@ export interface DeckPage<
   overrides: CellOverrides;
   /** Rows hidden by the user, by row label. Absent means "use the defaults". */
   hiddenRows?: string[];
+  /** Part of the monthly report, as the user classified it. Absent means "use the module's kinds". */
+  monthly?: boolean;
   /** Uploaded image URLs, in display order. Only meaningful for `notes` pages. */
   images?: string[];
   /** Freeform placement of the text block on the page canvas. `notes` pages only. */
@@ -519,4 +521,27 @@ export function insertBeforeClosing<TPage extends DeckPage<string, string>>(
  */
 export function isPageVisible(page: DeckPage): boolean {
   return page.visible !== false;
+}
+
+/** Page kinds that frame the deck and never belong to the monthly report. */
+const NEVER_MONTHLY_KINDS = ["cover", "index", "section", "closing"];
+
+/** Whether the "Mensual" classification applies to a page at all. */
+export function canBeMonthly(page: DeckPage): boolean {
+  return !NEVER_MONTHLY_KINDS.includes(page.kind);
+}
+
+/**
+ * Whether a page belongs to the monthly report. The user's choice wins; a page
+ * never classified follows the kinds its module declares as monthly.
+ */
+export function isPageMonthly(
+  page: DeckPage,
+  defaultKinds: readonly string[]
+): boolean {
+  if (!canBeMonthly(page)) {
+    return false;
+  }
+
+  return page.monthly ?? defaultKinds.includes(page.kind);
 }

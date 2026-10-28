@@ -47,6 +47,8 @@ export interface DeckModuleConfig {
   kindLabels: Record<string, string>;
   /** localStorage prefix of the collapsed state of the sidebar sections. */
   storagePrefix: string;
+  /** Page kinds of the monthly report, driven together by the "Mensual" switch. */
+  monthlyKinds?: string[];
 }
 
 export interface DeckModule {
@@ -122,6 +124,7 @@ export const DECK_MODULES: DeckModule[] = [
         ofiRecicladoresElementoSemanal: "Recicladores por elemento, comparativa semanal",
       },
       storagePrefix: "av-weekly:oficinas-sidebar-collapsed:",
+      monthlyKinds: ["ofiMensualIncidencias", "ofiMensualRecicladores", "ofiMensualCierresDT", "ofiMensualPeticiones"],
     },
   },
   {
@@ -166,8 +169,10 @@ export const DECK_MODULES: DeckModule[] = [
         itRenove: "Renove",
         itIncidenciasOnsite: "Incidencias On Site",
         itSmartTechMes: "SmartTech mensual",
+        itTopTenSlaMes: "Top Ten y SLA mensual",
       },
       storagePrefix: "av-weekly:informatica-sidebar-collapsed:",
+      monthlyKinds: ["itIncidenciasOnsite", "itSmartTechMes", "itTopTenSlaMes"],
     },
   },
   {
@@ -252,6 +257,7 @@ export const DECK_MODULES: DeckModule[] = [
         pendingItems: "Asuntos pendientes",
       },
       storagePrefix: "av-weekly:sidebar-collapsed:",
+      monthlyKinds: ["monthlyTrend"],
     },
   },
 ];
