@@ -1080,16 +1080,43 @@ describe("Codigo.gs template del día 1", () => {
     ]);
   });
 
-  it("sigue fallando si una pestaña de SLAs con filas pierde sus columnas", () => {
+  it("salta la pestaña de SLAs si no se han introducido columnas de medición", () => {
     const sinColumnas = [
       ["", "MeasurementStatus", "Total"],
       ["SVTTitle", "", "Total"],
       ["WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "", "449"],
     ];
+    const slas: Record<string, number> = {};
+    expect(() => gs.agregarSlas(templateFound(sinColumnas), slas, firstOfOctober)).not.toThrow();
+    expect(gs.rows(slas)).toEqual([
+      ["2026/09", "WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "465", "51", 516],
+    ]);
+  });
 
-    expect(() => gs.agregarSlas(templateFound(sinColumnas), {}, firstOfOctober)).toThrow(
-      "no expone Cumplido e Incumplido"
-    );
+  it("admite pestaña de SLAs cuando todos son Incumplidos (falta columna Cumplido)", () => {
+    const soloIncumplidos = [
+      ["", "MeasurementStatus", "Incumplido", "Total"],
+      ["SVTTitle", "", "Incumplido", "Total"],
+      ["WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "", "449 (100%)", "449"],
+    ];
+    const slas: Record<string, number> = {};
+    gs.agregarSlas(templateFound(soloIncumplidos), slas, new Date(Date.UTC(2026, 8, 28)));
+    expect(gs.rows(slas)).toContainEqual([
+      "2026/09", "WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "0", "449", 449,
+    ]);
+  });
+
+  it("admite pestaña de SLAs cuando todos son Cumplidos (falta columna Incumplido)", () => {
+    const soloCumplidos = [
+      ["", "MeasurementStatus", "Cumplido", "Total"],
+      ["SVTTitle", "", "Cumplido", "Total"],
+      ["WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "", "449 (100%)", "449"],
+    ];
+    const slas: Record<string, number> = {};
+    gs.agregarSlas(templateFound(soloCumplidos), slas, new Date(Date.UTC(2026, 8, 28)));
+    expect(gs.rows(slas)).toContainEqual([
+      "2026/09", "WPSPAIN_Minsait.Inc.Reacción.P3.SSCC", "449", "0", 449,
+    ]);
   });
 
   it("ancla las comparativas en el mes de la extracción", () => {

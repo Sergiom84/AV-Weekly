@@ -10,7 +10,9 @@
     "preview": "vite preview --host",
     "test": "vitest run --config vitest.config.ts",
     "check": "tsc --noEmit",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "clasp:push": "clasp push",
+    "clasp:pull": "clasp pull"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

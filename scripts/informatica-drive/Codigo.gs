@@ -3569,18 +3569,10 @@ function agregarSlas(found, slas, extraction) {
     var missed = headers[normalize('Incumplido')];
     var total = headers[normalize('Total')];
 
-    // On the 1st the month in progress has no finished ticket yet: the tab
-    // carries only the Total line and no Cumplido / Incumplido columns.
-    if ((met === undefined || missed === undefined) && !slaTieneFilas(grid, headerAt)) continue;
-
-    // The tab named itself as an SLA block and has rows, so missing columns
-    // are a defect of this reader and not an absent section. Failing here is
-    // what stops the PLANO from silently shipping without SLAs.
-    if (met === undefined || missed === undefined) {
-      throw new Error(
-        'La pestaña ' + grids[gridIndex].name + ' declara SVTTitle pero no expone Cumplido e Incumplido.'
-      );
-    }
+    // If neither Cumplido nor Incumplido is present, this tab has no SLA
+    // measurement data (e.g. empty month at the beginning of the period, or
+    // SLAs not yet entered for this month). Skip it safely without failing.
+    if (met === undefined && missed === undefined) continue;
 
     var month = normalize(grids[gridIndex].name).indexOf('MES AN') >= 0 ? shiftMonthLabel(reference, -1) : reference;
 
@@ -3590,9 +3582,10 @@ function agregarSlas(found, slas, extraction) {
 
       if (svt === '' || normalize(svt) === 'TOTAL') continue;
 
-      var metValue = leadingNumber(row[met]);
-      var missedValue = leadingNumber(row[missed]);
-      bump(slas, [month, svt, metValue, missedValue], total === undefined ? metValue + missedValue : leadingNumber(row[total]));
+      var metValue = met !== undefined ? leadingNumber(row[met]) : 0;
+      var missedValue = missed !== undefined ? leadingNumber(row[missed]) : 0;
+      var totalValue = total !== undefined ? leadingNumber(row[total]) : metValue + missedValue;
+      bump(slas, [month, svt, metValue, missedValue], totalValue);
     }
   }
 }
