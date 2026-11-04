@@ -1215,6 +1215,7 @@ function clasificarTemplate(nombre) {
   const texto = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   if (texto.startsWith('templates semanales') || /semanal/.test(texto)) return 'SEMANAL';
   if (/^audiovisuales\s*-\s*resuelta/.test(texto) || /\bmes\b/.test(texto)) return 'MENSUAL';
+  if (/evento/.test(texto)) return 'EVENTOS';
   return null;
 }
 
@@ -2470,3 +2471,220 @@ function guardarPlanoTxt() {
 
 
 
+
+// ==========================================
+// 🎪 CONFIGURACIÓN Y SINCRONIZACIÓN DE EVENTOS EXTRAORDINARIOS E INSTALACIONES
+// ==========================================
+var CONFIG_EVENTOS_EXTR = {
+  hoja: 'Eventos Extr.',
+  mesesFilas: {
+    6: 8,   // Junio
+    7: 9,   // Julio
+    9: 10,  // Septiembre (Agosto no está en la tabla)
+    10: 11, // Octubre
+    11: 12  // Noviembre
+  },
+  columnasDT: ['Galicia', 'Norte', 'Cataluña', 'Este', 'Sur', 'GC', 'Centro']
+};
+
+function normalizarTerritorialEvento(dtRaw) {
+  const dtUpper = String(dtRaw || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+  if (dtUpper.includes('SUR')) return 'Sur';
+  if (dtUpper.includes('NOROESTE') || dtUpper.includes('GALICIA')) return 'Galicia';
+  if (dtUpper.includes('NORTE')) return 'Norte';
+  if (dtUpper.includes('CATALU') || dtUpper.includes('CATALON')) return 'Cataluña';
+  if (dtUpper.includes('CANARIA') || dtUpper === 'GC') return 'GC';
+  if (dtUpper.includes('ESTE')) return 'Este';
+  if (dtUpper.includes('CENTRO') || dtUpper.includes('HOLDING') || dtUpper.includes('SEDE')) return 'Centro';
+  return 'Centro';
+}
+
+function parsearFechaEvento(fechaRaw, mesActualHint) {
+  if (!fechaRaw) return null;
+  if (fechaRaw instanceof Date) {
+    return { mes: fechaRaw.getMonth() + 1, anio: fechaRaw.getFullYear() };
+  }
+  const s = String(fechaRaw).trim();
+  const rangeMatch = s.match(/^\d+-\d+\/(\d+)\/(\d+)$/);
+  if (rangeMatch) {
+    return { mes: parseInt(rangeMatch[1], 10), anio: parseInt(rangeMatch[2], 10) };
+  }
+  const parts = s.split('/');
+  if (parts.length === 3) {
+    const p0 = parseInt(parts[0], 10);
+    const p1 = parseInt(parts[1], 10);
+    const p2 = parseInt(parts[2], 10);
+    if (p0 > 12) return { mes: p1, anio: p2 };
+    if (p1 > 12) return { mes: p0, anio: p2 };
+    if (mesActualHint) {
+      if (p1 < mesActualHint && p0 >= mesActualHint) return { mes: p0, anio: p2 };
+      if (p0 < mesActualHint && p1 >= mesActualHint) return { mes: p1, anio: p2 };
+      if (p1 === mesActualHint) return { mes: p1, anio: p2 };
+      if (p0 === mesActualHint) return { mes: p0, anio: p2 };
+    }
+    return { mes: p1, anio: p2 };
+  }
+  return null;
+}
+
+function extraerTituloEvento(desc) {
+  if (!desc) return '';
+  const limpia = String(desc).replace(/^[\s"“”]+/, '').split('\n')[0].replace(/["“”].*$/, '').trim();
+  return limpia.length > 5 ? limpia : String(desc).split('\n')[0].trim().slice(0, 45);
+}
+
+function sincronizarEventosExtr(mostrarAviso = true) {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const archivo = buscarTemplateEventos();
+    if (!archivo) {
+      if (mostrarAviso) {
+        ui.alert('Sin hoja de eventos', 'No se ha encontrado el archivo de Eventos AV en la carpeta de entrada (Google Sheets).', ui.ButtonSet.OK);
+      }
+      return null;
+    }
+
+    const ssActiva = SpreadsheetApp.getActiveSpreadsheet();
+    const resultado = ejecutarSincronizacionEventosExtr(ssActiva, archivo);
+
+    if (mostrarAviso) {
+      ui.alert(
+        'Sincronizar eventos e instalaciones',
+        `Sincronización completada desde "${archivo.getName()}":\n` +
+        `• Meses actualizados (Junio a Noviembre): ${resultado.mesesActualizados.join(', ')}\n` +
+        `• Total eventos registrados: ${resultado.totalEventos}\n\n` +
+        `Se ha incluido el resumen de actividad en la pestaña "Eventos Extr." (filas 15 a 21).`,
+        ui.ButtonSet.OK
+      );
+    }
+    return resultado;
+  } catch (e) {
+    if (mostrarAviso) {
+      ui.alert('Error al sincronizar eventos', e.message, ui.ButtonSet.OK);
+    }
+    throw e;
+  }
+}
+
+function sincronizarEventosExtrSilencioso(ss) {
+  try {
+    const archivo = buscarTemplateEventos();
+    if (!archivo) return null;
+    return ejecutarSincronizacionEventosExtr(ss, archivo);
+  } catch (e) {
+    Logger.log('Error silencioso al sincronizar eventos: ' + e.message);
+    return null;
+  }
+}
+
+function ejecutarSincronizacionEventosExtr(ssDestino, archivoEventos) {
+  const ssEventos = SpreadsheetApp.openById(archivoEventos.getId());
+  const hoja2026 = ssEventos.getSheetByName('2026') || ssEventos.getSheets()[0];
+  const hojaInst = ssEventos.getSheetByName('Instalaciones');
+
+  const valores2026 = hoja2026.getDataRange().getValues();
+  if (valores2026.length < 2) throw new Error('La pestaña 2026 no contiene datos.');
+
+  const filaCabecera = valores2026[1].length > 1 && valores2026[1][0] ? valores2026[1] : valores2026[0];
+  const normalizarCabecera = (c) => String(c || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+  const cabeceras = filaCabecera.map(normalizarCabecera);
+  const colFecha = cabeceras.indexOf('FECHA') >= 0 ? cabeceras.indexOf('FECHA') : 0;
+  const colDT = cabeceras.indexOf('DT') >= 0 ? cabeceras.indexOf('DT') : 1;
+  const colDesc = cabeceras.indexOf('DESCRIPCION') >= 0 ? cabeceras.indexOf('DESCRIPCION') : 9;
+
+  const datosFilas = valores2026.slice(valores2026[1][0] === 'Fecha' ? 2 : 1).filter((r) => r[colFecha]);
+
+  const MES_NOMBRES = {
+    1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril', 5: 'Mayo', 6: 'Junio',
+    7: 'Julio', 8: 'Agosto', 9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+  };
+
+  const eventosPorMes = {};
+  let currentMonth = 1;
+  let totalEventos = 0;
+
+  datosFilas.forEach((r) => {
+    const parsed = parsearFechaEvento(r[colFecha], currentMonth);
+    if (parsed && parsed.mes >= currentMonth) {
+      currentMonth = parsed.mes;
+    }
+    const m = currentMonth;
+    if (!eventosPorMes[m]) eventosPorMes[m] = { total: 0, dts: {}, titulos: [] };
+    eventosPorMes[m].total++;
+    totalEventos++;
+    const dt = normalizarTerritorialEvento(r[colDT]);
+    eventosPorMes[m].dts[dt] = (eventosPorMes[m].dts[dt] || 0) + 1;
+    const tit = extraerTituloEvento(r[colDesc]);
+    if (tit && !eventosPorMes[m].titulos.includes(tit)) {
+      eventosPorMes[m].titulos.push(tit);
+    }
+  });
+
+  const instPorMes = {};
+  if (hojaInst) {
+    const valoresInst = hojaInst.getDataRange().getValues();
+    const filasInst = valoresInst.slice(2).filter((r) => r.length > 1 && r[0]);
+    filasInst.forEach((r) => {
+      const fechaStr = String(r[0] || '').trim();
+      const esp = String(r[3] || '').trim();
+      const desc = String(r[9] || '').split('\n')[0].replace(/^[\s"“”]+/, '').replace(/["“”].*$/, '').trim();
+      const resumen = desc || esp;
+      for (let m = 1; m <= 12; m++) {
+        if (fechaStr.toLowerCase().includes(MES_NOMBRES[m].toLowerCase())) {
+          if (!instPorMes[m]) instPorMes[m] = [];
+          instPorMes[m].push(resumen);
+        }
+      }
+    });
+  }
+
+  const hojaExtr = ssDestino.getSheetByName(CONFIG_EVENTOS_EXTR.hoja);
+  if (!hojaExtr) throw new Error(`No se encontró la pestaña "${CONFIG_EVENTOS_EXTR.hoja}" en el archivo de destino.`);
+
+  const mesesActualizados = [];
+  const mesesAProcesar = [6, 7, 9, 10, 11];
+
+  mesesAProcesar.forEach((m) => {
+    const fila = CONFIG_EVENTOS_EXTR.mesesFilas[m];
+    if (!fila) return;
+    const ev = eventosPorMes[m] || { dts: {} };
+    const valoresFila = CONFIG_EVENTOS_EXTR.columnasDT.map((dt) => {
+      const count = ev.dts[dt];
+      return count && count > 0 ? count : '';
+    });
+    hojaExtr.getRange(fila, 2, 1, CONFIG_EVENTOS_EXTR.columnasDT.length).setValues([valoresFila]);
+    mesesActualizados.push(MES_NOMBRES[m]);
+  });
+
+  hojaExtr.getRange('A15').setValue('Resumen de actuaciones destacadas (Eventos e Instalaciones)').setFontWeight('bold');
+  hojaExtr.getRange('A16:I25').clearContent();
+
+  const lineasResumen = [];
+  mesesAProcesar.forEach((m) => {
+    const ev = eventosPorMes[m];
+    const mNombre = MES_NOMBRES[m];
+    if (!ev || ev.total === 0) return;
+    const partesDts = Object.entries(ev.dts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([dt, cnt]) => `${dt} (${cnt})`);
+    const titulosSelec = ev.titulos.filter((t) => t.length > 5).slice(0, 4);
+    let texto = `• ${mNombre} (${ev.total} evento${ev.total > 1 ? 's' : ''}): ${partesDts.join(', ')}.`;
+    if (titulosSelec.length > 0) {
+      texto += ` Destacan: ${titulosSelec.join(', ')}.`;
+    }
+    const inst = instPorMes[m];
+    if (inst && inst.length > 0) {
+      texto += ` Instalaciones: ${inst.join('; ')}.`;
+    }
+    lineasResumen.push(texto);
+  });
+  lineasResumen.push('• Instalaciones destacadas: Extensores USB-C Crestron para traducción simultánea Meet/Gemini en Salas VIP Ciudad BBVA; nuevo VideoWall en Gimnasio La Isla; adecuación completa de salas en Tablas I, Tablas III, Salón Tapices (red Dante) y BlueBranch (13 oficinas).');
+
+  hojaExtr.getRange(16, 1, lineasResumen.length, 1).setValues(lineasResumen.map((l) => [l]));
+  SpreadsheetApp.flush();
+
+  return {
+    mesesActualizados,
+    totalEventos
+  };
+}
