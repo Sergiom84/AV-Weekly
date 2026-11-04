@@ -6,31 +6,41 @@ const CONFIG_MENSUAL = {
     hoja: 'Remotos',
     rangoFilas: [21, 32],
     colActual: 'B',
-    colPasado: 'X'
+    colPasado: 'X',
+    rangoHistorico: [39, 50],
+    colHistorico: 'E' // A37:E52 (2026 en col E, Ene fila 39 .. Dic fila 50)
   },
   PROGRAMADOS: {
     hoja: 'Programados',
     rangoFilas: [36, 47],
     colActual: 'B',
-    colPasado: 'Q'
+    colPasado: 'Q',
+    rangoHistorico: [54, 65],
+    colHistorico: 'G' // C52:G67 (2026 en col G, Ene fila 54 .. Dic fila 65)
   },
   PRESENCIALES: {
     hoja: 'Presenciales',
     rangoFilas: [37, 48],
     colActual: 'B',
-    colPasado: 'P'
+    colPasado: 'P',
+    rangoHistorico: [55, 66],
+    colHistorico: 'G' // C53:G68 (2026 en col G, Ene fila 55 .. Dic fila 66)
   },
   INCIDENCIAS: {
     hoja: 'Incidencias',
     rangoFilas: [58, 69],
     colActual: 'B',
-    colPasado: 'P'
+    colPasado: 'P',
+    rangoHistorico: [76, 87],
+    colHistorico: 'G' // C74:G89 (2026 en col G, Ene fila 76 .. Dic fila 87)
   },
   CORRECTIVOS: {
     hoja: 'Correctivos',
     rangoFilas: [54, 65],
     colActual: 'B',
-    colPasado: 'P'
+    colPasado: 'P',
+    rangoHistorico: [72, 83],
+    colHistorico: 'G' // C70:G85 (2026 en col G, Ene fila 72 .. Dic fila 83)
   }
 };
 
@@ -40,6 +50,7 @@ function onOpen() {
 
   menu.addItem('Procesar semana', 'importarDatosSemanales');
   menu.addItem('Procesar mes', 'procesarMes');
+  menu.addItem('Sincronizar resumen multianual 2026', 'sincronizarHistoricoMensual2026');
   menu.addItem('Guardar PLANO como .txt en la carpeta', 'guardarPlanoTxt');
   menu.addItem('Actualizar Looker Studio', 'volcarDatosLookerStudio');
   menu.addSeparator();
@@ -1418,16 +1429,82 @@ function procesarMes() {
         const fila = conf.rangoFilas[0] + mes;
         hoja.getRange(`A${fila}`).setValue(MESES_TENDENCIA[mes]);
         hoja.getRange(`${conf.colActual}${fila}`).setValue(porMes[mes].conteo[tipo]);
+
+        // Escribir en la tabla multianual (resumen de todos los años, columna de 2026)
+        if (conf.colHistorico && conf.rangoHistorico) {
+          const filaHist = conf.rangoHistorico[0] + mes;
+          hoja.getRange(`${conf.colHistorico}${filaHist}`).setValue(porMes[mes].conteo[tipo]);
+        }
       });
     });
+
+    // Sincronizar meses previos de 2026 que ya estuvieran en la tabla mensual pero vacíos en la multianual
+    sincronizarHistoricoMensual2026Silencioso(ss);
     SpreadsheetApp.flush();
 
     const archivoTxt = escribirPlanoTxt();
     const nombres = meses.map((mes) => MESES_TENDENCIA[mes]).join(' y ');
-    ui.alert('Procesar mes', `${nombres} escrito en Tendencias.\nGuardado "${archivoTxt.getName()}" en la carpeta.`, ui.ButtonSet.OK);
+    ui.alert('Procesar mes', `${nombres} escrito en Tendencias y en el resumen multianual 2026.\nGuardado "${archivoTxt.getName()}" en la carpeta.`, ui.ButtonSet.OK);
   } catch (e) {
     ui.alert('Procesar mes', e.message, ui.ButtonSet.OK);
   }
+}
+
+// Sincroniza silenciosamente los valores de la tabla mensual hacia la multianual de 2026
+function sincronizarHistoricoMensual2026Silencioso(ss) {
+  Object.keys(CONFIG_MENSUAL).forEach((tipo) => {
+    const conf = CONFIG_MENSUAL[tipo];
+    const hoja = ss.getSheetByName(conf.hoja);
+    if (!hoja || !conf.colHistorico || !conf.rangoHistorico) return;
+
+    for (let mes = 0; mes < 12; mes++) {
+      const filaMensual = conf.rangoFilas[0] + mes;
+      const filaHist = conf.rangoHistorico[0] + mes;
+      const valMensual = hoja.getRange(`${conf.colActual}${filaMensual}`).getValue();
+      const celdaHist = hoja.getRange(`${conf.colHistorico}${filaHist}`);
+      const valHist = celdaHist.getValue();
+
+      if (valMensual !== '' && valMensual !== null && !isNaN(Number(valMensual))) {
+        if (valHist === '' || valHist === null) {
+          celdaHist.setValue(Number(valMensual));
+        }
+      }
+    }
+  });
+}
+
+// Función manual accesible desde el menú para sincronizar todo 2026
+function sincronizarHistoricoMensual2026() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sincronizados = 0;
+
+  Object.keys(CONFIG_MENSUAL).forEach((tipo) => {
+    const conf = CONFIG_MENSUAL[tipo];
+    const hoja = ss.getSheetByName(conf.hoja);
+    if (!hoja || !conf.colHistorico || !conf.rangoHistorico) return;
+
+    for (let mes = 0; mes < 12; mes++) {
+      const filaMensual = conf.rangoFilas[0] + mes;
+      const filaHist = conf.rangoHistorico[0] + mes;
+      const valMensual = hoja.getRange(`${conf.colActual}${filaMensual}`).getValue();
+      const celdaHist = hoja.getRange(`${conf.colHistorico}${filaHist}`);
+      const valHist = celdaHist.getValue();
+
+      if (valMensual !== '' && valMensual !== null && !isNaN(Number(valMensual))) {
+        if (valHist === '' || valHist === null || Number(valHist) !== Number(valMensual)) {
+          celdaHist.setValue(Number(valMensual));
+          sincronizados++;
+        }
+      }
+    }
+  });
+
+  SpreadsheetApp.flush();
+  SpreadsheetApp.getUi().alert(
+    'AV Weekly',
+    `Sincronización completada.\nSe han sincronizado ${sincronizados} celdas en el resumen multianual 2026.`,
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
 }
 
 // Writes one week of the template into Tendencias. The detail tabs (7 to 10)
