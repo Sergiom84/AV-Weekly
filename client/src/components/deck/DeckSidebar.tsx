@@ -601,6 +601,19 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
     }
   };
 
+  const remainingPages = pages.filter(
+    page => !isPageMonthly(page, monthlyKinds)
+  );
+  const remainingOn = remainingPages.some(page => isPageVisible(page));
+
+  const setRemaining = (checked: boolean) => {
+    for (const page of remainingPages) {
+      if (isPageVisible(page) !== checked) {
+        onUpdatePage(page.id, { visible: checked } as Partial<TPage>);
+      }
+    }
+  };
+
   const manualCorrections = pages.flatMap((page, index) => {
     const pageVisible = isPageVisible(page);
     const slideNumber = pageVisible
@@ -841,6 +854,22 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
             <p className="font-mono text-xs text-muted-foreground">
               Sin páginas
             </p>
+          )}
+
+          {(remainingPages.length > 0 || editing) && pages.length > 0 && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/40 p-2">
+              <span className="font-mono text-xs font-semibold text-foreground">
+                Resto
+              </span>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={remainingOn}
+                  disabled={remainingPages.length === 0}
+                  onCheckedChange={setRemaining}
+                  aria-label="Mostrar el resto de slides"
+                />
+              </div>
+            </div>
           )}
 
           {(monthlyPages.length > 0 || editing) && (
