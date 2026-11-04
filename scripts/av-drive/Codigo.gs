@@ -2474,6 +2474,7 @@ function guardarPlanoTxt() {
 
 // ==========================================
 // 🎪 CONFIGURACIÓN Y SINCRONIZACIÓN DE EVENTOS EXTRAORDINARIOS E INSTALACIONES
+
 // ==========================================
 var CONFIG_EVENTOS_EXTR = {
   hoja: 'Eventos Extr.',
@@ -2533,7 +2534,100 @@ function extraerTituloEvento(desc) {
   return limpia.length > 5 ? limpia : String(desc).split('\n')[0].trim().slice(0, 45);
 }
 
-function sincronizarEventosExtr(mostrarAviso = true) {
+function obtenerMesEnCursoInforme(ss) {
+  try {
+    const datos = obtenerDatosMensuales('REMOTOS');
+    if (datos && datos.hayDatos && datos.mes) {
+      const MES_NOMBRES = {
+        'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+        'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+      };
+      const m = MES_NOMBRES[String(datos.mes).toLowerCase().trim()];
+      if (m) return m;
+    }
+  } catch (e) {
+    // fallback silencioso
+  }
+  return 10;
+}
+
+function generarDestacadosMes(items, instalaciones) {
+  if (!items || items.length === 0) return 'Sin eventos destacados registrados este mes.';
+
+  const porTitulo = {};
+  items.forEach((it) => {
+    const titLimpio = String(it.tit || '').replace(/^[\s"“”]+/, '').replace(/["“”].*$/, '').trim();
+    if (!titLimpio) return;
+    const key = titLimpio.toLowerCase().replace(/^(evento|streaming|plenaria|plenarias)\s+/, '');
+    if (!porTitulo[key]) {
+      porTitulo[key] = { tituloOriginal: titLimpio, dts: {}, items: [] };
+    }
+    porTitulo[key].dts[it.dt] = true;
+    porTitulo[key].items.push(it);
+  });
+
+  const destacados = [];
+
+  // 1. Despliegues globales / multiterritoriales (3 o más territoriales)
+  Object.values(porTitulo).forEach((group) => {
+    const numDts = Object.keys(group.dts).length;
+    if (numDts >= 3) {
+      destacados.push(`Despliegue global ${group.tituloOriginal} en ${numDts} territoriales`);
+    }
+  });
+
+  // 2. Eventos institucionales prioritarios (Premios, Fronteras, Town Hall, etc.)
+  const prioritarios = [
+    /biodiversidad/i, /fronteras/i, /town hall/i, /alfatech/i, /cib/i, /premios/i,
+    /junta/i, /accionistas/i, /plenaria/i, /ia /i, /inteligencia artificial/i
+  ];
+
+  Object.values(porTitulo).forEach((group) => {
+    const numDts = Object.keys(group.dts).length;
+    if (numDts >= 3) return;
+    const tit = group.tituloOriginal;
+    const desc = group.items[0]?.desc || '';
+    const esPrioritario = prioritarios.some((p) => p.test(tit) || p.test(desc));
+    if (esPrioritario && destacados.length < 3) {
+      let detalle = tit;
+      const edif = group.items[0]?.edif;
+      const esp = group.items[0]?.esp || '';
+      if (esp.includes('Sala 13') || esp.includes('Fronteras') || edif === 'Recoletos') {
+        detalle = tit.replace(/Premios Fronteras.*$/, '').trim() + ' (Recoletos)';
+      } else if (edif && !detalle.toLowerCase().includes(edif.toLowerCase())) {
+        detalle += ` (${edif})`;
+      } else if (esp && !detalle.toLowerCase().includes(esp.toLowerCase())) {
+        detalle += ` (${esp.split('.')[0]})`;
+      }
+      if (!destacados.some((d) => d.toLowerCase().includes(tit.toLowerCase().slice(0, 15)))) {
+        destacados.push(detalle);
+      }
+    }
+  });
+
+  // 3. Completar con otros títulos destacados si hay espacio
+  if (destacados.length < 2) {
+    Object.values(porTitulo).forEach((group) => {
+      const tit = group.tituloOriginal;
+      if (tit && tit.length > 5 && !destacados.some((d) => d.toLowerCase().includes(tit.toLowerCase().slice(0, 15)))) {
+        let detalle = tit;
+        const edif = group.items[0]?.edif;
+        if (edif && !detalle.toLowerCase().includes(edif.toLowerCase())) {
+          detalle += ` (${edif})`;
+        }
+        destacados.push(detalle);
+      }
+    });
+  }
+
+  let texto = 'Destacan: ' + destacados.slice(0, 3).join('; ') + '.';
+  if (instalaciones && instalaciones.length > 0) {
+    texto += ' Instalaciones: ' + instalaciones.join('; ') + '.';
+  }
+  return texto;
+}
+
+function sincronizarEventosExtr(mostrarAviso = true, mesObjetivo) {
   const ui = SpreadsheetApp.getUi();
   try {
     const archivo = buscarTemplateEventos();
@@ -2545,7 +2639,7 @@ function sincronizarEventosExtr(mostrarAviso = true) {
     }
 
     const ssActiva = SpreadsheetApp.getActiveSpreadsheet();
-    const resultado = ejecutarSincronizacionEventosExtr(ssActiva, archivo);
+    const resultado = ejecutarSincronizacionEventosExtr(ssActiva, archivo, mesObjetivo);
 
     if (mostrarAviso) {
       ui.alert(
@@ -2553,7 +2647,7 @@ function sincronizarEventosExtr(mostrarAviso = true) {
         `Sincronización completada desde "${archivo.getName()}":\n` +
         `• Meses actualizados (Junio a Noviembre): ${resultado.mesesActualizados.join(', ')}\n` +
         `• Total eventos registrados: ${resultado.totalEventos}\n\n` +
-        `Se ha incluido el resumen de actividad en la pestaña "Eventos Extr." (filas 15 a 21).`,
+        `Resumen del mes en curso (${resultado.mesNombre}):\n${resultado.resumenMes}`,
         ui.ButtonSet.OK
       );
     }
@@ -2566,18 +2660,18 @@ function sincronizarEventosExtr(mostrarAviso = true) {
   }
 }
 
-function sincronizarEventosExtrSilencioso(ss) {
+function sincronizarEventosExtrSilencioso(ss, mesObjetivo) {
   try {
     const archivo = buscarTemplateEventos();
     if (!archivo) return null;
-    return ejecutarSincronizacionEventosExtr(ss, archivo);
+    return ejecutarSincronizacionEventosExtr(ss, archivo, mesObjetivo);
   } catch (e) {
     Logger.log('Error silencioso al sincronizar eventos: ' + e.message);
     return null;
   }
 }
 
-function ejecutarSincronizacionEventosExtr(ssDestino, archivoEventos) {
+function ejecutarSincronizacionEventosExtr(ssDestino, archivoEventos, mesObjetivo) {
   const ssEventos = SpreadsheetApp.openById(archivoEventos.getId());
   const hoja2026 = ssEventos.getSheetByName('2026') || ssEventos.getSheets()[0];
   const hojaInst = ssEventos.getSheetByName('Instalaciones');
@@ -2590,6 +2684,8 @@ function ejecutarSincronizacionEventosExtr(ssDestino, archivoEventos) {
   const cabeceras = filaCabecera.map(normalizarCabecera);
   const colFecha = cabeceras.indexOf('FECHA') >= 0 ? cabeceras.indexOf('FECHA') : 0;
   const colDT = cabeceras.indexOf('DT') >= 0 ? cabeceras.indexOf('DT') : 1;
+  const colEdificio = cabeceras.indexOf('EDIFICIO') >= 0 ? cabeceras.indexOf('EDIFICIO') : 2;
+  const colEspacio = cabeceras.indexOf('ESPACIO') >= 0 ? cabeceras.indexOf('ESPACIO') : 3;
   const colDesc = cabeceras.indexOf('DESCRIPCION') >= 0 ? cabeceras.indexOf('DESCRIPCION') : 9;
 
   const datosFilas = valores2026.slice(valores2026[1][0] === 'Fecha' ? 2 : 1).filter((r) => r[colFecha]);
@@ -2609,12 +2705,16 @@ function ejecutarSincronizacionEventosExtr(ssDestino, archivoEventos) {
       currentMonth = parsed.mes;
     }
     const m = currentMonth;
-    if (!eventosPorMes[m]) eventosPorMes[m] = { total: 0, dts: {}, titulos: [] };
+    if (!eventosPorMes[m]) eventosPorMes[m] = { total: 0, dts: {}, titulos: [], items: [] };
     eventosPorMes[m].total++;
     totalEventos++;
     const dt = normalizarTerritorialEvento(r[colDT]);
     eventosPorMes[m].dts[dt] = (eventosPorMes[m].dts[dt] || 0) + 1;
     const tit = extraerTituloEvento(r[colDesc]);
+    const edif = String(r[colEdificio] || '').trim();
+    const esp = String(r[colEspacio] || '').trim();
+    const desc = String(r[colDesc] || '').trim();
+    eventosPorMes[m].items.push({ dt, edif, esp, desc, tit });
     if (tit && !eventosPorMes[m].titulos.includes(tit)) {
       eventosPorMes[m].titulos.push(tit);
     }
@@ -2656,35 +2756,24 @@ function ejecutarSincronizacionEventosExtr(ssDestino, archivoEventos) {
     mesesActualizados.push(MES_NOMBRES[m]);
   });
 
+  // Determinar mes en curso (objetivo explícito o el último mes cerrado con datos del informe)
+  const mesEnCurso = mesObjetivo || obtenerMesEnCursoInforme(ssDestino);
+  const evMes = eventosPorMes[mesEnCurso] || { items: [] };
+  const instMes = instPorMes[mesEnCurso] || [];
+  const resumenMes = generarDestacadosMes(evMes.items, instMes);
+
+  // Escribir únicamente el resumen del mes en curso y limpiar el resto
   hojaExtr.getRange('A15').setValue('Resumen de actuaciones destacadas (Eventos e Instalaciones)').setFontWeight('bold');
   hojaExtr.getRange('A16:I25').clearContent();
+  hojaExtr.getRange('A16').setValue(resumenMes);
 
-  const lineasResumen = [];
-  mesesAProcesar.forEach((m) => {
-    const ev = eventosPorMes[m];
-    const mNombre = MES_NOMBRES[m];
-    if (!ev || ev.total === 0) return;
-    const partesDts = Object.entries(ev.dts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([dt, cnt]) => `${dt} (${cnt})`);
-    const titulosSelec = ev.titulos.filter((t) => t.length > 5).slice(0, 4);
-    let texto = `• ${mNombre} (${ev.total} evento${ev.total > 1 ? 's' : ''}): ${partesDts.join(', ')}.`;
-    if (titulosSelec.length > 0) {
-      texto += ` Destacan: ${titulosSelec.join(', ')}.`;
-    }
-    const inst = instPorMes[m];
-    if (inst && inst.length > 0) {
-      texto += ` Instalaciones: ${inst.join('; ')}.`;
-    }
-    lineasResumen.push(texto);
-  });
-  lineasResumen.push('• Instalaciones destacadas: Extensores USB-C Crestron para traducción simultánea Meet/Gemini en Salas VIP Ciudad BBVA; nuevo VideoWall en Gimnasio La Isla; adecuación completa de salas en Tablas I, Tablas III, Salón Tapices (red Dante) y BlueBranch (13 oficinas).');
-
-  hojaExtr.getRange(16, 1, lineasResumen.length, 1).setValues(lineasResumen.map((l) => [l]));
   SpreadsheetApp.flush();
 
   return {
     mesesActualizados,
-    totalEventos
+    totalEventos,
+    mesEnCurso,
+    mesNombre: MES_NOMBRES[mesEnCurso],
+    resumenMes
   };
 }

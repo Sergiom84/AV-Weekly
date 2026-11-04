@@ -47,6 +47,10 @@ function loadCodigo() {
     normalizarTerritorialEvento: (dt: string) => string;
     parsearFechaEvento: (fecha: unknown, mesHint?: number) => { mes: number; anio: number } | null;
     extraerTituloEvento: (desc: string) => string;
+    generarDestacadosMes: (
+      items: { dt: string; edif?: string; esp?: string; desc?: string; tit: string }[],
+      instalaciones?: string[]
+    ) => string;
     CONFIG_EVENTOS_EXTR: {
       hoja: string;
       mesesFilas: Record<number, number>;
@@ -128,9 +132,7 @@ describe("AV Codigo.gs - Eventos Extr.", () => {
     });
 
     it("resuelve ambigüedades usando mesActualHint", () => {
-      // 09/01/2026 cuando mesHint=9 -> mes 9
       expect(codigo.parsearFechaEvento("09/01/2026", 9)).toEqual({ mes: 9, anio: 2026 });
-      // 10/01/2026 cuando mesHint=10 -> mes 10
       expect(codigo.parsearFechaEvento("10/01/2026", 10)).toEqual({ mes: 10, anio: 2026 });
     });
 
@@ -140,7 +142,7 @@ describe("AV Codigo.gs - Eventos Extr.", () => {
     });
 
     it("acepta objetos Date directamente", () => {
-      const d = new Date(2026, 9, 15); // Octubre 15
+      const d = new Date(2026, 9, 15);
       expect(codigo.parsearFechaEvento(d)).toEqual({ mes: 10, anio: 2026 });
     });
   });
@@ -152,14 +154,45 @@ describe("AV Codigo.gs - Eventos Extr.", () => {
     });
   });
 
+  describe("generarDestacadosMes", () => {
+    it("genera el formato conciso solicitado para el mes en curso con eventos destacados", () => {
+      const items = [
+        { dt: "Norte", edif: "Gran via 12", tit: "People with Values" },
+        { dt: "Cataluña", edif: "Antoni Maura", tit: "People with Values" },
+        { dt: "Galicia", edif: "Canton Pequeño", tit: "People with Values" },
+        { dt: "GC", edif: "Dunas", tit: "People with Values" },
+        { dt: "Sur", edif: "Palmera", tit: "People with Values" },
+        { dt: "Centro", edif: "Recoletos", esp: "Recoletos. Sala Fronteras", tit: "XXI Comisión Biodiversidad Premios Fronteras" },
+        { dt: "Centro", edif: "Tres Cantos", esp: "TC. Salas Multiusos", tit: "Town Hall CIB/Alfatech" },
+      ];
+      const resultado = codigo.generarDestacadosMes(items, []);
+      expect(resultado).toContain("Destacan:");
+      expect(resultado).toContain("Despliegue global People with Values en 5 territoriales");
+      expect(resultado).toContain("XXI Comisión Biodiversidad (Recoletos)");
+      expect(resultado).toContain("Town Hall CIB/Alfatech (Tres Cantos)");
+    });
+
+    it("añade instalaciones del mes si existen", () => {
+      const items = [{ dt: "Centro", edif: "Ciudad BBVA", tit: "DemoDay" }];
+      const inst = ["Extensores USB-C Crestron"];
+      const res = codigo.generarDestacadosMes(items, inst);
+      expect(res).toContain("Destacan: DemoDay (Ciudad BBVA).");
+      expect(res).toContain("Instalaciones: Extensores USB-C Crestron.");
+    });
+
+    it("retorna mensaje amigable si el mes no tiene eventos", () => {
+      expect(codigo.generarDestacadosMes([], [])).toBe("Sin eventos destacados registrados este mes.");
+    });
+  });
+
   describe("CONFIG_EVENTOS_EXTR", () => {
     it("tiene la configuración esperada de filas para los meses", () => {
       expect(codigo.CONFIG_EVENTOS_EXTR.hoja).toBe("Eventos Extr.");
-      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[6]).toBe(8); // Junio fila 8
-      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[7]).toBe(9); // Julio fila 9
-      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[9]).toBe(10); // Septiembre fila 10
-      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[10]).toBe(11); // Octubre fila 11
-      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[11]).toBe(12); // Noviembre fila 12
+      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[6]).toBe(8);
+      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[7]).toBe(9);
+      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[9]).toBe(10);
+      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[10]).toBe(11);
+      expect(codigo.CONFIG_EVENTOS_EXTR.mesesFilas[11]).toBe(12);
     });
   });
 });
