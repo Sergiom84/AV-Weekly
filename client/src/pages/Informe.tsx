@@ -29,6 +29,7 @@ import PresentationOverlay from "@/components/deck/PresentationOverlay";
 import MonthlyTrendPage from "@/modules/av/pages/MonthlyTrendPage";
 import ResolutionDetailPage from "@/modules/av/pages/ResolutionDetailPage";
 import WeeklySupportPage from "@/modules/av/pages/WeeklySupportPage";
+import TerritorialEventsPage from "@/modules/av/pages/TerritorialEventsPage";
 import SlideFrame from "@/components/deck/SlideFrame";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -287,7 +288,30 @@ export default function Informe() {
             />
           </SlideFrame>
         );
+      case "territorialEvents":
+        return (
+          <SlideFrame number={number} muted={muted}>
+            <TerritorialEventsPage
+              page={page}
+              monthly={monthly}
+              editing={isEditing}
+              onChange={onChange}
+            />
+          </SlideFrame>
+        );
       case "notes":
+        if (page.id === "XupuUjDO039gwXaQI0dI9" || page.text?.title === "2.1 Territoriales") {
+          return (
+            <SlideFrame number={number} muted={muted}>
+              <TerritorialEventsPage
+                page={page}
+                monthly={monthly}
+                editing={isEditing}
+                onChange={onChange}
+              />
+            </SlideFrame>
+          );
+        }
         return (
           <SlideFrame number={number} muted={muted}>
             <NotesPage

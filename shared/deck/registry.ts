@@ -263,9 +263,10 @@ export const DECK_MODULES: DeckModule[] = [
         weeklySupport: "Soporte semanal",
         resolutionDetail: "Detalle de resolución",
         pendingItems: "Asuntos pendientes",
+        territorialEvents: "Territoriales",
       },
       storagePrefix: "av-weekly:sidebar-collapsed:",
-      monthlyKinds: ["monthlyTrend"],
+      monthlyKinds: ["monthlyTrend", "territorialEvents"],
     },
   },
 ];

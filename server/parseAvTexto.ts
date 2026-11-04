@@ -2,7 +2,7 @@ import { unwrapDriveCopiedTexto } from "./driveTexto.ts";
 import { densifyWeeklyMatrix } from "./parseInformeWeekly.ts";
 import type { WeeklyMatrix, WeeklyRow } from "../shared/deck/core.ts";
 import type { InformeWeeklyDataset, SupportType } from "../shared/informe.ts";
-import { INFORME_SUPPORT_TYPES, emptyWeeklyDataset } from "../shared/informe.ts";
+import { INFORME_SUPPORT_TYPES, emptyWeeklyDataset, type TerritorialEventsData, type TerritorialEventMonth } from "../shared/informe.ts";
 import {
   AV_TEXTO_HEADER,
   AV_TEXTO_META,
@@ -160,6 +160,72 @@ export function weeklyFromAvTexto(
   return weekly;
 }
 
+
+function parseEventosExtrLines(lines: string[][]): TerritorialEventsData | null {
+  if (lines.length === 0) return null;
+  let resumen = "";
+  const meses: TerritorialEventMonth[] = [];
+  const totales: Record<string, number> = {};
+
+  for (const parts of lines) {
+    const first = parts[0]?.trim() ?? "";
+    if (normalize(first) === "RESUMEN") {
+      resumen = parts.slice(1).join("\t").trim();
+      continue;
+    }
+    if (normalize(first) === "TOTAL") {
+      totales.Galicia = Number(parts[1]) || 0;
+      totales.Norte = Number(parts[2]) || 0;
+      totales.Cataluña = Number(parts[3]) || 0;
+      totales.Este = Number(parts[4]) || 0;
+      totales.Sur = Number(parts[5]) || 0;
+      totales.GC = Number(parts[6]) || 0;
+      totales.Centro = Number(parts[7]) || 0;
+      totales.Total = Number(parts[8]) || (
+        (Number(parts[1]) || 0) +
+        (Number(parts[2]) || 0) +
+        (Number(parts[3]) || 0) +
+        (Number(parts[4]) || 0) +
+        (Number(parts[5]) || 0) +
+        (Number(parts[6]) || 0) +
+        (Number(parts[7]) || 0)
+      );
+      continue;
+    }
+    if (parts.length >= 8) {
+      const g = Number(parts[1]) || 0;
+      const n = Number(parts[2]) || 0;
+      const c = Number(parts[3]) || 0;
+      const e = Number(parts[4]) || 0;
+      const s = Number(parts[5]) || 0;
+      const gc = Number(parts[6]) || 0;
+      const ce = Number(parts[7]) || 0;
+      const tot = Number(parts[8]) || (g + n + c + e + s + gc + ce);
+      meses.push({
+        mes: first,
+        galicia: g,
+        norte: n,
+        cataluna: c,
+        este: e,
+        sur: s,
+        gc: gc,
+        centro: ce,
+        total: tot,
+      });
+    }
+  }
+
+  const withData = meses.filter(m => m.total > 0);
+  const mesActual = withData.length > 0 ? withData[withData.length - 1].mes : (meses[meses.length - 1]?.mes ?? "Octubre");
+
+  return {
+    meses,
+    totales,
+    resumen,
+    mesActual,
+  };
+}
+
 export function parseAvTexto(input: string): AvTextoParseResult {
   const lines = unwrapDriveCopiedTexto(input).split("\n");
 
@@ -175,7 +241,9 @@ export function parseAvTexto(input: string): AvTextoParseResult {
     resolucion: [],
     mensual: [],
     comparativa: [],
+    eventosExtr: null,
   };
+  const rawEventosExtr: string[][] = [];
 
   let section: string | null = null;
 
@@ -243,6 +311,11 @@ export function parseAvTexto(input: string): AvTextoParseResult {
       continue;
     }
 
+    if (section === AV_TEXTO_SECTIONS.eventosExtr) {
+      rawEventosExtr.push(parts);
+      continue;
+    }
+
     if (section === AV_TEXTO_SECTIONS.comparativa) {
       if (parts.length < 4) fail(at, "se esperaban anio, semana, tipo y tickets.");
       document.comparativa.push({
@@ -257,12 +330,16 @@ export function parseAvTexto(input: string): AvTextoParseResult {
     fail(at, `sección desconocida: "${section}".`);
   }
 
+  if (rawEventosExtr.length > 0) {
+    document.eventosExtr = parseEventosExtrLines(rawEventosExtr);
+  }
+
   const stamp = { sourceFile: null, uploadedAt: null };
 
   return {
     document,
     weekly: weeklyFromAvTexto(document, stamp),
-    monthly: monthlyFromTexto(document.mensual, stamp),
+    monthly: monthlyFromTexto(document.mensual, stamp, document.eventosExtr),
     comparisons: comparisonsFromTexto(document.comparativa),
     resolutions: resolutionsFromTexto(document.resolucion),
   };

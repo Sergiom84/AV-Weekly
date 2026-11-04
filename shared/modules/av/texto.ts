@@ -1,5 +1,6 @@
 import type {
   InformeMonthlyDataset,
+  TerritorialEventsData,
   ResolutionRow,
   SupportType,
   WeeklyComparison,
@@ -24,6 +25,7 @@ export const AV_TEXTO_SECTIONS = {
   mensual: "MENSUAL",
   /** `anio` `semana` `tipo` `tickets` — previous-year weekly totals. */
   comparativa: "COMPARATIVA",
+  eventosExtr: "EVENTOS_EXTR",
 } as const;
 
 export const AV_TEXTO_META = {
@@ -96,6 +98,7 @@ export interface AvTextoDocument {
   resolucion: AvTextoResolucionRow[];
   mensual: AvTextoMensualRow[];
   comparativa: AvTextoComparativaRow[];
+  eventosExtr?: TerritorialEventsData | null;
 }
 
 const TAB = "\t";
@@ -148,6 +151,28 @@ export function serializeAvTexto(document: AvTextoDocument): string {
         line(row.year, row.week, AV_TEXTO_TYPE_LABEL[row.type], row.tickets)
       )
     ),
+    ...(document.eventosExtr
+      ? section(
+          AV_TEXTO_SECTIONS.eventosExtr,
+          [
+            ...(document.eventosExtr.resumen ? [line("resumen", document.eventosExtr.resumen)] : []),
+            ...document.eventosExtr.meses.map((m) =>
+              line(m.mes, m.galicia, m.norte, m.cataluna, m.este, m.sur, m.gc, m.centro, m.total)
+            ),
+            line(
+              "Total",
+              document.eventosExtr.totales.Galicia ?? 0,
+              document.eventosExtr.totales.Norte ?? 0,
+              document.eventosExtr.totales.Cataluña ?? 0,
+              document.eventosExtr.totales.Este ?? 0,
+              document.eventosExtr.totales.Sur ?? 0,
+              document.eventosExtr.totales.GC ?? 0,
+              document.eventosExtr.totales.Centro ?? 0,
+              document.eventosExtr.totales.Total ?? 0
+            ),
+          ]
+        )
+      : []),
   ];
 
   return [...preamble, ...body, ""].join("\n");
@@ -159,10 +184,12 @@ export function emptyMonths(): (number | null)[] {
 
 export function monthlyFromTexto(
   rows: AvTextoMensualRow[],
-  stamp: { sourceFile: string | null; uploadedAt: string | null }
+  stamp: { sourceFile: string | null; uploadedAt: string | null },
+  territoriales?: TerritorialEventsData | null
 ): InformeMonthlyDataset {
   if (rows.length === 0) {
-    return emptyMonthlyDataset();
+    const empty = emptyMonthlyDataset();
+    return { ...empty, territoriales: territoriales ?? null };
   }
 
   const byType = emptyMonthlyDataset().byType;
@@ -178,7 +205,7 @@ export function monthlyFromTexto(
     new Set(rows.map((row) => row.year))
   ).sort((a, b) => a - b);
 
-  return { byType, years, sourceFile: stamp.sourceFile, uploadedAt: stamp.uploadedAt };
+  return { byType, years, sourceFile: stamp.sourceFile, uploadedAt: stamp.uploadedAt, territoriales: territoriales ?? null };
 }
 
 export function comparisonsFromTexto(
@@ -260,3 +287,5 @@ export function resolutionsFromTexto(
 
   return result;
 }
+
+export type { TerritorialEventsData, TerritorialEventMonth } from './types.ts';

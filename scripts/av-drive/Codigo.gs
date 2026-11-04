@@ -1441,6 +1441,15 @@ function procesarMes() {
 
     // Sincronizar meses previos de 2026 que ya estuvieran en la tabla mensual pero vacíos en la multianual
     sincronizarHistoricoMensual2026Silencioso(ss);
+
+    // Sincronizar eventos e instalaciones
+    try {
+      var ultimoMes = (meses && meses.length > 0) ? (meses[meses.length - 1] + 1) : null;
+      sincronizarEventosExtrSilencioso(ss, ultimoMes);
+    } catch (eEv) {
+      Logger.log('Aviso al sincronizar eventos en procesarMes: ' + eEv.message);
+    }
+
     SpreadsheetApp.flush();
 
     const archivoTxt = escribirPlanoTxt();
@@ -2315,6 +2324,30 @@ function serializarPlanoAv(numSemana) {
       break;
     }
   });
+
+
+  var hojaExtr = ss.getSheetByName(CONFIG_EVENTOS_EXTR.hoja);
+  if (hojaExtr && hojaExtr.getLastRow() >= 3) {
+    lineas.push('', '[EVENTOS_EXTR]');
+    var resumenVal = String(hojaExtr.getRange('A16').getValue() || '').replace(/\r?\n/g, ' ').trim();
+    if (resumenVal) {
+      lineas.push('resumen\t' + resumenVal);
+    }
+    var maxFila = Math.min(hojaExtr.getLastRow(), 25);
+    var datosExtr = hojaExtr.getRange(2, 1, maxFila - 1, 9).getValues();
+    for (var e = 1; e < datosExtr.length; e++) {
+      var filaMes = datosExtr[e];
+      var nombreFila = String(filaMes[0] || '').trim();
+      if (!nombreFila) continue;
+      var vals = [];
+      for (var c = 1; c < 9; c++) {
+        var v = Number(filaMes[c]);
+        vals.push(isNaN(v) ? 0 : v);
+      }
+      lineas.push([nombreFila].concat(vals).join('\t'));
+      if (nombreFila.toLowerCase() === 'total') break;
+    }
+  }
 
   return lineas.join('\n') + '\n';
 }

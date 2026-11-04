@@ -6,6 +6,21 @@ import type {
   WeeklyMatrix,
 } from "../../deck/core.ts";
 import { followLatestWeekSelection } from "../../deck/core.ts";
+import type {
+  TerritorialEventMonth,
+  TerritorialEventsData,
+} from "./territorialesDefault.ts";
+
+export type {
+  TerritorialEventMonth,
+  TerritorialEventsData,
+  TerritorioKey,
+} from "./territorialesDefault.ts";
+export {
+  DEFAULT_TERRITORIALES_DATA,
+  TERRITORIOS_LABELS,
+  TERRITORIO_COLORS,
+} from "./territorialesDefault.ts";
 
 /**
  * Contract for the "Informe" AV deck: a slide-based weekly report.
@@ -45,7 +60,8 @@ export type AvDeckPageKind =
   | "monthlyTrend"
   | "weeklySupport"
   | "resolutionDetail"
-  | "pendingItems";
+  | "pendingItems"
+  | "territorialEvents";
 
 export type AvDeckPage = DeckPage<AvDeckPageKind, SupportType>;
 export type AvDeckState = DeckState<AvDeckPageKind, SupportType>;
@@ -150,6 +166,7 @@ export interface InformeMonthlyDataset {
   years: number[];
   sourceFile: string | null;
   uploadedAt: string | null;
+  territoriales?: TerritorialEventsData | null;
 }
 
 export interface InformePayload {

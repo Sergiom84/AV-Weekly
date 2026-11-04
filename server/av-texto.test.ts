@@ -84,6 +84,25 @@ describe("AV texto plano", () => {
     );
   });
 
+  it("lee la sección EVENTOS_EXTR con resumen, meses y totales", () => {
+    const textWithExtr = `${SAMPLE}
+[EVENTOS_EXTR]
+resumen\tDestacan: Despliegue global People with Values en 6 territoriales; XXI Comisión Biodiversidad Premios Fronteras (Recoletos).
+Enero\t4\t8\t4\t0\t2\t1\t5\t24
+Octubre\t1\t4\t4\t0\t3\t2\t6\t20
+Total\t11\t47\t31\t0\t8\t5\t33\t135
+`;
+    const parsed = parseAvTexto(textWithExtr);
+    expect(parsed.document.eventosExtr).not.toBeNull();
+    expect(parsed.document.eventosExtr?.resumen).toContain("People with Values");
+    expect(parsed.document.eventosExtr?.meses).toHaveLength(2);
+    expect(parsed.document.eventosExtr?.totales.Galicia).toBe(11);
+    expect(parsed.document.eventosExtr?.totales.Norte).toBe(47);
+    expect(parsed.document.eventosExtr?.totales.Total).toBe(135);
+    expect(parsed.document.eventosExtr?.mesActual).toBe("Octubre");
+    expect(parsed.monthly.territoriales).toEqual(parsed.document.eventosExtr);
+  });
+
   it("rechaza un encabezado ajeno", () => {
     expect(() => parseAvTexto("AGA TEXTO PLANO v1\n")).toThrow(/plano de AV/);
   });

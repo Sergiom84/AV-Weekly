@@ -38,6 +38,9 @@ export {
 } from "./deck/core.ts";
 
 export type {
+  TerritorialEventsData,
+  TerritorialEventMonth,
+  TerritorioKey,
   AvDeckPage,
   AvDeckPage as DeckPage,
   AvDeckPageKind,
@@ -54,6 +57,9 @@ export type {
 } from "./modules/av/types.ts";
 
 export {
+  DEFAULT_TERRITORIALES_DATA,
+  TERRITORIOS_LABELS,
+  TERRITORIO_COLORS,
   AV_SERVICE,
   DEFAULT_VISIBLE_ROWS,
   INFORME_SUPPORT_TYPES,
