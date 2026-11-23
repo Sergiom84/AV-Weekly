@@ -7,8 +7,22 @@ mano.
 
 | Fichero | Qué es |
 | --- | --- |
-| `Codigo.gs` | El script. Se pega en el editor de Apps Script de la hoja. |
-| `verificar-local.mjs` | Ejecuta la agregación de `Codigo.gs` fuera de Google, contra ficheros del disco. |
+| `00_Entorno_IDs.gs` | **Solo IDs de carpetas y libro.** No se toca al actualizar la lógica entre casa y trabajo. |
+| `01_Config_y_Menu.gs` | Pestañas, semillas, menú `⭐ AGA Weekly`, acceso a hojas y lectura de `Configuración`. |
+| `02_Lectura_Drive_y_Mapas.gs` | Lectura y conversión temporal en Drive y tablas de mapeo. |
+| `03_Agregacion_y_Fuentes.gs` | Conteos y lectura de GPS, Gestionado, Office y pestaña `Anual`. |
+| `04_Procesar_Semana_y_PLANO.gs` | Flujo `procesarSemana()`, `Comprobación`, `PLANO` y guardado de `.txt` en Drive. |
+| `05_Inicializacion.gs` | Creación inicial de pestañas, mapas e `Instrucciones` (`inicializarHoja()`). |
+| `trabajo/00_Entorno_IDs.gs` | Plantilla de `00_Entorno_IDs.gs` con los IDs del entorno de trabajo. |
+| `verificar-local.mjs` | Ejecuta la agregación de los bloques `.gs` fuera de Google, contra ficheros del disco. |
+
+## Estructura modular (casa vs trabajo)
+
+En Google Apps Script todos los `.gs` comparten el mismo ámbito global. Para
+actualizar el entorno de trabajo sin pisar sus carpetas ni su libro, **deja
+intacto `00_Entorno_IDs.gs`** (creado desde `trabajo/00_Entorno_IDs.gs`) y
+copia únicamente los bloques modificados (`01_` a `05_`). `.claspignore` deja
+fuera `trabajo/`, tests y documentación si usas `clasp`.
 
 El formato del texto lo declara [`shared/modules/aga/texto.ts`](../../shared/modules/aga/texto.ts)
 y lo lee [`server/parseAgaTexto.ts`](../../server/parseAgaTexto.ts). Si cambia
@@ -17,7 +31,9 @@ una sección hay que tocar los tres sitios.
 ## Instalación, una sola vez
 
 1. Crear una hoja de cálculo nueva en Drive, por ejemplo `AV Weekly - AGA`.
-2. `Extensiones > Apps Script`, borrar lo que haya y pegar `Codigo.gs`. Guardar.
+2. `Extensiones > Apps Script`, crear los bloques `00_Entorno_IDs.gs` a
+   `05_Inicializacion.gs` (en el trabajo usar `trabajo/00_Entorno_IDs.gs`),
+   guardar.
 3. Volver a la hoja y recargar. Aparece el menú `⭐ AGA Weekly`.
 4. `⭐ AGA Weekly > Inicializar hoja`. Crea las pestañas y las tablas de mapeo.
 5. Crear la carpeta de Drive donde se dejarán los ficheros y pegar su ID en la
@@ -62,9 +78,9 @@ bloquea el proceso. Las fechas ya normalizadas no se invierten otra vez. Los
 productos Office sin familia también bloquean la generación:
 `MICROSOFT OFFICE 2021 (MAC)` tiene una serie propia y no se suma a Standard.
 
-Actualizar este archivo o `Codigo.gs` localmente no actualiza el script instalado
-en Google Sheets. En una hoja existente, sustituir y guardar el script; conservar
-las pestañas de mapas y no volver a inicializarlas. Antes de importar, verificar
+Actualizar este archivo o los bloques `.gs` localmente no actualiza el script instalado
+en Google Sheets. En una hoja existente, sustituir los bloques `01_`–`05_` y guardar
+(conservando su `00_Entorno_IDs.gs`, las pestañas de mapas y sin volver a inicializarlas). Antes de importar, verificar
 fecha, total en gestión, total gestionado y desglose Office en `Comprobación`.
 Un TXT corregido no elimina automáticamente claves erróneas importadas antes:
 esa reparación necesita revisar el histórico y su copia de respaldo.
@@ -126,8 +142,8 @@ aunque tuviera cifra: es justo el fallo del método manual que esto sustituye.
 
 ## Verificación local
 
-`Codigo.gs` no se puede probar con el resto de la suite: solo corre dentro de una
-hoja. `verificar-local.mjs` carga ese mismo fichero en un VM de Node con los
+Los módulos `.gs` no se pueden probar por separado en Google: solo corren dentro de una
+hoja. `verificar-local.mjs` carga los bloques `00_`–`05_` en orden en un VM de Node con los
 globales de Google simulados y le da los tres libros desde el disco:
 
 ```bash

@@ -1,0 +1,23 @@
+{
+  "scriptId": "1eBCEeuIzTxJUA8S2j0KXp6bQtA1Fc-dGux8__IHG67WDnma0Q2byTpA4",
+  "rootDir": ".",
+  "scriptExtensions": [
+    ".js",
+    ".gs"
+  ],
+  "htmlExtensions": [
+    ".html"
+  ],
+  "jsonExtensions": [
+    ".json"
+  ],
+  "filePushOrder": [
+    "00_Entorno_IDs.gs",
+    "01_Config_y_Menu.gs",
+    "02_Lectura_Drive_y_Mapas.gs",
+    "03_Agregacion_y_Fuentes.gs",
+    "04_Procesar_Semana_y_PLANO.gs",
+    "05_Inicializacion.gs"
+  ],
+  "skipSubdirectories": true
+}

@@ -18,7 +18,10 @@
     "av:clasp:pull": "cd scripts/av-drive && clasp pull",
     "informatica:clasp:status": "cd scripts/informatica-drive && clasp status",
     "informatica:clasp:push": "cd scripts/informatica-drive && clasp push --force",
-    "informatica:clasp:pull": "cd scripts/informatica-drive && clasp pull"
+    "informatica:clasp:pull": "cd scripts/informatica-drive && clasp pull",
+    "aga:clasp:status": "cd scripts/aga-drive && clasp status",
+    "aga:clasp:push": "cd scripts/aga-drive && clasp push --force",
+    "aga:clasp:pull": "cd scripts/aga-drive && clasp pull"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

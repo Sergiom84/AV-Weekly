@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createContext, runInContext } from "node:vm";
 import * as XLSX from "xlsx";
 import { parseAgaOfficeWorkbook, agaOfficeDatesAreSwapped } from "./parseAgaOffice.ts";
@@ -26,7 +28,15 @@ function managedRows(normalized = false) {
 }
 function drive() {
   const context = createContext({ Date });
-  runInContext(readFileSync(new URL("../scripts/aga-drive/Codigo.gs", import.meta.url), "utf8"), context);
+  const dir = fileURLToPath(new URL("../scripts/aga-drive/", import.meta.url));
+  const gsFiles = readdirSync(dir)
+    .filter((f) => /^\d+_.*\.gs$/.test(f))
+    .sort();
+
+  for (const file of gsFiles) {
+    runInContext(readFileSync(join(dir, file), "utf8"), context, { filename: file });
+  }
+
   return context;
 }
 function entry(script: ReturnType<typeof drive>, headers: string[], rows: unknown[][]) {

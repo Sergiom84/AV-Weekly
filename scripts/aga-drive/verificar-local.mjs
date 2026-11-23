@@ -1,9 +1,9 @@
 /**
  * Runs the Drive Apps Script against real exports, outside Google.
  *
- * `Codigo.gs` cannot be unit-tested where it lives: it only runs inside a
- * spreadsheet, and the week it produces is only correct if it agrees with the
- * deck. This harness loads that same file into a Node VM with the Google
+ * The modular `00_`–`05_` `.gs` blocks cannot be unit-tested where they live: they only run inside a
+ * spreadsheet, and the week they produce is only correct if it agrees with the
+ * deck. This harness loads those blocks in order into a Node VM with the Google
  * globals stubbed, feeds it the three workbooks from disk, and prints the text
  * it would write into the `PLANO` tab.
  *
@@ -26,7 +26,7 @@ import * as XLSX from "xlsx";
 const HERE = fileURLToPath(new URL(".", import.meta.url));
 
 /* -------------------------------------------------------------------------- */
-/* Loading Codigo.gs                                                           */
+/* Loading modular .gs scripts                                                 */
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -37,7 +37,9 @@ const HERE = fileURLToPath(new URL(".", import.meta.url));
  * Drive pass this harness and fail in production.
  */
 function loadScript() {
-  const source = readFileSync(join(HERE, "Codigo.gs"), "utf8");
+  const gsFiles = readdirSync(HERE)
+    .filter((f) => /^\d+_.*\.gs$/.test(f))
+    .sort();
   const context = createContext({
     console,
     // The host `Date`, so that `value instanceof Date` holds for the dates the
@@ -51,7 +53,9 @@ function loadScript() {
     },
   });
 
-  runInContext(source, context, { filename: "Codigo.gs" });
+  for (const file of gsFiles) {
+    runInContext(readFileSync(join(HERE, file), "utf8"), context, { filename: file });
+  }
 
   return context;
 }

@@ -1,0 +1,8 @@
+**/*
+!00_Entorno_IDs.gs
+!01_Config_y_Menu.gs
+!02_Lectura_Drive_y_Mapas.gs
+!03_Agregacion_y_Fuentes.gs
+!04_Procesar_Semana_y_PLANO.gs
+!05_Inicializacion.gs
+!appsscript.json
