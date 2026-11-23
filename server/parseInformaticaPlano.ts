@@ -1,10 +1,13 @@
 import * as XLSX from "xlsx";
+import { isoWeekBounds } from "../shared/deck/core.ts";
+import { parseExcelDate } from "./excelDate.ts";
 import { isoWeek, isoWeekYear } from "./isoWeek.ts";
 import {
   INFORMATICA_SHEETS,
   type InformaticaCitaAnualRow,
   type InformaticaCitaRow,
   type InformaticaDataset,
+  type InformaticaDateCell,
   type InformaticaEdificioRow,
   type InformaticaComparativaRow,
   type InformaticaEncuestaRow,
@@ -1391,4 +1394,76 @@ export function foldCompleteInformaticaDataset(
   stored.sheetsFound = sectionsWithRows(stored);
 
   return stored;
+}
+
+/**
+ * Projects the three accumulated request sections down to `dataset.activeCutoff`
+ * when an older `.txt` is loaded over newer stored data.
+ */
+export function projectInformaticaDatasetToCutoff(
+  dataset: InformaticaDataset
+): InformaticaDataset {
+  const match = dataset.activeCutoff?.trim().match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+  if (!match) {
+    return dataset;
+  }
+
+  const cutoffDay = `${match[1]}-${match[2]}-${match[3]}`;
+  const cutoffDate = new Date(`${cutoffDay}T00:00:00Z`);
+  if (Number.isNaN(cutoffDate.getTime())) {
+    return dataset;
+  }
+
+  const cutoffIsoYear = isoWeekYear(cutoffDate);
+  const cutoffIsoWeek = isoWeek(cutoffDate);
+  const cutoffWeekEnd = isoWeekBounds(cutoffIsoYear, cutoffIsoWeek).end;
+  const cutoffMonth = `${match[1]}/${match[2]}`;
+
+  const keepPeriodRow = (row: {
+    fecha: InformaticaDateCell;
+    mes: string;
+    semana: number;
+  }): boolean => {
+    if (row.fecha !== null && row.fecha !== undefined && row.fecha !== "") {
+      const parsed = parseExcelDate(row.fecha);
+      if (parsed) {
+        return parsed.toISOString().slice(0, 10) <= cutoffWeekEnd;
+      }
+    }
+
+    const rowYear = Number(row.mes.slice(0, 4));
+    if (!Number.isInteger(rowYear)) {
+      return true;
+    }
+
+    return (
+      rowYear < cutoffIsoYear ||
+      (rowYear === cutoffIsoYear && row.semana <= cutoffIsoWeek)
+    );
+  };
+
+  const peticiones = dataset.peticiones?.filter(keepPeriodRow);
+  const peticionesProducto = dataset.peticionesProducto?.filter(keepPeriodRow);
+  const peticionesMes = dataset.peticionesMes?.filter(
+    (row) => row.mes <= cutoffMonth
+  );
+
+  const projected: InformaticaDataset = {
+    ...dataset,
+    ...(peticiones && peticiones.length > 0 ? { peticiones } : { peticiones: undefined }),
+    ...(peticionesProducto && peticionesProducto.length > 0
+      ? { peticionesProducto }
+      : { peticionesProducto: undefined }),
+    ...(peticionesMes && peticionesMes.length > 0
+      ? { peticionesMes }
+      : { peticionesMes: undefined }),
+  };
+
+  if (!projected.peticiones) delete projected.peticiones;
+  if (!projected.peticionesProducto) delete projected.peticionesProducto;
+  if (!projected.peticionesMes) delete projected.peticionesMes;
+
+  projected.sheetsFound = sectionsWithRows(projected);
+
+  return projected;
 }

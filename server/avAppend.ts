@@ -7,7 +7,7 @@
  * A week counts as stored when its column has at least one ticket, so the zero
  * columns that densifying inserts for missing weeks can still be filled later.
  */
-import type { WeeklyMatrix } from "../shared/deck/core.ts";
+import { isoWeekBounds, type WeeklyMatrix } from "../shared/deck/core.ts";
 import { INFORME_SUPPORT_TYPES, type SupportType } from "../shared/informe.ts";
 import type {
   InformeMonthlyDataset,
@@ -136,5 +136,151 @@ export function appendMonthlyDataset(
     sourceFile: incoming.sourceFile ?? stored.sourceFile,
     uploadedAt: incoming.uploadedAt ?? stored.uploadedAt,
     territoriales: incoming.territoriales ?? stored.territoriales ?? null,
+  };
+}
+
+/** Slices a weekly matrix down to `weeks <= maxWeek` and recomputes row/column totals. */
+export function sliceWeeklyMatrixToWeek(
+  matrix: WeeklyMatrix | null,
+  maxWeek: number
+): WeeklyMatrix | null {
+  if (!matrix) return null;
+
+  const indices: number[] = [];
+  for (let i = 0; i < matrix.weeks.length; i += 1) {
+    if (matrix.weeks[i] <= maxWeek) {
+      indices.push(i);
+    }
+  }
+  if (indices.length === 0) return null;
+
+  const weeks = indices.map((i) => matrix.weeks[i]);
+  const rows = matrix.rows.map((row) => {
+    const values = indices.map((i) => row.values[i] ?? 0);
+    return {
+      label: row.label,
+      values,
+      total: values.reduce((sum, value) => sum + value, 0),
+    };
+  });
+  const totals = weeks.map((_, index) =>
+    rows.reduce((sum, row) => sum + (row.values[index] ?? 0), 0)
+  );
+
+  return { weeks, rows, totals };
+}
+
+/** Projects a stored weekly dataset down to `activeWeek` without modifying storage. */
+export function projectAvWeeklyToWeek(
+  weekly: InformeWeeklyDataset,
+  activeWeek?: number
+): InformeWeeklyDataset {
+  if (!activeWeek || activeWeek <= 0 || activeWeek >= weekly.maxWeek) {
+    return weekly;
+  }
+
+  const byType = Object.fromEntries(
+    INFORME_SUPPORT_TYPES.map((type) => {
+      const data = weekly.byType[type];
+      const resolutionsByWeek = Object.fromEntries(
+        Object.entries(data.resolutionsByWeek).filter(
+          ([weekKey]) => Number(weekKey) <= activeWeek
+        )
+      );
+      return [
+        type,
+        {
+          ...data,
+          categories: sliceWeeklyMatrixToWeek(data.categories, activeWeek),
+          locations: sliceWeeklyMatrixToWeek(data.locations, activeWeek),
+          resolutionsByWeek,
+        },
+      ];
+    })
+  ) as InformeWeeklyDataset["byType"];
+
+  return {
+    ...weekly,
+    byType,
+    maxWeek: activeWeek,
+  };
+}
+
+/** Projects a stored monthly dataset down to the cutoff month of `activeWeek`. */
+export function projectAvMonthlyToWeek(
+  monthly: InformeMonthlyDataset,
+  year: string | undefined,
+  activeWeek: number | undefined,
+  storedMaxWeek: number
+): InformeMonthlyDataset {
+  const { activeMonthlyOverride: storedOverride, ...baseMonthly } = monthly;
+  const numericYear = Number(year);
+
+  if (
+    !activeWeek ||
+    activeWeek <= 0 ||
+    activeWeek >= storedMaxWeek ||
+    !year ||
+    !Number.isInteger(numericYear)
+  ) {
+    return baseMonthly;
+  }
+
+  const weekEnd = isoWeekBounds(numericYear, activeWeek).end;
+  const cutoffMonth =
+    Number(weekEnd.slice(0, 4)) > numericYear
+      ? 11
+      : Number(weekEnd.slice(5, 7)) - 1;
+
+  const override =
+    storedOverride &&
+    storedOverride.week === activeWeek &&
+    storedOverride.year === year
+      ? storedOverride
+      : null;
+
+  const byType = Object.fromEntries(
+    INFORME_SUPPORT_TYPES.map((type) => {
+      const storedYears = monthly.byType[type] ?? {};
+      const nextYears: Record<string, (number | null)[]> = {};
+
+      for (const [yearKey, values] of Object.entries(storedYears)) {
+        const y = Number(yearKey);
+        if (y < numericYear) {
+          nextYears[yearKey] = values;
+        }
+      }
+
+      const storedCurrent = storedYears[year];
+      const overrideCurrent = override?.byType[type]?.[year];
+      if (storedCurrent || overrideCurrent) {
+        nextYears[year] = Array.from({ length: 12 }, (_, index) => {
+          if (index > cutoffMonth) return null;
+          if (index === cutoffMonth) {
+            return overrideCurrent?.[index] ?? storedCurrent?.[index] ?? null;
+          }
+          return storedCurrent?.[index] ?? overrideCurrent?.[index] ?? null;
+        });
+      }
+
+      return [type, nextYears];
+    })
+  ) as InformeMonthlyDataset["byType"];
+
+  const yearsSet = new Set<number>();
+  for (const type of INFORME_SUPPORT_TYPES) {
+    for (const [yearKey, values] of Object.entries(byType[type])) {
+      if (values.some((value) => value !== null && value !== undefined)) {
+        yearsSet.add(Number(yearKey));
+      }
+    }
+  }
+  const years = Array.from(yearsSet).sort((left, right) => left - right);
+
+  return {
+    ...baseMonthly,
+    byType,
+    years,
+    territoriales: override?.territoriales ?? baseMonthly.territoriales ?? null,
   };
 }

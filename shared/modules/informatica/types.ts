@@ -430,6 +430,13 @@ export interface InformaticaDataset {
    * upload, so a complete-scope import cannot wipe it.
    */
   historico?: InformaticaHistoricoRow[];
+  /**
+   * Cutoff date (`YYYY-MM-DD`) when an older `.txt` is loaded on top of newer
+   * stored data. Absent means no extra cutoff projection is applied.
+   */
+  activeCutoff?: string;
+  /** Highest `asOfDate` (`YYYY-MM-DD`) seen in stored uploads. */
+  maxAsOfDate?: string;
   source: DatasetSource;
   /** Sheets found in the uploaded workbook, in workbook order. */
   sheetsFound?: InformaticaSectionKey[];

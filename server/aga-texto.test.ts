@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeAgaAnnualSection, parseAgaTexto } from "./parseAgaTexto.ts";
+import { mergeAgaAnnualSection, parseAgaTexto, projectAgaDatasetToWeek } from "./parseAgaTexto.ts";
 import { serializeAgaTexto } from "../shared/modules/aga/texto.ts";
 import type { AgaDataset } from "../shared/modules/aga/types.ts";
 
@@ -246,5 +246,132 @@ describe("mergeAgaAnnualSection", () => {
 
     expect(merged.peticiones[0].values.slice(0, 4)).toEqual([10, 20, 99, 40]);
     expect(merged.posiciones).toHaveLength(1);
+  });
+});
+
+describe("projectAgaDatasetToWeek", () => {
+  it("slices weeks, managed, office and annual sections to activeWeek without mutating storage", () => {
+    const dataset: AgaDataset = {
+      activeWeek: "2026-08-17",
+      weeks: [
+        {
+          week: "2026-08-10",
+          reportWeek: 32,
+          total: 800,
+          byDepartment: [{ label: "GAM", count: 50 }],
+          byDepartmentRaw: [{ label: "GAM", count: 50 }],
+          byProject: [{ label: "A", count: 10 }],
+        },
+        {
+          week: "2026-08-17",
+          reportWeek: 33,
+          total: 846,
+          byDepartment: [{ label: "GAM", count: 45 }],
+          byDepartmentRaw: [{ label: "GAM", count: 45 }],
+          byProject: [{ label: "A", count: 12 }],
+        },
+        {
+          week: "2026-09-07",
+          reportWeek: 36,
+          total: 900,
+          byDepartment: [{ label: "GAM", count: 60 }],
+          byDepartmentRaw: [{ label: "GAM", count: 60 }],
+          byProject: [{ label: "A", count: 15 }],
+        },
+      ],
+      managed: {
+        weeklyTotals: [
+          { week: "2026-08-17", total: 300 },
+          { week: "2026-09-07", total: 350 },
+        ],
+        locationTotals: [
+          { week: "2026-08-17", total: 296 },
+          { week: "2026-09-07", total: 340 },
+        ],
+        byDepartment: [
+          {
+            label: "GAM",
+            counts: [
+              { week: "2026-08-17", count: 50 },
+              { week: "2026-09-07", count: 70 },
+            ],
+          },
+          {
+            label: "SoloSeptiembre",
+            counts: [{ week: "2026-09-07", count: 10 }],
+          },
+        ],
+        byProduct: [
+          {
+            label: "PORTATIL",
+            counts: [
+              { week: "2026-08-17", count: 20 },
+              { week: "2026-09-07", count: 25 },
+            ],
+          },
+        ],
+        byLocation: [
+          {
+            label: "Sede",
+            counts: [
+              { week: "2026-08-17", count: 175 },
+              { week: "2026-09-07", count: 200 },
+            ],
+          },
+        ],
+        byDepartmentProduct: [
+          {
+            department: "GAM",
+            rows: [
+              {
+                label: "PORTATIL",
+                counts: [
+                  { week: "2026-08-17", count: 6 },
+                  { week: "2026-09-07", count: 9 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      office: {
+        months: ["2026-07", "2026-08", "2026-09"],
+        families: [{ label: "OFFICE 365", values: [30, 44, 55] }],
+      },
+      annual: {
+        peticiones: [
+          { year: 2025, values: Array(12).fill(100) },
+          { year: 2026, values: [10, 20, 30, 40, 50, 60, 70, 80, 90, null, null, null] },
+          { year: 2027, values: [5, ...Array(11).fill(null)] },
+        ],
+        posiciones: [
+          { year: 2026, values: [11, 21, 31, 41, 51, 61, 71, 81, 91, null, null, null] },
+        ],
+      },
+      source: { sourceFile: "test.txt", uploadedAt: "2026-08-24T08:00:00.000Z" },
+    };
+
+    const projected = projectAgaDatasetToWeek(dataset);
+
+    expect(projected.weeks.map((w) => w.week)).toEqual(["2026-08-10", "2026-08-17"]);
+    expect(projected.managed?.weeklyTotals).toEqual([{ week: "2026-08-17", total: 300 }]);
+    expect(projected.managed?.locationTotals).toEqual([{ week: "2026-08-17", total: 296 }]);
+    expect(projected.managed?.byDepartment).toEqual([
+      { label: "GAM", counts: [{ week: "2026-08-17", count: 50 }] },
+    ]);
+    expect(projected.managed?.byDepartmentProduct[0].rows[0].counts).toEqual([
+      { week: "2026-08-17", count: 6 },
+    ]);
+    expect(projected.office).toEqual({
+      months: ["2026-07", "2026-08"],
+      families: [{ label: "OFFICE 365", values: [30, 44] }],
+    });
+    expect(projected.annual?.peticiones).toEqual([
+      { year: 2025, values: Array(12).fill(100) },
+      { year: 2026, values: [10, 20, 30, 40, 50, 60, 70, 80, null, null, null, null] },
+    ]);
+    expect(projected.annual?.posiciones).toEqual([
+      { year: 2026, values: [11, 21, 31, 41, 51, 61, 71, 81, null, null, null, null] },
+    ]);
   });
 });

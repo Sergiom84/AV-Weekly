@@ -4,6 +4,7 @@ import multer from "multer";
 import { createDeckPdfRenderer } from "./pdf-render.js";
 import { listAvReports, readAvReport, saveAvReport } from "./av-report-archive.js";
 import * as XLSX from "xlsx";
+import { isoWeekBounds } from "../shared/deck/core.ts";
 import type {
   DeckState,
   InformeMonthlyDataset,
@@ -74,7 +75,7 @@ import {
   parseAgaWorkbook,
   type AgaImportReport,
 } from "./parseAgaPlano.js";
-import { mergeAgaAnnualSection, parseAgaTexto } from "./parseAgaTexto.js";
+import { mergeAgaAnnualSection, parseAgaTexto, projectAgaDatasetToWeek } from "./parseAgaTexto.js";
 import {
   mergeAgaOfficeSection,
   parseAgaOfficeWorkbook,
@@ -89,13 +90,16 @@ import { AGA_BUILDING_LOCATIONS } from "./agaLocationMap.js";
 import {
   mergeOficinasDataset,
   parseOficinasWorkbook,
+  projectOficinasDatasetToWeek,
   type OficinasImportReport,
 } from "./parseOficinasPlano.js";
+import { reportWeek as oficinasReportWeek } from "../shared/modules/oficinas/derived.ts";
 import {
   foldCompleteInformaticaDataset,
   mergeInformaticaDataset,
   mergeInformaticaWorkbooks,
   parseInformaticaPlanoWorkbook,
+  projectInformaticaDatasetToCutoff,
   selectInformaticaWorkbooksForMerge,
   type InformaticaImportReport,
   type InformaticaUploadWorkbook,
@@ -118,6 +122,8 @@ import {
   appendMonthlyDataset,
   appendResolutionWeeks,
   appendWeeklyDataset,
+  projectAvMonthlyToWeek,
+  projectAvWeeklyToWeek,
 } from "./avAppend.js";
 import {
   mergeMonthlyDatasets,
@@ -388,10 +394,19 @@ async function buildInformePayload(): Promise<InformePayload> {
     readStoredResolutionHistory(),
   ]);
 
-  const weeklyPayload = withHistory(
+  const fullWeekly = withHistory(
     weekly ?? emptyWeeklyDataset(),
     history,
     resolutions
+  );
+  const storedMaxWeek = fullWeekly.maxWeek;
+  const activeWeek = fullWeekly.activeWeek;
+  const weeklyPayload = projectAvWeeklyToWeek(fullWeekly, activeWeek);
+  const monthlyPayload = projectAvMonthlyToWeek(
+    monthly ?? emptyMonthlyDataset(),
+    fullWeekly.year,
+    activeWeek,
+    storedMaxWeek
   );
 
   return {
@@ -400,7 +415,7 @@ async function buildInformePayload(): Promise<InformePayload> {
       weeklyPayload.maxWeek
     ),
     weekly: weeklyPayload,
-    monthly: monthly ?? emptyMonthlyDataset(),
+    monthly: monthlyPayload,
   };
 }
 
@@ -445,6 +460,7 @@ router.post("/api/informe/upload/semanal", upload.single("file"), backupBeforeIm
     const dataset = parseInformeWeeklyWorkbook(workbook);
     const stored: InformeWeeklyDataset = {
       ...dataset,
+      activeWeek: undefined,
       sourceFile: req.file.originalname,
       uploadedAt: new Date().toISOString(),
     };
@@ -519,6 +535,7 @@ router.post("/api/informe/upload/texto", upload.single("file"), backupBeforeImpo
       String(new Date().getUTCFullYear());
 
     // Uploads are append-only: what is stored stays, new weeks and months are added.
+    const incomingWeek = parsed.weekly.maxWeek;
     const storedWeekly: InformeWeeklyDataset = appendWeeklyDataset(
       await readStoredInformeWeekly(),
       {
@@ -528,6 +545,8 @@ router.post("/api/informe/upload/texto", upload.single("file"), backupBeforeImpo
         uploadedAt: stamp.uploadedAt,
       }
     );
+    storedWeekly.activeWeek = incomingWeek > 0 ? incomingWeek : undefined;
+    const isOlderWeek = incomingWeek > 0 && incomingWeek < storedWeekly.maxWeek;
 
     const writes: Array<{ sql: string; args: Array<string | null> }> = [
       {
@@ -561,13 +580,29 @@ router.post("/api/informe/upload/texto", upload.single("file"), backupBeforeImpo
       });
     }
 
-    if (parsed.document.mensual.length > 0 || parsed.document.eventosExtr) {
-      const previousMonthly = (await readStoredInformeMonthly()) ?? emptyMonthlyDataset();
-      const monthly = appendMonthlyDataset(previousMonthly, {
+    const previousMonthly = (await readStoredInformeMonthly()) ?? emptyMonthlyDataset();
+    if (
+      parsed.document.mensual.length > 0 ||
+      parsed.document.eventosExtr ||
+      previousMonthly.activeMonthlyOverride
+    ) {
+      const mergedMonthly = appendMonthlyDataset(previousMonthly, {
         ...parsed.monthly,
+        ...(isOlderWeek ? { territoriales: null } : {}),
         sourceFile: stamp.sourceFile,
         uploadedAt: stamp.uploadedAt,
       });
+      const monthly: InformeMonthlyDataset = isOlderWeek
+        ? {
+            ...mergedMonthly,
+            activeMonthlyOverride: {
+              week: incomingWeek,
+              year,
+              byType: parsed.monthly.byType,
+              territoriales: parsed.monthly.territoriales ?? null,
+            },
+          }
+        : mergedMonthly;
       writes.push({
         sql: `INSERT INTO informe_monthly (id, data, source_file, uploaded_at)
               VALUES (1, ?, ?, datetime('now'))
@@ -946,12 +981,13 @@ async function buildInformaticaPayload(): Promise<InformaticaResponse> {
   // the catalogue whenever the stored snapshot came from a text that omitted it.
   const named =
     data.edificios?.length || edificios.length === 0 ? data : { ...data, edificios };
+  const projected = projectInformaticaDatasetToCutoff(named);
 
   return {
     deck: deck ?? createDefaultInformaticaDeck(),
     // An empty table stays absent rather than becoming an empty array, so a page
     // asking "is this section present" gets the same answer as before it existed.
-    data: historico.length === 0 ? named : { ...named, historico },
+    data: historico.length === 0 ? projected : { ...projected, historico },
   };
 }
 
@@ -1157,6 +1193,7 @@ router.post("/api/informatica/upload/plano", uploadInformaticaPlano, backupBefor
       sourceFile: describeSourceFiles(files),
       uploadedAt: new Date().toISOString(),
     });
+    stored.activeCutoff = undefined;
 
     // The flat workbook is the other place a building master can enter the app,
     // and the catalogue is what names the coded weekly text back.
@@ -1266,6 +1303,20 @@ router.post("/api/informatica/upload/texto", upload.single("file"), backupBefore
         ? foldCompleteInformaticaDataset(normalizedExisting, normalized, source)
         : mergeInformaticaDataset(normalizedExisting, normalized, source);
 
+    const incomingIso = parseIsoDateString(source.asOfDate);
+    const previousMax = parseIsoDateString(
+      existing?.maxAsOfDate ?? existing?.source?.asOfDate
+    );
+    if (incomingIso) {
+      const nextMax =
+        !previousMax || incomingIso >= previousMax ? incomingIso : previousMax;
+      stored.maxAsOfDate = nextMax;
+      stored.activeCutoff = incomingIso < nextMax ? incomingIso : undefined;
+    } else {
+      stored.maxAsOfDate = previousMax ?? undefined;
+      stored.activeCutoff = undefined;
+    }
+
     await saveInformaticaEdificios(catalog, source.sourceFile);
     await client.execute({
       sql: `INSERT INTO informatica_dataset (id, data, source_file, uploaded_at)
@@ -1360,7 +1411,10 @@ async function readStoredAgaDataset(): Promise<AgaDataset | null> {
 async function buildAgaPayload(): Promise<AgaResponse> {
   const [deck, dataset] = await Promise.all([readStoredAgaDeck(), readStoredAgaDataset()]);
 
-  return { deck: deck ?? createDefaultAgaDeck(), data: dataset ?? emptyAgaDataset() };
+  return {
+    deck: deck ?? createDefaultAgaDeck(),
+    data: projectAgaDatasetToWeek(dataset ?? emptyAgaDataset()),
+  };
 }
 
 router.get("/api/aga", async (_req, res) => {
@@ -1419,15 +1473,18 @@ router.post("/api/aga/upload/plano", upload.single("file"), backupBeforeImport(c
 
     // Sections 2 and 3 are seeded from other exports and must survive the
     // upload untouched, so the dataset is folded rather than rebuilt.
-    const stored: AgaDataset = mergeAgaDataset(
-      existing,
-      weeks,
-      {
-        sourceFile: req.file.originalname,
-        uploadedAt: new Date().toISOString(),
-      },
-      report.sheetsFound
-    );
+    const stored: AgaDataset = {
+      ...mergeAgaDataset(
+        existing,
+        weeks,
+        {
+          sourceFile: req.file.originalname,
+          uploadedAt: new Date().toISOString(),
+        },
+        report.sheetsFound
+      ),
+      activeWeek: undefined,
+    };
 
     await client.execute({
       sql: `INSERT INTO aga_dataset (id, data, source_file, uploaded_at)
@@ -1687,20 +1744,40 @@ router.post("/api/aga/upload/texto", upload.single("file"), backupBeforeImport(c
 
     // `Fecha Gestionado` closes in the past: a week later than the reported one
     // is a mangled date, and the six compared slides of section 2 follow the
-    // newest week they can see. Restricting the merge and not just the upload
-    // also takes out the ghosts an earlier import already stored.
-    const managed = parsed.managed
+    // newest week they can see. Restricting the incoming upload first and then
+    // clamping the merge at `max(existingLatestManaged, reportWeek)` still drops
+    // ghost dates without erasing newer stored weeks when loading an older TXT.
+    const reportWeek = parsed.report.meta.week ?? "";
+    const existingLatestManaged = existing.managed?.weeklyTotals.at(-1)?.week ?? "";
+    const incomingManaged = parsed.managed
       ? restrictAgaManagedToWeek(
-          mergeAgaManagedSection(existing.managed, {
+          {
             ...parsed.managed,
             source: stamp,
-          }),
-          parsed.report.meta.week ?? ""
+          },
+          reportWeek
         )
       : null;
+    const managedCut =
+      existingLatestManaged && (!reportWeek || existingLatestManaged > reportWeek)
+        ? existingLatestManaged
+        : reportWeek;
+    const managed = incomingManaged
+      ? restrictAgaManagedToWeek(
+          mergeAgaManagedSection(existing.managed, incomingManaged.managed),
+          managedCut
+        )
+      : null;
+    const managedIgnoredWeeks = Array.from(
+      new Set([
+        ...(incomingManaged?.ignoredWeeks ?? []),
+        ...(managed?.ignoredWeeks ?? []),
+      ])
+    ).sort();
 
     const stored: AgaDataset = {
       ...existing,
+      activeWeek: reportWeek || undefined,
       ...(parsed.weeks.length > 0
         ? { weeks: mergeAgaWeeks(existing.weeks ?? [], parsed.weeks) }
         : {}),
@@ -1734,7 +1811,7 @@ router.post("/api/aga/upload/texto", upload.single("file"), backupBeforeImport(c
         ...parsed.report,
         file: stamp.sourceFile,
         officeIgnoredMonths: office?.ignoredMonths ?? [],
-        managedIgnoredWeeks: managed?.ignoredWeeks ?? [],
+        managedIgnoredWeeks,
       },
     });
   } catch (err) {
@@ -1823,7 +1900,7 @@ async function buildOficinasPayload(): Promise<OficinasResponse> {
 
   return {
     deck: deck ?? createDefaultOficinasDeck(),
-    data: dataset ?? emptyOficinasDataset(),
+    data: projectOficinasDatasetToWeek(dataset ?? emptyOficinasDataset()),
   };
 }
 
@@ -1889,11 +1966,15 @@ router.post("/api/oficinas/upload/plano", upload.single("file"), backupBeforeImp
     // corrected export overwrites exactly the weeks it contains and the office
     // master seeded from the other workbook survives untouched.
     const existing = await readStoredOficinasDataset();
+    const incomingWeek = oficinasReportWeek(dataset, year);
 
-    const stored: OficinasDataset = mergeOficinasDataset(existing, dataset, {
-      sourceFile: req.file.originalname,
-      uploadedAt: new Date().toISOString(),
-    });
+    const stored: OficinasDataset = {
+      ...mergeOficinasDataset(existing, dataset, {
+        sourceFile: req.file.originalname,
+        uploadedAt: new Date().toISOString(),
+      }),
+      activeWeek: incomingWeek !== null ? { year, week: incomingWeek } : undefined,
+    };
 
     await client.execute({
       sql: `INSERT INTO oficinas_dataset (id, data, source_file, uploaded_at)
@@ -1969,7 +2050,8 @@ function sendDeckPdf(
  */
 async function agaReportDate(): Promise<Date | undefined> {
   try {
-    const dataset = await readStoredAgaDataset();
+    const stored = await readStoredAgaDataset();
+    const dataset = stored ? projectAgaDatasetToWeek(stored) : null;
 
     return latestReportDate((dataset?.weeks ?? []).map(entry => entry.week));
   } catch {
@@ -1977,8 +2059,24 @@ async function agaReportDate(): Promise<Date | undefined> {
   }
 }
 
-router.get("/api/informe/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/av", "AV", "av");
+async function avReportDate(): Promise<Date | undefined> {
+  try {
+    const weekly = await readStoredInformeWeekly();
+    const week = weekly?.activeWeek ?? weekly?.maxWeek ?? 0;
+    const year = Number(weekly?.year);
+
+    if (!Number.isInteger(year) || year < 2000 || week < 1 || week > 53) {
+      return undefined;
+    }
+
+    return new Date(`${isoWeekBounds(year, week).start}T12:00:00Z`);
+  } catch {
+    return undefined;
+  }
+}
+
+router.get("/api/informe/pdf", async (req, res) => {
+  sendDeckPdf(req, res, "/av", "AV", "av", await avReportDate());
 });
 
 router.get("/api/informe/reports", async (_req, res) => {
@@ -2075,16 +2173,54 @@ router.get("/api/informe/reports/:id/pdf", async (req, res) => {
   }
 });
 
-router.get("/api/informatica/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/informatica", "Informatica", "informatica");
+function parseIsoDateString(value: string | null | undefined): string | null {
+  const match = value?.trim().match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
+}
+
+async function informaticaReportDate(): Promise<Date | undefined> {
+  try {
+    const dataset = await readStoredInformaticaDataset();
+    const iso = parseIsoDateString(dataset?.activeCutoff ?? dataset?.source?.asOfDate);
+
+    return iso ? new Date(`${iso}T12:00:00Z`) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function oficinasReportDate(): Promise<Date | undefined> {
+  try {
+    const stored = await readStoredOficinasDataset();
+    if (!stored) {
+      return undefined;
+    }
+
+    const projected = projectOficinasDatasetToWeek(stored);
+    const year = projected.activeWeek?.year ?? projected.year;
+    const week =
+      projected.activeWeek?.week ?? (year ? oficinasReportWeek(projected, year) : null);
+
+    if (!year || !week || week < 1 || week > 53) {
+      return undefined;
+    }
+
+    return new Date(`${isoWeekBounds(year, week).start}T12:00:00Z`);
+  } catch {
+    return undefined;
+  }
+}
+
+router.get("/api/informatica/pdf", async (req, res) => {
+  sendDeckPdf(req, res, "/informatica", "Informatica", "informatica", await informaticaReportDate());
 });
 
 router.get("/api/aga/pdf", async (req, res) => {
   sendDeckPdf(req, res, "/aga", "AGA", "aga", await agaReportDate());
 });
 
-router.get("/api/oficinas/pdf", (req, res) => {
-  sendDeckPdf(req, res, "/oficinas", "Oficinas", "oficinas");
+router.get("/api/oficinas/pdf", async (req, res) => {
+  sendDeckPdf(req, res, "/oficinas", "Oficinas", "oficinas", await oficinasReportDate());
 });
 
 router.get("/api/uploads/:id", async (req, res) => {

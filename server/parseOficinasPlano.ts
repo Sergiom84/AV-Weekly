@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { parseExcelDate, parseExcelMonth } from "./excelDate.ts";
-import { isoWeek, isoWeekYear } from "./isoWeek.ts";
+import { isoWeek, isoWeekThursday, isoWeekYear } from "./isoWeek.ts";
 import {
   normalizeDT,
   pickSpelling,
@@ -1309,5 +1309,130 @@ export function mergeOficinasDataset(
     source,
     sheetsFound: incoming.sheetsFound,
     year: incoming.year,
+  };
+}
+
+function filterWeekRows<T extends OficinasRow>(
+  rows: T[],
+  keepsWeek: (entry: OficinasWeekValue) => boolean
+): T[] {
+  return rows
+    .map((row) => ({
+      ...row,
+      values: row.values.filter(keepsWeek),
+    }))
+    .filter((row) => row.values.length > 0);
+}
+
+function filterIncidencias(
+  section: OficinasIncidencias | undefined,
+  keepsWeek: (entry: OficinasWeekValue) => boolean
+): OficinasIncidencias | undefined {
+  if (!section) return undefined;
+
+  return {
+    ...section,
+    totalsByWeek: section.totalsByWeek.filter(keepsWeek),
+    byDT: section.byDT.map((matrix) => ({
+      ...matrix,
+      rows: filterWeekRows(matrix.rows, keepsWeek),
+    })),
+    byElement: filterWeekRows(section.byElement, keepsWeek),
+    ...(section.history
+      ? {
+          history: section.history
+            .map((series) => ({
+              ...series,
+              values: series.values.filter(keepsWeek),
+            }))
+            .filter((series) => series.values.length > 0),
+        }
+      : {}),
+  };
+}
+
+/** Projects a stored Oficinas dataset down to `dataset.activeWeek` without altering storage. */
+export function projectOficinasDatasetToWeek(
+  dataset: OficinasDataset
+): OficinasDataset {
+  if (!dataset.activeWeek) {
+    return dataset;
+  }
+
+  const { year: activeYear, week: activeWeek } = dataset.activeWeek;
+  const thursday = isoWeekThursday(activeYear, activeWeek);
+  const cutoffMonth = `${thursday.getUTCFullYear()}-${String(thursday.getUTCMonth() + 1).padStart(2, "0")}`;
+
+  const keepsWeek = (entry: OficinasWeekValue): boolean =>
+    entry.year < activeYear ||
+    (entry.year === activeYear && entry.week <= activeWeek);
+
+  const asignadas = filterIncidencias(dataset.asignadas, keepsWeek);
+  const resueltas = filterIncidencias(dataset.resueltas, keepsWeek);
+
+  const peticiones = dataset.peticiones
+    ? {
+        ...dataset.peticiones,
+        totalsByWeek: dataset.peticiones.totalsByWeek.filter(keepsWeek),
+        byDT: filterWeekRows(dataset.peticiones.byDT, keepsWeek),
+        byTipo: filterWeekRows(dataset.peticiones.byTipo, keepsWeek),
+      }
+    : undefined;
+
+  const recicladores = dataset.recicladores
+    ? {
+        ...dataset.recicladores,
+        byDT: filterWeekRows(dataset.recicladores.byDT, keepsWeek),
+        byElemento: filterWeekRows(dataset.recicladores.byElemento, keepsWeek),
+      }
+    : undefined;
+
+  const imac = dataset.imac
+    ? {
+        peticionesByWeek: dataset.imac.peticionesByWeek.filter(keepsWeek),
+        intervencionesByWeek: dataset.imac.intervencionesByWeek.filter(keepsWeek),
+        byTipo: filterWeekRows(dataset.imac.byTipo, keepsWeek),
+      }
+    : undefined;
+
+  const mensual = dataset.mensual
+    ? {
+        incidencias: dataset.mensual.incidencias.filter(
+          (entry) => entry.month <= cutoffMonth
+        ),
+        recicladores: dataset.mensual.recicladores.filter(
+          (entry) => entry.month <= cutoffMonth
+        ),
+        cierresPorDT: dataset.mensual.cierresPorDT
+          .map((row) => ({
+            ...row,
+            values: row.values.filter((entry) => entry.month <= cutoffMonth),
+          }))
+          .filter((row) => row.values.length > 0),
+        peticiones: dataset.mensual.peticiones.filter(
+          (entry) => entry.month <= cutoffMonth
+        ),
+      }
+    : undefined;
+
+  const encuestas = dataset.encuestas
+    ? {
+        ...dataset.encuestas,
+        porMes: dataset.encuestas.porMes.filter(
+          (entry) => entry.month <= cutoffMonth
+        ),
+      }
+    : undefined;
+
+  return {
+    ...dataset,
+    year: activeYear,
+    ...(asignadas ? { asignadas } : {}),
+    ...(resueltas ? { resueltas } : {}),
+    ...(peticiones ? { peticiones } : {}),
+    ...(recicladores ? { recicladores } : {}),
+    ...(imac ? { imac } : {}),
+    ...(mensual ? { mensual } : {}),
+    ...(encuestas ? { encuestas } : {}),
   };
 }

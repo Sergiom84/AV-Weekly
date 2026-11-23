@@ -513,6 +513,11 @@ export interface OficinasDataset {
   mensual?: OficinasMensual;
   encuestas?: OficinasEncuestas;
   masters?: OficinasMasters;
+  /**
+   * Week selected for display and export when an older workbook is loaded on
+   * top of newer stored weeks. Absent means show all stored weeks.
+   */
+  activeWeek?: { year: number; week: number };
   source: DatasetSource;
   /** Sheets the last upload recognised, in workbook order. */
   sheetsFound?: string[];

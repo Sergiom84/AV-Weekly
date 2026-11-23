@@ -4,7 +4,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import type { Server } from "node:http";
 import express from "express";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   INFORMATICA_TEXTO_HEADER,
   INFORMATICA_TEXTO_SECTIONS,
@@ -13,6 +13,7 @@ import {
 import type { InformaticaDataset } from "../shared/modules/informatica/types.ts";
 import { getDeckModule } from "../shared/deck/registry.ts";
 import { parseInformaticaTexto } from "./parseInformaticaTexto.ts";
+import { projectInformaticaDatasetToCutoff } from "./parseInformaticaPlano.ts";
 
 const source = { sourceFile: "Backlog.xlsx", uploadedAt: "2026-08-24T09:00:00.000Z" };
 
@@ -396,6 +397,7 @@ describe("POST /api/informatica/upload/texto", () => {
   let server: Server;
   let dataDir = "";
   let closeClient: (() => Promise<void>) | undefined;
+  let clearDataset: (() => Promise<void>) | undefined;
 
   beforeAll(async () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "av-weekly-informatica-texto-"));
@@ -408,6 +410,9 @@ describe("POST /api/informatica/upload/texto", () => {
 
     await initDb();
     closeClient = async () => client.close();
+    clearDataset = async () => {
+      await client.execute("DELETE FROM informatica_dataset");
+    };
 
     const app = express();
     app.use(express.json({ limit: "25mb" }));
@@ -424,6 +429,10 @@ describe("POST /api/informatica/upload/texto", () => {
     }
 
     origin = `http://127.0.0.1:${address.port}`;
+  });
+
+  beforeEach(async () => {
+    await clearDataset?.();
   });
 
   afterAll(async () => {
@@ -616,5 +625,115 @@ describe("POST /api/informatica/upload/texto", () => {
       ["2026/09", "On Site", "Backlog", 359],
       ["2026/10", "Technology", "Gestionadas", 30],
     ]);
+  });
+
+  it("al subir un TXT de una semana anterior recorta peticiones al corte y conserva las semanas posteriores en BD", async () => {
+    const w48Texto = [
+      INFORMATICA_TEXTO_HEADER,
+      "semana\t2026-11-23",
+      "asOfDate\t2026-11-23",
+      "alcance\tcompleto",
+      "",
+      "[PETICIONES]",
+      "2026-11-23\t2026/11\t48\tOn Site\tEn vuelo\tPeticiones\t900",
+      "",
+      "[PETICIONESPRODUCTO]",
+      "2026-11-23\t2026/11\t48\tPortátil\tEn vuelo\t120",
+      "",
+      "[PETICIONESMES]",
+      "2026/11\tOn Site\tBacklog\t410",
+    ].join("\n");
+
+    const w44Texto = [
+      INFORMATICA_TEXTO_HEADER,
+      "semana\t2026-10-26",
+      "asOfDate\t2026-10-26",
+      "alcance\tcompleto",
+      "",
+      "[PETICIONES]",
+      "2026-10-26\t2026/10\t44\tOn Site\tEn vuelo\tPeticiones\t650",
+      "",
+      "[PETICIONESPRODUCTO]",
+      "2026-10-26\t2026/10\t44\tPortátil\tEn vuelo\t85",
+      "",
+      "[PETICIONESMES]",
+      "2026/10\tOn Site\tBacklog\t320",
+    ].join("\n");
+
+    const res48 = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texto: w48Texto }),
+    });
+    expect(res48.status).toBe(200);
+
+    const res44 = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texto: w44Texto }),
+    });
+    expect(res44.status).toBe(200);
+    const body44 = (await res44.json()) as { data: InformaticaDataset };
+
+    expect(body44.data.activeCutoff).toBe("2026-10-26");
+    expect(body44.data.peticiones?.some((row) => row.semana === 48)).toBe(false);
+    expect(body44.data.peticiones?.some((row) => row.semana === 44)).toBe(true);
+    expect(body44.data.peticionesProducto?.some((row) => row.semana === 48)).toBe(false);
+    expect(body44.data.peticionesMes?.some((row) => row.mes === "2026/11")).toBe(false);
+    expect(body44.data.peticionesMes?.some((row) => row.mes === "2026/10")).toBe(true);
+
+    // Re-subir una semana actual (sin peticionesMes) vuelve a exponer 2026/11 y semana 48 guardadas.
+    const w48Refresh = [
+      INFORMATICA_TEXTO_HEADER,
+      "semana\t2026-11-23",
+      "asOfDate\t2026-11-23",
+      "alcance\tcompleto",
+      "",
+      "[HIC]",
+      "SSCC\t2026/11\t\tResueltas\t500",
+    ].join("\n");
+    const resRefresh = await fetch(`${origin}/api/informatica/upload/texto`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texto: w48Refresh }),
+    });
+    expect(resRefresh.status).toBe(200);
+    const refreshed = (await resRefresh.json()) as { data: InformaticaDataset };
+
+    expect(refreshed.data.activeCutoff).toBeUndefined();
+    expect(refreshed.data.peticiones?.some((row) => row.semana === 48)).toBe(true);
+    expect(refreshed.data.peticionesMes?.some((row) => row.mes === "2026/11")).toBe(true);
+  });
+});
+
+describe("projectInformaticaDatasetToCutoff", () => {
+  it("filtra peticiones, peticionesProducto y peticionesMes hasta activeCutoff sin mutar el origen", () => {
+    const stored: InformaticaDataset = {
+      source: { sourceFile: "Informatica.txt", uploadedAt: "2026-11-23T08:00:00Z", asOfDate: "2026-11-15" },
+      activeCutoff: "2026-11-15",
+      maxAsOfDate: "2026-11-23",
+      peticiones: [
+        { fecha: "2026-11-09", semana: 46, mes: "2026/11", origen: "On Site", estado: "En vuelo", entidad: "Peticiones", total: 10 },
+        { fecha: "2026-11-23", semana: 48, mes: "2026/11", origen: "On Site", estado: "En vuelo", entidad: "Peticiones", total: 20 },
+      ],
+      peticionesProducto: [
+        { fecha: "2026-11-09", semana: 46, mes: "2026/11", producto: "PC", estado: "En vuelo", total: 5 },
+        { fecha: "2026-11-23", semana: 48, mes: "2026/11", producto: "PC", estado: "En vuelo", total: 8 },
+      ],
+      peticionesMes: [
+        { mes: "2026/10", origen: "On Site", estado: "Backlog", total: 100 },
+        { mes: "2026/11", origen: "On Site", estado: "Backlog", total: 110 },
+        { mes: "2026/12", origen: "On Site", estado: "Backlog", total: 120 },
+      ],
+      sheetsFound: ["peticiones", "peticionesProducto", "peticionesMes"],
+    };
+
+    const projected = projectInformaticaDatasetToCutoff(stored);
+
+    expect(projected.peticiones?.map((row) => row.semana)).toEqual([46]);
+    expect(projected.peticionesProducto?.map((row) => row.semana)).toEqual([46]);
+    expect(projected.peticionesMes?.map((row) => row.mes)).toEqual(["2026/10", "2026/11"]);
+    expect(stored.peticiones?.map((row) => row.semana)).toEqual([46, 48]);
+    expect(stored.peticionesMes?.map((row) => row.mes)).toEqual(["2026/10", "2026/11", "2026/12"]);
   });
 });

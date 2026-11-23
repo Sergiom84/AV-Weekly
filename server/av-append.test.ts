@@ -4,6 +4,8 @@ import {
   appendResolutionWeeks,
   appendWeeklyDataset,
   appendWeeklyMatrix,
+  projectAvMonthlyToWeek,
+  projectAvWeeklyToWeek,
 } from "./avAppend.ts";
 import { emptyMonthlyDataset, emptyWeeklyDataset } from "../shared/modules/av/types.ts";
 import type { WeeklyMatrix } from "../shared/deck/core.ts";
@@ -105,5 +107,104 @@ describe("AV append-only upload", () => {
     const incomingWith = { ...emptyMonthlyDataset(), territoriales: updatedTerritoriales };
 
     expect(appendMonthlyDataset(stored, incomingWith).territoriales).toEqual(updatedTerritoriales);
+  });
+});
+
+describe("AV projection to activeWeek", () => {
+  it("projects weekly matrices, totals, resolutionsByWeek and maxWeek without mutating stored data", () => {
+    const stored = { ...emptyWeeklyDataset(), year: "2026", maxWeek: 47 };
+    stored.byType.Remotos.categories = matrix([45, 46, 47], {
+      ERRORES: [10, 12, 15],
+      CONEXION: [3, 4, 8],
+    });
+    stored.byType.Programados.locations = matrix([45, 46, 47], {
+      CIUDAD: [5, 7, 9],
+    });
+    stored.byType.Programados.resolutionsByWeek = {
+      "45": [{ category: "Programados", tier2: "SALA", tier3: "A", total: 5 }],
+      "46": [{ category: "Programados", tier2: "SALA", tier3: "A", total: 7 }],
+      "47": [{ category: "Programados", tier2: "SALA", tier3: "A", total: 9 }],
+    };
+
+    const projected = projectAvWeeklyToWeek(stored, 46);
+
+    expect(projected.maxWeek).toBe(46);
+    expect(projected.byType.Remotos.categories?.weeks).toEqual([45, 46]);
+    expect(
+      projected.byType.Remotos.categories?.rows.find((row) => row.label === "ERRORES")
+    ).toEqual({
+      label: "ERRORES",
+      values: [10, 12],
+      total: 22,
+    });
+    expect(projected.byType.Remotos.categories?.totals).toEqual([13, 16]);
+    expect(projected.byType.Programados.locations?.weeks).toEqual([45, 46]);
+    expect(Object.keys(projected.byType.Programados.resolutionsByWeek)).toEqual(["45", "46"]);
+
+    // Stored object remains intact with week 47.
+    expect(stored.maxWeek).toBe(47);
+    expect(stored.byType.Remotos.categories?.weeks).toEqual([45, 46, 47]);
+    expect(Object.keys(stored.byType.Programados.resolutionsByWeek)).toEqual([
+      "45",
+      "46",
+      "47",
+    ]);
+  });
+
+  it("projects monthly dataset to activeWeek cutoff month using activeMonthlyOverride and clears future months", () => {
+    const stored = emptyMonthlyDataset();
+    stored.byType.Remotos["2025"] = Array(12).fill(100);
+    // Stored has Oct (idx 9) and Nov (idx 10) up to W47, plus Dec (idx 11) in a hypothetical future state.
+    stored.byType.Remotos["2026"] = [10, 20, 30, 40, 50, 60, 70, 80, 90, 110, 220, 300];
+    stored.byType.Remotos["2027"] = [5, null, null, null, null, null, null, null, null, null, null, null];
+    stored.years = [2025, 2026, 2027];
+    stored.territoriales = {
+      mesActual: "Noviembre",
+      resumen: "Resumen W47",
+      meses: [],
+      totales: { Total: 50 },
+    };
+
+    const w46Territoriales = {
+      mesActual: "Noviembre",
+      resumen: "Resumen W46",
+      meses: [],
+      totales: { Total: 40 },
+    };
+
+    const withOverride = {
+      ...stored,
+      activeMonthlyOverride: {
+        week: 46, // 2026-W46 ends 2026-11-15 -> cutoffMonth = 10 (Nov)
+        year: "2026",
+        byType: {
+          ...emptyMonthlyDataset().byType,
+          Remotos: {
+            "2026": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 160, null],
+          },
+        },
+        territoriales: w46Territoriales,
+      },
+    };
+
+    const projected = projectAvMonthlyToWeek(withOverride, "2026", 46, 47);
+
+    expect(projected.activeMonthlyOverride).toBeUndefined();
+    expect(projected.years).toEqual([2025, 2026]);
+    expect(projected.byType.Remotos["2025"]).toEqual(Array(12).fill(100));
+    expect(projected.byType.Remotos["2027"]).toBeUndefined();
+    // Prior months use stored values; cutoffMonth (Nov = idx 10) uses override (160); Dec (idx 11) is null.
+    expect(projected.byType.Remotos["2026"]).toEqual([
+      10, 20, 30, 40, 50, 60, 70, 80, 90, 110, 160, null,
+    ]);
+    expect(projected.territoriales).toEqual(w46Territoriales);
+
+    // When activeWeek >= storedMaxWeek, returns full stored monthly without activeMonthlyOverride.
+    const full = projectAvMonthlyToWeek(withOverride, "2026", 47, 47);
+    expect(full.activeMonthlyOverride).toBeUndefined();
+    expect(full.years).toEqual([2025, 2026, 2027]);
+    expect(full.byType.Remotos["2026"][10]).toBe(220);
+    expect(full.byType.Remotos["2026"][11]).toBe(300);
+    expect(full.territoriales).toEqual(stored.territoriales);
   });
 });

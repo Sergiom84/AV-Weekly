@@ -10,6 +10,7 @@ import type {
   AgaAnnualSection,
   AgaBreakdownRow,
   AgaCount,
+  AgaDataset,
   AgaDepartmentBreakdown,
   AgaManagedSection,
   AgaOfficeSection,
@@ -657,5 +658,122 @@ export function mergeAgaAnnualSection(
     peticiones: mergeYearSeries(existing?.peticiones, incoming.peticiones),
     posiciones: mergeYearSeries(existing?.posiciones, incoming.posiciones),
     ...(incoming.source ? { source: incoming.source } : existing?.source ? { source: existing.source } : {}),
+  };
+}
+
+function filterBreakdownRowsToWeek(
+  rows: AgaBreakdownRow[],
+  cutoffWeek: string
+): AgaBreakdownRow[] {
+  return rows
+    .map((row) => ({
+      ...row,
+      counts: row.counts.filter((entry) => entry.week <= cutoffWeek),
+    }))
+    .filter((row) => row.counts.length > 0);
+}
+
+function filterAnnualSeriesToCutoff(
+  series: AgaYearSeries[],
+  cutoffYear: number,
+  cutoffMonthNum: number
+): AgaYearSeries[] {
+  return series
+    .filter((entry) => entry.year <= cutoffYear)
+    .map((entry) =>
+      entry.year < cutoffYear
+        ? entry
+        : {
+            ...entry,
+            values: entry.values.map((value, index) =>
+              index >= cutoffMonthNum ? null : value
+            ),
+          }
+    );
+}
+
+/** Projects a stored AGA dataset down to `dataset.activeWeek` without altering storage. */
+export function projectAgaDatasetToWeek(dataset: AgaDataset): AgaDataset {
+  const cutoffWeek = dataset.activeWeek;
+  if (!cutoffWeek) return dataset;
+
+  const cutoffMonth = cutoffWeek.slice(0, 7);
+  const cutoffYear = Number(cutoffWeek.slice(0, 4));
+  const cutoffMonthNum = Number(cutoffWeek.slice(5, 7));
+
+  const weeks = dataset.weeks.filter((entry) => entry.week <= cutoffWeek);
+
+  const managed = dataset.managed
+    ? {
+        ...dataset.managed,
+        weeklyTotals: dataset.managed.weeklyTotals.filter(
+          (entry) => entry.week <= cutoffWeek
+        ),
+        ...(dataset.managed.locationTotals
+          ? {
+              locationTotals: dataset.managed.locationTotals.filter(
+                (entry) => entry.week <= cutoffWeek
+              ),
+            }
+          : {}),
+        byDepartment: filterBreakdownRowsToWeek(
+          dataset.managed.byDepartment,
+          cutoffWeek
+        ),
+        byProduct: filterBreakdownRowsToWeek(
+          dataset.managed.byProduct,
+          cutoffWeek
+        ),
+        byLocation: filterBreakdownRowsToWeek(
+          dataset.managed.byLocation,
+          cutoffWeek
+        ),
+        byDepartmentProduct: dataset.managed.byDepartmentProduct.map((dept) => ({
+          ...dept,
+          rows: filterBreakdownRowsToWeek(dept.rows, cutoffWeek),
+        })),
+      }
+    : undefined;
+
+  let office = dataset.office;
+  if (office) {
+    const keptIndices: number[] = [];
+    for (let i = 0; i < office.months.length; i += 1) {
+      if (office.months[i] <= cutoffMonth) {
+        keptIndices.push(i);
+      }
+    }
+    office = {
+      ...office,
+      months: keptIndices.map((i) => office!.months[i]),
+      families: office.families.map((family) => ({
+        ...family,
+        values: keptIndices.map((i) => family.values[i] ?? null),
+      })),
+    };
+  }
+
+  const annual = dataset.annual
+    ? {
+        ...dataset.annual,
+        peticiones: filterAnnualSeriesToCutoff(
+          dataset.annual.peticiones,
+          cutoffYear,
+          cutoffMonthNum
+        ),
+        posiciones: filterAnnualSeriesToCutoff(
+          dataset.annual.posiciones,
+          cutoffYear,
+          cutoffMonthNum
+        ),
+      }
+    : undefined;
+
+  return {
+    ...dataset,
+    weeks,
+    ...(managed !== undefined ? { managed } : {}),
+    ...(office !== undefined ? { office } : {}),
+    ...(annual !== undefined ? { annual } : {}),
   };
 }

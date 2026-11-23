@@ -192,6 +192,11 @@ export interface AgaAnnualSection {
 export interface AgaDataset {
   /** Every week ever imported, ascending by date. */
   weeks: AgaWeekAggregate[];
+  /**
+   * Active extraction Monday (`YYYY-MM-DD`) when an older `.txt` is loaded on
+   * top of newer stored weeks. Absent means show all stored weeks.
+   */
+  activeWeek?: string;
   /** Section 2. Absent until the managed-positions import has run. */
   managed?: AgaManagedSection;
   /** Slide 2.8. Absent until the Office import has run. */

@@ -153,10 +153,26 @@ export interface InformeWeeklyDataset {
   resolutionSource?: DatasetSource;
   /** Highest week number found across all sheets. */
   maxWeek: number;
+  /**
+   * Week selected for display and export when an older `.txt` is loaded on
+   * top of newer stored weeks. Absent means `maxWeek`.
+   */
+  activeWeek?: number;
   /** Report year, set by the texto upload. Older stored datasets lack it. */
   year?: string;
   sourceFile: string | null;
   uploadedAt: string | null;
+}
+
+/**
+ * Snapshot of an in-progress month and territorial events when an older `.txt`
+ * is loaded while newer weeks already exist in storage.
+ */
+export interface AvMonthlyOverride {
+  week: number;
+  year: string;
+  byType: Record<SupportType, Record<string, (number | null)[]>>;
+  territoriales?: TerritorialEventsData | null;
 }
 
 export interface InformeMonthlyDataset {
@@ -167,6 +183,7 @@ export interface InformeMonthlyDataset {
   sourceFile: string | null;
   uploadedAt: string | null;
   territoriales?: TerritorialEventsData | null;
+  activeMonthlyOverride?: AvMonthlyOverride | null;
 }
 
 export interface InformePayload {
