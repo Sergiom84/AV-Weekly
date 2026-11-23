@@ -85,7 +85,10 @@ describe("carga del texto plano con edificios codificados", () => {
     const { status, body } = await upload(codedTexto());
 
     expect(status).toBe(400);
+    expect(body.error).toContain("Ha fallado por:");
+    expect(body.error).toContain("La solución es:");
     expect(body.error).toContain("catálogo de edificios está vacío");
+    expect(body.error).toContain("(secciones WORKORDERS, CITAS)");
     expect(body.error).toContain(edificioCode("Smart Tech Antoni Maura"));
 
     // Nothing was stored: a refused upload leaves last week's report standing.
@@ -123,5 +126,23 @@ describe("carga del texto plano con edificios codificados", () => {
 
     const stored = await client.execute("SELECT data FROM informatica_edificios WHERE id = 1");
     expect(JSON.parse(stored.rows[0].data as string)).toHaveLength(1);
+  });
+
+  it("explains cause, section and solution when a partial catalogue misses a code", async () => {
+    const missingCode = edificioCode("SEDE NUEVA SIN MAPEAR");
+    const texto = [
+      codedTexto(),
+      "",
+      "[IMACS]",
+      `2026-11-01\t2026/11\t${missingCode}\tSolicitudes\t1`,
+    ].join("\n");
+
+    const { status, body } = await upload(texto);
+
+    expect(status).toBe(400);
+    expect(body.error).toContain("Ha fallado por:");
+    expect(body.error).toContain("La solución es:");
+    expect(body.error).toContain("(sección IMACS)");
+    expect(body.error).toContain(missingCode);
   });
 });

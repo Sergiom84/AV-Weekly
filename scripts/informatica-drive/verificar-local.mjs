@@ -1,7 +1,7 @@
 /**
  * Runs the Informatica Drive aggregation against the real exports, outside Google.
  *
- * The harness loads Codigo.gs itself in a Node VM. It classifies the five input
+ * The harness loads the modular 00_–06_ .gs files in a Node VM. It classifies the five input
  * workbooks by their headers, exposes the read-only masters from the clean book,
  * and prints the exact PLANO text. Drive conversion and sheet writes are left
  * out deliberately: a local stub could only pretend to verify those effects.
@@ -86,7 +86,9 @@ function spreadsheetFromGrids(grids) {
 }
 
 function loadScriptWithSpreadsheet(spreadsheet) {
-  const source = readFileSync(join(HERE, "Codigo.gs"), "utf8");
+  const gsFiles = readdirSync(HERE)
+    .filter((f) => /^\d+_.*\.gs$/.test(f))
+    .sort();
   const context = createContext({
     console,
     Date,
@@ -101,7 +103,9 @@ function loadScriptWithSpreadsheet(spreadsheet) {
     },
   });
 
-  runInContext(source, context, { filename: "Codigo.gs" });
+  for (const file of gsFiles) {
+    runInContext(readFileSync(join(HERE, file), "utf8"), context, { filename: file });
+  }
 
   return context;
 }

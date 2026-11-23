@@ -88,4 +88,22 @@ describe("AV append-only upload", () => {
     expect(merged.byType.Remotos["2025"][0]).toBe(161);
     expect(merged.years).toEqual([2025, 2026]);
   });
+
+  it("preserves stored territoriales when incoming lacks it and updates when incoming provides it", () => {
+    const territorialesSample = {
+      mesActual: "Octubre",
+      resumen: "Destacan: Town Hall",
+      meses: [{ mes: "Octubre", galicia: 1, norte: 4, cataluna: 4, este: 0, sur: 3, gc: 2, centro: 6, total: 20 }],
+      totales: { Galicia: 1, Norte: 4, Cataluña: 4, Este: 0, Sur: 3, GC: 2, Centro: 6, Total: 20 },
+    };
+    const stored = { ...emptyMonthlyDataset(), territoriales: territorialesSample };
+    const incomingWithout = emptyMonthlyDataset();
+
+    expect(appendMonthlyDataset(stored, incomingWithout).territoriales).toEqual(territorialesSample);
+
+    const updatedTerritoriales = { ...territorialesSample, mesActual: "Noviembre" };
+    const incomingWith = { ...emptyMonthlyDataset(), territoriales: updatedTerritoriales };
+
+    expect(appendMonthlyDataset(stored, incomingWith).territoriales).toEqual(updatedTerritoriales);
+  });
 });

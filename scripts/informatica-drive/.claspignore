@@ -1,3 +1,9 @@
 **/*
-!Codigo.gs
+!00_Entorno_IDs.gs
+!01_Config_y_Menu.gs
+!02_Lectura_Drive_y_Clasificacion.gs
+!03_Marcadores_y_Tablas_Mensuales.gs
+!04_Escritura_Datos_y_Formulas.gs
+!05_Agregacion_y_PLANO.gs
+!06_Orquestacion_y_Auditoria.gs
 !appsscript.json

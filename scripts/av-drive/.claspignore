@@ -1,0 +1,10 @@
+**/*
+!00_Entorno_IDs.gs
+!01_Config_y_Menu.gs
+!02_Importacion_Semanal.gs
+!03_Procesar_Mes.gs
+!04_Eventos_Extraordinarios.gs
+!05_Exportacion_TXT_Looker.gs
+!06_Speeches_Datos.gs
+!07_Speeches_Informes.gs
+!appsscript.json

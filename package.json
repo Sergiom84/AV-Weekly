@@ -12,7 +12,13 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "clasp:push": "clasp push",
-    "clasp:pull": "clasp pull"
+    "clasp:pull": "clasp pull",
+    "av:clasp:status": "cd scripts/av-drive && clasp status",
+    "av:clasp:push": "cd scripts/av-drive && clasp push --force",
+    "av:clasp:pull": "cd scripts/av-drive && clasp pull",
+    "informatica:clasp:status": "cd scripts/informatica-drive && clasp status",
+    "informatica:clasp:push": "cd scripts/informatica-drive && clasp push --force",
+    "informatica:clasp:pull": "cd scripts/informatica-drive && clasp pull"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

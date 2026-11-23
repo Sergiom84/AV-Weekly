@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContext, runInContext } from "node:vm";
 import { describe, expect, it } from "vitest";
@@ -16,10 +17,7 @@ import { describe, expect, it } from "vitest";
  * The rows below are transcribed from the real file in each environment.
  */
 
-const source = readFileSync(
-  fileURLToPath(new URL("../scripts/informatica-drive/Codigo.gs", import.meta.url)),
-  "utf8"
-);
+const DRIVE_SCRIPTS_DIR = fileURLToPath(new URL("../scripts/informatica-drive/", import.meta.url));
 
 interface DriveScript {
   mergedHeaderRow: (grid: unknown[][], lastRow: number) => unknown[];
@@ -30,8 +28,13 @@ interface DriveScript {
 
 function loadScript(): DriveScript {
   const context = createContext({});
+  const gsFiles = readdirSync(DRIVE_SCRIPTS_DIR)
+    .filter((f) => /^\d+_.*\.gs$/.test(f))
+    .sort();
 
-  runInContext(source, context);
+  for (const file of gsFiles) {
+    runInContext(readFileSync(join(DRIVE_SCRIPTS_DIR, file), "utf8"), context, { filename: file });
+  }
 
   return context as unknown as DriveScript;
 }

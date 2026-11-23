@@ -1,99 +1,59 @@
 # AV en Google Drive
 
-Copia local del Apps Script de `Tendencias AV_2026`. Pegar `Codigo.gs` en
-`Extensiones > Apps Script` sustituye el menú por `⭐ AV Weekly`.
+Apps Script modular de `Tendencias AV_2026`. Sustituir el proyecto de
+`Extensiones > Apps Script` por los ficheros `00_*.gs` a `07_*.gs` activa el
+menú `⭐ AV Weekly`.
 
-| Fichero | Qué es |
-| --- | --- |
-| `Codigo.gs` | Procesar semana, TXT, Looker y speeches. |
+## Estructura modular (casa vs trabajo)
+
+| Fichero | Qué contiene | Cuándo se toca |
+| --- | --- | --- |
+| `00_Entorno_IDs.gs` | **Solo IDs de carpetas y libro.** | Nunca tras configurarlo en cada Drive. |
+| `01_Config_y_Menu.gs` | Rangos de pestañas, bloques y menú `⭐ AV Weekly`. | Solo si cambia la estructura de `Tendencias`. |
+| `02_Importacion_Semanal.gs` | Lectura multi-template semanal (`Bruto`) sin pisar datos previos. | Cambios en importación semanal. |
+| `03_Procesar_Mes.gs` | Conteo mensual (`Audiovisuales - Resueltas…`) y multianual 2026. | Cambios en cierre mensual. |
+| `04_Eventos_Extraordinarios.gs` | Sincronización de `Eventos AV 2026` hacia `Eventos Extr.`. | Cambios en eventos/instalaciones. |
+| `05_Exportacion_TXT_Looker.gs` | Tablas `Ubicacion`/`Resolucion`, `.txt` plano e histórico. | Cambios en Looker o contrato `.txt`. |
+| `06_Speeches_Datos.gs` | Lectura de métricas y formateo para speeches. | Ajustes de datos de speeches. |
+| `07_Speeches_Informes.gs` | Orquestador y plantillas de Sergio (HTML) y Carlos (texto). | Ajustes de redacción del speech. |
+| `trabajo/00_Entorno_IDs.gs` | Plantilla de `00_Entorno_IDs.gs` con los IDs del entorno de trabajo. | Solo referencia para el trabajo. |
+
+En Google Apps Script todos los `.gs` comparten el mismo ámbito global. Para
+actualizar el entorno de trabajo sin riesgo, **deja intacto `00_Entorno_IDs.gs`**
+y copia únicamente los `.gs` modificados (`01` a `07`).
 
 El formato del TXT lo declara
 [`shared/modules/av/texto.ts`](../../shared/modules/av/texto.ts)
 y lo lee [`server/parseAvTexto.ts`](../../server/parseAvTexto.ts).
 
-## Carpetas
+## Carpetas (entorno personal)
 
-| Carpeta | ID | Uso |
+| Carpeta | ID / Resolución | Uso |
 | --- | --- | --- |
-| [Bruto](https://drive.google.com/drive/folders/1Uz7rU5hm8jUvp1nLLQyALgaiYjhCR8LW) | `ID_CARPETA_TEMPLATES` | Templates semanal y mensual |
-| [Carpeta de Tendencias](https://drive.google.com/drive/folders/1KdBpANFQ2O2_PBhlTtV8LpC2-xfyhNiR) | `ID_CARPETA_TXT` | TXT para AV Weekly |
-| [histórico AV - txt](https://drive.google.com/drive/folders/10beuK3so7X4lHMVuWKQ4azWJDq7My99E) | `ID_CARPETA_HISTORICO_TXT` | TXT anteriores, nunca se borran |
+| [Bruto](https://drive.google.com/drive/folders/1Uz7rU5hm8jUvp1nLLQyALgaiYjhCR8LW) | `ID_CARPETA_TEMPLATES` (o subcarpeta `Bruto`) | Templates semanal, mensual y eventos |
+| [AV](https://drive.google.com/drive/folders/1KdBpANFQ2O2_PBhlTtV8LpC2-xfyhNiR) | `ID_CARPETA_TXT` (`ID_CARPETA_CONTENEDORA`) | TXT para AV Weekly |
+| [histórico AV - txt](https://drive.google.com/drive/folders/10beuK3so7X4lHMVuWKQ4azWJDq7My99E) | `ID_CARPETA_HISTORICO_TXT` (o subcarpeta `histórico AV - txt`) | TXT anteriores, nunca se borran |
 
-Solo se abren Google Sheets: un `.xlsx` hay que abrirlo antes con
-`Abrir con > Hojas de cálculo de Google`. El tipo lo decide el nombre y, si
-hay varios del mismo tipo, se usa el más reciente:
+## Clasp (cuenta personal)
 
-| Nombre | Tipo |
-| --- | --- |
-| Empieza por `Templates semanales` o contiene `semanal` | Semanal |
-| Empieza por `Audiovisuales - Resuelta…` o contiene la palabra `mes` | Mensual |
+`scripts/av-drive/.clasp.json` apunta al proyecto de `Tendencias AV_2026`
+personal (`1NRPNzg0uzrSU16tbsIlPB6UbuYZkRbNOREyL9dTKH8ZBlChD4A3ms3Ih`):
 
-## Cada semana
+```bash
+pnpm run av:clasp:status
+pnpm run av:clasp:push
+```
 
-1. Dejar el template en la carpeta Bruto.
-2. `⭐ AV Weekly > Procesar semana`. Rellena todas las semanas del template que
-   estén vacías en Tendencias (las que ya tienen datos no se tocan), actualiza
-   Looker y deja `AV 2026-S40.txt` (la última semana) en la carpeta de
-   Tendencias. Las pestañas de detalle (7 a 10) solo traen la última semana:
-   las anteriores llevan ubicaciones y categorías de Remotos, sin resoluciones.
-3. Descargar ese TXT y subirlo en `Audiovisuales > Texto plano (Drive)`.
+`.claspignore` sube únicamente `00_*.gs`–`07_*.gs` y `appsscript.json`, dejando
+fuera `trabajo/`, tests y documentación.
 
-## Cada mes
+## Cada semana y cada mes
 
-1. Dejar `Audiovisuales - Resueltas mes anterior` en la carpeta Bruto. Puede
-   haber uno por mes (por ejemplo agosto y septiembre): se procesan todos.
-2. `⭐ AV Weekly > Procesar mes`. Cuenta los tickets cerrados de cada mes, en la
-   zona horaria del propio fichero, enseña
-   los cinco valores, avisa si el fichero no cubre el mes entero o si ya había
-   otros valores, y solo escribe tras confirmar. Después deja el TXT.
-
-| Ticket | Pestaña |
-| --- | --- |
-| Grupo `SOPORTE WEBEX` | Remotos |
-| Modulo `SOPORTE PROGRAMADO` | Programados |
-| Modulo `SOPORTE PRESENCIAL` | Presenciales |
-| Modulo `MANTENIMIENTO CORRECTIVO` | Correctivos |
-| Modulo `MANTENIMIENTO` | No se cuenta |
-| Cualquier otro módulo de `AUDIOVISUALES` | Incidencias |
-
-La equivalencia se validó con septiembre de 2026: las semanas 37-39 del
-fichero mensual coinciden tipo a tipo con el template semanal.
-
-## La app no pisa lo que ya tiene
-
-Subir un TXT solo añade lo que falta: semanas sin tickets, meses vacíos y
-semanas de resolución nuevas. Lo ya guardado se conserva aunque el TXT traiga
-otros números, para que un template incompleto no borre datos buenos. Un TXT
-de otro año empieza el semanal de cero.
-
-`Guardar PLANO como .txt en la carpeta` regenera el fichero sin volver a
-importar. `Actualizar Looker Studio` solo sirve al informe de Looker; la app
-ya no lo necesita.
-
-## Correcciones respecto al script anterior
-
-**Fila de semanas de Presenciales en `Ubicacion`.** `CONF_UBICACION` leía la
-fila 21 (bloque de resoluciones, semana 14 vacía). El bloque de edificios
-usa la fila 28. `CONF_RESOLUCION` sigue en la 21.
-
-**VIDEO y BLUE BRANCH en Remotos.** Se copian las filas 6 y 8 del template a
-las filas 17 y 16 de Tendencias, y el volcado de `Resolucion` las incluye.
-
-**Etiquetas de Remotos.** El template ordena las categorías por volumen, así
-que sus filas cambian de una semana a otra. ERRORES, OPERATIVA, CONEXION,
-VIDEO y BLUE BRANCH se buscan por etiqueta, no por número de fila.
-
-## Qué impide que se vuelva a perder una semana
-
-- **Los TXT no se borran.** Al generar uno nuevo, los anteriores pasan a
-  `histórico AV - txt`. Cada TXT lleva el detalle de resoluciones de todas las
-  semanas hasta la suya.
-- **Recuperación.** `Procesar semana` busca semanas con ubicaciones pero sin
-  detalle de resolución y lo rellena desde el TXT archivado más reciente que lo
-  tenga. Solo escribe en celdas vacías.
-- **Revisión.** Al terminar, `Procesar semana` lista las semanas vacías o sin
-  detalle. `Procesar mes` compara su conteo por semana con Tendencias en las
-  semanas completas del mes y avisa de las que no cuadran (en Remotos una
-  diferencia pequeña es normal: Tendencias solo guarda cinco categorías).
-- **La app guarda copia de cada subida** (fichero y estado anterior de las
-  tablas) en Turso. Ver `scripts/copias-seguridad.ts`.
+1. Dejar los templates en `Bruto` en formato **Google Sheets** (`Abrir con > Hojas de cálculo de Google`).
+2. `⭐ AV Weekly > Procesar semana` lee **todos** los templates semanales de
+   `Bruto`, usa cada uno para el detalle de su última semana (pestañas 7–10) sin
+   pisar ubicaciones ya guardadas, sincroniza `Eventos Extr.`, aplica el formato
+   de tabla, actualiza Looker y genera `AV 2026-SXX.txt`.
+3. `⭐ AV Weekly > Procesar mes` cuenta tickets cerrados del mes, sincroniza el
+   multianual 2026 y los eventos extraordinarios, y regenera el `.txt`.
+4. Subir ese `.txt` en `Audiovisuales > Texto plano (Drive)`.

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createContext, runInContext } from "node:vm";
@@ -7,8 +7,25 @@ import { edificioCode } from "../../shared/modules/informatica/buildingCodes.ts"
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-function loadCodigo() {
-  const source = readFileSync(join(HERE, "Codigo.gs"), "utf8");
+function moduleFileNames(): string[] {
+  return readdirSync(HERE)
+    .filter((f) => /^\d+_.*\.gs$/.test(f))
+    .sort();
+}
+
+function runModularInformatica(
+  context: ReturnType<typeof createContext>,
+  overrideEnvFile?: string
+): void {
+  for (const file of moduleFileNames()) {
+    const filePath =
+      file === "00_Entorno_IDs.gs" && overrideEnvFile ? overrideEnvFile : join(HERE, file);
+    const source = readFileSync(filePath, "utf8");
+    runInContext(source, context, { filename: file });
+  }
+}
+
+function loadCodigo(overrideEnvFile?: string) {
   const context = createContext({
     console,
     Date,
@@ -26,9 +43,23 @@ function loadCodigo() {
     },
   });
 
-  runInContext(source, context, { filename: "Codigo.gs" });
+  runModularInformatica(context, overrideEnvFile);
 
   return context as {
+    ENTORNO_INFORMATICA: {
+      NOMBRE: string;
+      ID_CARPETA_BRUTO: string;
+      ID_CARPETA_SALIDA_PLANO: string;
+      ID_HOJA_INFORME: string;
+      NOMBRE_CARPETA_HISTORICO_TXT: string;
+    };
+    onOpen: () => void;
+    inicializarHoja: () => unknown;
+    procesarSemana: () => unknown;
+    guardarPlanoTxt: () => unknown;
+    obtenerIdCarpetaBrutoInformatica: () => string;
+    obtenerIdCarpetaSalidaInformatica: () => string;
+    obtenerNombreCarpetaHistoricoInformatica: () => string;
     esAliasEdificioBasura: (name: string) => boolean;
     debeRodarSemanaAnterior: (extraction: Date, lastProcessed: Date | null) => boolean;
     extraccionYaProcesada: (
@@ -229,7 +260,6 @@ function memorySheet(grid: unknown[][]) {
 }
 
 function loadCodigoWithSheets(tabs: Record<string, ReturnType<typeof memorySheet>>) {
-  const source = readFileSync(join(HERE, "Codigo.gs"), "utf8");
   const context = createContext({
     console,
     Date,
@@ -254,7 +284,7 @@ function loadCodigoWithSheets(tabs: Record<string, ReturnType<typeof memorySheet
     },
   });
 
-  runInContext(source, context, { filename: "Codigo.gs" });
+  runModularInformatica(context);
 
   return context as ReturnType<typeof loadCodigo>;
 }
@@ -1483,5 +1513,40 @@ describe("Codigo.gs tablas mensuales en valores", () => {
 
     expect(result.vivo).toBe("");
     expect(JSON.stringify(book.total.grid)).toBe(before);
+  });
+});
+
+describe("estructura modular 00_–06_", () => {
+  it("contiene los siete bloques 00_ a 06_ y expone los puntos de entrada", () => {
+    expect(moduleFileNames()).toEqual([
+      "00_Entorno_IDs.gs",
+      "01_Config_y_Menu.gs",
+      "02_Lectura_Drive_y_Clasificacion.gs",
+      "03_Marcadores_y_Tablas_Mensuales.gs",
+      "04_Escritura_Datos_y_Formulas.gs",
+      "05_Agregacion_y_PLANO.gs",
+      "06_Orquestacion_y_Auditoria.gs",
+    ]);
+
+    const gs = loadCodigo();
+
+    expect(gs.ENTORNO_INFORMATICA.NOMBRE).toBe("PERSONAL");
+    expect(gs.obtenerIdCarpetaBrutoInformatica()).toBe("17O7dORS6oIDN0hyLP1AXQEN7tR6k3ZbH");
+    expect(gs.obtenerIdCarpetaSalidaInformatica()).toBe("1b1yyWSoWIj3cNwuCn-1Co1jtqgdGK2_A");
+    expect(gs.obtenerNombreCarpetaHistoricoInformatica()).toBe("histórico Informática - txt");
+    expect(typeof gs.onOpen).toBe("function");
+    expect(typeof gs.inicializarHoja).toBe("function");
+    expect(typeof gs.procesarSemana).toBe("function");
+    expect(typeof gs.guardarPlanoTxt).toBe("function");
+  });
+
+  it("permite sustituir solo 00_Entorno_IDs.gs por trabajo/00_Entorno_IDs.gs sin errores", () => {
+    const gsTrabajo = loadCodigo(join(HERE, "trabajo", "00_Entorno_IDs.gs"));
+
+    expect(gsTrabajo.ENTORNO_INFORMATICA.NOMBRE).toBe("TRABAJO");
+    expect(gsTrabajo.obtenerIdCarpetaBrutoInformatica()).toBe("");
+    expect(gsTrabajo.obtenerIdCarpetaSalidaInformatica()).toBe("");
+    expect(gsTrabajo.obtenerNombreCarpetaHistoricoInformatica()).toBe("histórico Informática - txt");
+    expect(typeof gsTrabajo.procesarSemana).toBe("function");
   });
 });

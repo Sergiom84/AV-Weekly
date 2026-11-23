@@ -104,7 +104,7 @@ import { parseInformaticaTexto } from "./parseInformaticaTexto.js";
 import {
   catalogFromEdificios,
   resolveInformaticaBuildingCodes,
-  unresolvedEdificioCodes,
+  unresolvedEdificioDetails,
 } from "../shared/modules/informatica/buildingCodes.ts";
 import { mergeEdificioCatalog } from "./informaticaEdificios.js";
 import {
@@ -561,7 +561,7 @@ router.post("/api/informe/upload/texto", upload.single("file"), backupBeforeImpo
       });
     }
 
-    if (parsed.document.mensual.length > 0) {
+    if (parsed.document.mensual.length > 0 || parsed.document.eventosExtr) {
       const previousMonthly = (await readStoredInformeMonthly()) ?? emptyMonthlyDataset();
       const monthly = appendMonthlyDataset(previousMonthly, {
         ...parsed.monthly,
@@ -878,7 +878,7 @@ function informaticaBuildingCodeError(
   dataset: InformaticaDataset,
   catalogSize: number
 ): string | null {
-  const pending = unresolvedEdificioCodes(dataset);
+  const { codes: pending, sections } = unresolvedEdificioDetails(dataset);
 
   if (pending.length === 0) {
     return null;
@@ -886,16 +886,29 @@ function informaticaBuildingCodeError(
 
   const shown = pending.slice(0, 10).join(", ");
   const rest = pending.length > 10 ? ` y ${pending.length - 10} más` : "";
-  const cause =
-    catalogSize === 0
-      ? "El catálogo de edificios está vacío."
-      : `El catálogo tiene ${catalogSize} filas y no cubre estos edificios.`;
+  const sectionNote =
+    sections.length === 0
+      ? ""
+      : sections.length === 1
+        ? ` (sección ${sections[0]})`
+        : ` (secciones ${sections.join(", ")})`;
 
-  return (
-    `${cause} No se pueden traducir ${pending.length} códigos del texto: ${shown}${rest}. ` +
-    "Actualiza server/assets/informatica-edificios.tsv y ejecuta " +
-    "node scripts/importar-edificios-informatica.mjs antes de volver a subirlo."
-  );
+  if (catalogSize === 0) {
+    return [
+      `Ha fallado por: El catálogo de edificios está vacío y no se pueden traducir ${pending.length} códigos del texto: ${shown}${rest}${sectionNote}.`,
+      "La solución es: Ejecuta node --env-file=.env scripts/importar-edificios-informatica.mjs para cargar server/assets/informatica-edificios.tsv y vuelve a subir el texto.",
+    ].join("\n");
+  }
+
+  const targetNoun =
+    pending.length === 1
+      ? "edificio o ubicación que no está"
+      : "edificios o ubicaciones que no están";
+
+  return [
+    `Ha fallado por: Han aparecido ${pending.length} ${targetNoun} en el catálogo (${catalogSize} filas): ${shown}${rest}${sectionNote}.`,
+    'La solución es: Revisa en el Excel de esa sección si el edificio está escrito con un formato distinto al habitual (por ejemplo, una dirección postal en vez del nombre de la sede), corrígelo y vuelve a ejecutar "Procesar semana". Si es una sede nueva válida, añádela a server/assets/informatica-edificios.tsv, ejecuta node --env-file=.env scripts/importar-edificios-informatica.mjs y vuelve a subir el texto.',
+  ].join("\n");
 }
 
 /**

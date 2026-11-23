@@ -135,5 +135,6 @@ export function appendMonthlyDataset(
     years,
     sourceFile: incoming.sourceFile ?? stored.sourceFile,
     uploadedAt: incoming.uploadedAt ?? stored.uploadedAt,
+    territoriales: incoming.territoriales ?? stored.territoriales ?? null,
   };
 }

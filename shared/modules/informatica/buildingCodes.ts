@@ -108,25 +108,30 @@ function expandField(value: string, catalog: string[]): string {
 const CODED_FIELDS: {
   section: keyof InformaticaDataset;
   field: string;
+  label: string;
 }[] = [
-  { section: "incidencias", field: "edificio" },
-  { section: "workOrders", field: "edificio" },
-  { section: "citas", field: "edificio" },
-  { section: "imacs", field: "ciudad" },
+  { section: "incidencias", field: "edificio", label: "INCIDENCIAS" },
+  { section: "workOrders", field: "edificio", label: "WORKORDERS" },
+  { section: "citas", field: "edificio", label: "CITAS" },
+  { section: "imacs", field: "ciudad", label: "IMACS" },
 ];
 
 /**
- * Codes still unexpanded after `resolveInformaticaBuildingCodes`.
+ * Codes and PLANO section labels still unexpanded after `resolveInformaticaBuildingCodes`.
  *
  * An unknown code is not a cosmetic defect: `E3361717668` reaches the slide as
  * the name of an office and the report publishes a hash to the bank. The
  * importer refuses the upload on this list rather than storing it, so the
  * failure is visible on the week it happens instead of on the printed deck.
  */
-export function unresolvedEdificioCodes(dataset: InformaticaDataset): string[] {
+export function unresolvedEdificioDetails(dataset: InformaticaDataset): {
+  codes: string[];
+  sections: string[];
+} {
   const found = new Set<string>();
+  const sections = new Set<string>();
 
-  for (const { section, field } of CODED_FIELDS) {
+  for (const { section, field, label } of CODED_FIELDS) {
     const rows = dataset[section] as Record<string, unknown>[] | undefined;
 
     for (const row of rows ?? []) {
@@ -134,11 +139,19 @@ export function unresolvedEdificioCodes(dataset: InformaticaDataset): string[] {
 
       if (isEdificioCode(value)) {
         found.add(value.trim());
+        sections.add(label);
       }
     }
   }
 
-  return Array.from(found).sort();
+  return {
+    codes: Array.from(found).sort(),
+    sections: Array.from(sections),
+  };
+}
+
+export function unresolvedEdificioCodes(dataset: InformaticaDataset): string[] {
+  return unresolvedEdificioDetails(dataset).codes;
 }
 
 /** Restores coded building fields on an imported dataset. */

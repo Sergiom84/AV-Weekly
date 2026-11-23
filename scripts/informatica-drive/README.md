@@ -6,9 +6,34 @@ pestaña `PLANO` con los recuentos que AV Weekly importa.
 
 | Fichero | Qué es |
 | --- | --- |
-| `Codigo.gs` | Script que se instala en `SSCC- Informe Semanal limpio`. |
+| `00_Entorno_IDs.gs` | **Solo IDs de carpetas y libro.** No se toca al actualizar la lógica entre casa y trabajo. |
+| `01_Config_y_Menu.gs` | Pestañas, menú `⭐ Informática Weekly`, textos/códigos de edificio, acceso a hojas, `Configuración` y fechas/números. |
+| `02_Lectura_Drive_y_Clasificacion.gs` | Lectura y conversión temporal en Drive y clasificación de orígenes por cabecera. |
+| `03_Marcadores_y_Tablas_Mensuales.gs` | Marcadores semanales, utilidades de mes y cierre/escritura de tablas mensuales. |
+| `04_Escritura_Datos_y_Formulas.gs` | Volcado a pestañas `(Datos)` y reparación idempotente de fórmulas. |
+| `05_Agregacion_y_PLANO.gs` | Agregación semanal/mensual y serialización de la pestaña `PLANO`. |
+| `06_Orquestacion_y_Auditoria.gs` | Orquestación (`procesarSemana`, `inicializarHoja`, `guardarPlanoTxt`) y pestaña `Comprobación`. |
+| `trabajo/00_Entorno_IDs.gs` | Plantilla de `00_Entorno_IDs.gs` para el entorno de trabajo. |
 | `SPEC.md` | Contrato de datos, pestañas, periodos y zonas que no se modifican. |
 | `verificar-local.mjs` | Ejecuta la agregación contra los XLSX del disco, sin escribirlos. |
+
+## Estructura modular (casa vs trabajo)
+
+En Google Apps Script todos los `.gs` comparten el mismo ámbito global. Para
+actualizar el entorno de trabajo sin pisar sus carpetas ni su libro, **deja
+intacto `00_Entorno_IDs.gs`** (creado desde `trabajo/00_Entorno_IDs.gs` con los
+IDs de trabajo) y copia únicamente los bloques modificados (`01_` a `06_`).
+
+En la cuenta personal, `.clasp.json` apunta al proyecto de
+`SSCC- Informe Semanal limpio`:
+
+```bash
+pnpm run informatica:clasp:status
+pnpm run informatica:clasp:push
+```
+
+`.claspignore` sube únicamente `00_*.gs`–`06_*.gs` y `appsscript.json`, dejando
+fuera `trabajo/`, tests y documentación.
 
 El formato de intercambio se declara en
 [`shared/modules/informatica/texto.ts`](../../shared/modules/informatica/texto.ts)
@@ -19,8 +44,9 @@ tres puntos deben cambiar juntos si se modifica una sección de `PLANO`.
 ## Instalación, una sola vez
 
 1. Abrir `SSCC- Informe Semanal limpio` en Google Sheets.
-2. Entrar en `Extensiones > Apps Script`, sustituir el contenido por
-   `Codigo.gs`, guardar y volver a cargar la hoja.
+2. Entrar en `Extensiones > Apps Script`, crear los bloques `00_Entorno_IDs.gs` a
+   `06_Orquestacion_y_Auditoria.gs` (en el trabajo usar `trabajo/00_Entorno_IDs.gs`
+   con sus IDs), guardar y volver a cargar la hoja.
 3. Ejecutar `⭐ Informática Weekly > Inicializar hoja`.
 4. Revisar en `Configuración` las carpetas de entrada y salida y la ventana de encuestas.
 5. Autorizar la lectura de Drive y la escritura en la hoja cuando Google lo
@@ -163,7 +189,7 @@ cerrado`.
 
 ## Verificación local
 
-El arnés carga el mismo `Codigo.gs`, comprueba primero la resolución dual de
+El arnés carga los módulos `00_`–`06_` en orden, comprueba primero la resolución dual de
 los 20 nombres nativos de Google Sheets y sus alias del XLSX sin crear pestañas
 duplicadas, clasifica los cinco orígenes por cabecera, lee los maestros del
 libro limpio y genera el texto sin acceder a Drive ni modificar ningún XLSX:

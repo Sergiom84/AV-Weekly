@@ -6,6 +6,7 @@ import {
   isEdificioCode,
   resolveInformaticaBuildingCodes,
   unresolvedEdificioCodes,
+  unresolvedEdificioDetails,
 } from "../shared/modules/informatica/buildingCodes.ts";
 import {
   mergeEdificioCatalog,
@@ -120,6 +121,29 @@ describe("unresolvedEdificioCodes", () => {
   it("ignores buildings that are already names", () => {
     expect(unresolvedEdificioCodes(coded("Smart Tech Antoni Maura"))).toEqual([]);
     expect(unresolvedEdificioCodes(coded(""))).toEqual([]);
+  });
+
+  it("reports which PLANO sections contain unresolved codes", () => {
+    const dataset: InformaticaDataset = {
+      ...coded(edificioCode("Desconocido Citas")),
+      imacs: [
+        {
+          fecha: "2026-11-01",
+          mes: "2026/11",
+          ciudad: edificioCode("Desconocido Imacs"),
+          tipo: "Intervenciones",
+          imacs: 1,
+        },
+      ],
+    };
+
+    expect(unresolvedEdificioDetails(dataset)).toEqual({
+      codes: [
+        edificioCode("Desconocido Citas"),
+        edificioCode("Desconocido Imacs"),
+      ].sort(),
+      sections: ["CITAS", "IMACS"],
+    });
   });
 });
 

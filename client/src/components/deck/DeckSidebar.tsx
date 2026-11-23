@@ -481,7 +481,7 @@ function UploadZone({
       )}
 
       {localError && (
-        <p className="mt-2 font-mono text-xs text-destructive" role="alert">
+        <p className="mt-2 whitespace-pre-line font-mono text-xs text-destructive" role="alert">
           {localError}
         </p>
       )}
@@ -652,7 +652,7 @@ export default function DeckSidebar<TPage extends DeckPage<string, string>>({
           ))}
 
           {error && (
-            <p className="font-mono text-xs text-destructive" role="alert">
+            <p className="whitespace-pre-line font-mono text-xs text-destructive" role="alert">
               {error}
             </p>
           )}
