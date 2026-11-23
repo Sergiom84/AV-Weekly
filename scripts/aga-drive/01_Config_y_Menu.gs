@@ -153,8 +153,6 @@ function onOpen() {
     .addItem('Inicializar hoja', 'inicializarHoja')
     .addItem('Poner lunes actual en Configuración', 'ponerLunesActual')
     .addItem('Procesar semana', 'procesarSemana')
-    .addSeparator()
-    .addItem('Guardar PLANO como .txt en la carpeta', 'guardarPlanoTxt')
     .addToUi();
 }
 
